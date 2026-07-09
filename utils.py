@@ -1,16 +1,34 @@
 import json
+import os
+from pathlib import Path
+
 import mysql.connector
+from dotenv import load_dotenv
+
+# Load settings from a .env file next to this module (gitignored).
+# Values already present in the environment take precedence.
+load_dotenv(Path(__file__).with_name(".env"))
+
 
 def get_db_connection():
     """
-    Connect to PythonAnywhere MySQL database.
-    Replace placeholders with your actual credentials.
+    Connect to MySQL using DB_* environment variables (see .env.example).
+    DB_HOST and DB_NAME default to the PythonAnywhere shape derived from
+    DB_USER; DB_PASSWORD has no default and must always be set.
     """
+    user = os.environ.get("DB_USER", "kuantorflow")
+    password = os.environ.get("DB_PASSWORD")
+    if not password:
+        raise RuntimeError(
+            "DB_PASSWORD is not set — copy .env.example to .env and fill it in"
+        )
     conn = mysql.connector.connect(
-        user="kuantorflow",
-        password="password",
-        host="kuantorflow.mysql.pythonanywhere-services.com",
-        database="kuantorflow$default",
+        user=user,
+        password=password,
+        host=os.environ.get(
+            "DB_HOST", f"{user}.mysql.pythonanywhere-services.com"
+        ),
+        database=os.environ.get("DB_NAME", f"{user}$default"),
         connection_timeout=5,
     )
     return conn
