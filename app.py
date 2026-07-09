@@ -2,7 +2,7 @@ import os
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
-from parsers import parse_mht_file, parse_reverso_word
+from parsers import parse_google_word, parse_mht_file
 from utils import (
     get_db_connection,
     get_flashcards_by_topic,
@@ -32,7 +32,7 @@ def index():
                 if not word:
                     message = "Please enter a word."
                 else:
-                    entries = parse_reverso_word(word, topic=topic)
+                    entries = parse_google_word(word, topic=topic)
                     for entry in entries:
                         save_flashcard(entry)
                     pos_list = ", ".join(e["pos"] for e in entries)

@@ -152,6 +152,78 @@ def _google_translate(text, source, target):
     return "".join(seg[0] for seg in data[0] if seg and seg[0]).strip()
 
 
+GOOGLE_LANGS = {"ukr": "uk", "rus": "ru"}
+
+
+def _google_dictionary(word, target):
+    """
+    Fetch dictionary-style translations for an English word from Google
+    Translate (dt=bd returns entries grouped by part of speech).
+    Returns e.g. {'noun': ['біг', ...], 'verb': ['бігати', ...]};
+    words Google has no dictionary entry for fall back to
+    {'other': [plain translation]}.
+    """
+    params = {
+        "client": "gtx", "sl": "en", "tl": target, "hl": "en",
+        "dt": ["t", "bd"], "q": word,
+    }
+    resp = requests.get(GOOGLE_TRANSLATE_URL, params=params,
+                        headers=HEADERS, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+
+    pos_translations = {}
+    if len(data) > 1 and data[1]:
+        for entry in data[1]:
+            pos = (entry[0] or "other").lower()
+            terms = [t for t in (entry[1] or []) if t][:MAX_TRANSLATIONS]
+            if terms:
+                pos_translations[pos] = terms
+
+    if not pos_translations:
+        plain = "".join(seg[0] for seg in data[0] if seg and seg[0]).strip()
+        if plain and plain.lower() != word.lower():
+            pos_translations["other"] = [plain]
+    return pos_translations
+
+
+def parse_google_word(word, topic=None):
+    """
+    Build flashcard entries from Google Translate's dictionary data
+    (English→Ukrainian and English→Russian) — one card per part of speech,
+    same shape as parse_reverso_word() produces. English definitions from
+    Reverso's dictionary are attached when that site is reachable.
+    """
+    cards = {}  # pos -> entry dict
+
+    for key, code in GOOGLE_LANGS.items():
+        try:
+            pos_translations = _google_dictionary(word, code)
+        except (requests.RequestException, ValueError):
+            continue  # keep the other language even if one lookup fails
+        for pos, terms in pos_translations.items():
+            entry = cards.setdefault(pos, {"word": word, "pos": pos, "topic": topic})
+            entry[f"translation_{key}"] = ", ".join(terms)
+
+    # Same rule as the Reverso parser: the untagged catch-all card is kept
+    # only when no part of speech was identified at all.
+    if len(cards) > 1:
+        cards.pop("other", None)
+
+    if not cards:
+        raise ValueError(f"No translations found for '{word}'")
+
+    try:
+        definitions = _fetch_definitions(word)
+    except requests.RequestException:
+        definitions = {}  # e.g. Reverso blocks datacenter IPs — skip quietly
+    for pos, defs in definitions.items():
+        if pos in cards:
+            cards[pos]["explanation_en"] = "; ".join(defs)
+
+    return list(cards.values())
+
+
 def _fill_missing_translation(entry):
     """
     If a card has only one of the Russian/Ukrainian translations, fill the
