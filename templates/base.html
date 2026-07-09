@@ -11,8 +11,16 @@
         <a class="brand" href="{{ url_for('index') }}">Kuantor<span>Flow</span></a>
         <nav>
             <a href="{{ url_for('index') }}">Home</a>
+            <a href="#" id="about-link">About</a>
         </nav>
     </header>
+
+    <div class="modal-overlay" id="about-modal" hidden>
+        <div class="modal">
+            <button type="button" class="modal-close" aria-label="Close">&times;</button>
+            <img src="{{ url_for('static', filename='img/main_image.png') }}" alt="About KuantorFlow">
+        </div>
+    </div>
 
     <main class="page">
         {% for text, topic in get_flashed_messages() %}
@@ -30,5 +38,23 @@
     <footer class="site-footer">
         KuantorFlow &mdash; interactive language learning with notes and dictionaries
     </footer>
+
+    <script>
+        (function () {
+            var overlay = document.getElementById("about-modal");
+            document.getElementById("about-link").addEventListener("click", function (e) {
+                e.preventDefault();
+                overlay.hidden = false;
+            });
+            function close() { overlay.hidden = true; }
+            overlay.querySelector(".modal-close").addEventListener("click", close);
+            overlay.addEventListener("click", function (e) {
+                if (e.target === overlay) close();  // click outside the image
+            });
+            document.addEventListener("keydown", function (e) {
+                if (e.key === "Escape") close();
+            });
+        })();
+    </script>
 </body>
 </html>
