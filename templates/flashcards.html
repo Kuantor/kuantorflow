@@ -7,6 +7,11 @@
         body { font-family: sans-serif; max-width: 720px; margin: 2rem auto; }
         .card { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
         .word { font-size: 1.3rem; font-weight: bold; }
+        .pos {
+            font-size: 0.75rem; font-weight: normal; color: #fff;
+            background: #1a73e8; border-radius: 999px; padding: 0.1rem 0.6rem;
+            vertical-align: middle;
+        }
         .lang { color: #555; font-size: 0.85rem; text-transform: uppercase; margin-top: 0.5rem; }
         ul { margin: 0.25rem 0; }
     </style>
@@ -24,7 +29,9 @@
 
     {% for card in cards %}
         <div class="card">
-            <div class="word">{{ card.word }}</div>
+            <div class="word">{{ card.word }}
+                {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
+            </div>
 
             {% if card.explanation_en %}
                 <p>{{ card.explanation_en }}</p>

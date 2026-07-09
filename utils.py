@@ -17,6 +17,7 @@ def get_db_connection():
 
 FLASHCARD_FIELDS = (
     "word",
+    "pos",
     "explanation_en",
     "examples_en",
     "translation_ukr",
