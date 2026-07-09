@@ -76,6 +76,27 @@ def save_flashcard(entry):
         conn.close()
 
 
+def delete_flashcard(card_id):
+    """
+    Delete a flashcard by id.
+    Returns the deleted card's word, or None if no such card exists.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT word FROM flashcards WHERE id = %s", (card_id,))
+        row = cursor.fetchone()
+        if row is None:
+            cursor.close()
+            return None
+        cursor.execute("DELETE FROM flashcards WHERE id = %s", (card_id,))
+        conn.commit()
+        cursor.close()
+        return row[0]
+    finally:
+        conn.close()
+
+
 def get_topics():
     """
     Return all topics that have flashcards, as (topic, card_count) tuples

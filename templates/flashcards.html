@@ -17,6 +17,9 @@
 
     {% for card in cards %}
         <div class="panel card">
+            <button type="button" class="card-delete" aria-label="Delete card"
+                    data-word="{{ card.word }}{% if card.pos %} ({{ card.pos }}){% endif %}"
+                    data-url="{{ url_for('delete_card', topic=topic, card_id=card.id) }}">&times;</button>
             <div class="word">{{ card.word }}
                 {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
             </div>
@@ -46,4 +49,40 @@
             {% endif %}
         </div>
     {% endfor %}
+
+    <div class="modal-overlay" id="delete-modal" hidden>
+        <div class="modal modal-dialog">
+            <p id="delete-question">Do you really want to delete the card?</p>
+            <form method="POST" id="delete-form" class="modal-actions">
+                <button type="submit" class="danger">Yes</button>
+                <button type="button" class="secondary" id="delete-no">No</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var overlay = document.getElementById("delete-modal");
+            var question = document.getElementById("delete-question");
+            var form = document.getElementById("delete-form");
+
+            document.querySelectorAll(".card-delete").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    question.textContent =
+                        "Do you really want to delete the card '" + btn.dataset.word + "'?";
+                    form.action = btn.dataset.url;
+                    overlay.hidden = false;
+                });
+            });
+
+            function close() { overlay.hidden = true; }
+            document.getElementById("delete-no").addEventListener("click", close);
+            overlay.addEventListener("click", function (e) {
+                if (e.target === overlay) close();  // click outside the dialog
+            });
+            document.addEventListener("keydown", function (e) {
+                if (e.key === "Escape") close();
+            });
+        })();
+    </script>
 {% endblock %}
