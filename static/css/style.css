@@ -197,6 +197,7 @@ button:hover { background: var(--blue-dark); }
 .hint { color: var(--muted); font-size: 0.92rem; }
 
 /* About modal */
+.modal-overlay[hidden] { display: none; }
 .modal-overlay {
     position: fixed;
     inset: 0;
