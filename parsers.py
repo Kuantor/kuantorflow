@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 REVERSO_URL = "https://context.reverso.net/translation/english-{lang}/{word}"
 REVERSO_LANGS = {"ukr": "ukrainian", "rus": "russian"}
 DEFINITION_URL = "https://dictionary.reverso.net/english-definition/{word}"
+GOOGLE_TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
 
 # Reverso blocks requests without a browser-like User-Agent.
 HEADERS = {
@@ -137,12 +138,43 @@ def _fetch_definitions(word):
     return definitions
 
 
+def _google_translate(text, source, target):
+    """
+    Translate text with Google Translate's public JSON endpoint
+    (no API key; fine for light personal use). Language codes are
+    Google's own, e.g. 'ru', 'uk'.
+    """
+    params = {"client": "gtx", "sl": source, "tl": target, "dt": "t", "q": text}
+    resp = requests.get(GOOGLE_TRANSLATE_URL, params=params,
+                        headers=HEADERS, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    return "".join(seg[0] for seg in data[0] if seg and seg[0]).strip()
+
+
+def _fill_missing_translation(entry):
+    """
+    If a card has only one of the Russian/Ukrainian translations, fill the
+    other by machine-translating between the two (ru <-> uk).
+    Failures are ignored — the card is still useful with one language.
+    """
+    rus, ukr = entry.get("translation_rus"), entry.get("translation_ukr")
+    try:
+        if rus and not ukr:
+            entry["translation_ukr"] = _google_translate(rus, "ru", "uk") or None
+        elif ukr and not rus:
+            entry["translation_rus"] = _google_translate(ukr, "uk", "ru") or None
+    except (requests.RequestException, ValueError):
+        pass
+
+
 def parse_reverso_word(word, topic=None):
     """
     Look up a word on Reverso Context (English→Ukrainian and English→Russian)
     and build flashcard entries — one per part of speech found, so e.g.
     'run' produces separate verb and noun cards. English definitions from
-    Reverso's dictionary are attached to the matching cards.
+    Reverso's dictionary are attached to the matching cards, and a missing
+    Russian/Ukrainian translation is filled via Google Translate.
     """
     cards = {}  # pos -> entry dict
 
@@ -181,6 +213,9 @@ def parse_reverso_word(word, topic=None):
     for pos, defs in definitions.items():
         if pos in cards:
             cards[pos]["explanation_en"] = "; ".join(defs)
+
+    for entry in cards.values():
+        _fill_missing_translation(entry)
 
     return list(cards.values())
 
