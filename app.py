@@ -1,6 +1,7 @@
 import os
 
 from flask import Flask, flash, redirect, render_template, request, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from parsers import parse_google_word, parse_mht_file
 from utils import (
@@ -14,6 +15,10 @@ app = Flask(__name__)
 # Needed for flash messages (session cookie). Override in production:
 # set the SECRET_KEY environment variable on PythonAnywhere.
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+
+# PythonAnywhere serves the app behind a proxy; trust its X-Forwarded-*
+# headers so absolute URLs (og:image etc.) use https and the real host.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 
 @app.route("/", methods=["GET", "POST"])
