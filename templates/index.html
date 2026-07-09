@@ -1,61 +1,64 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>KuantorFlow</title>
-    <style>
-        .confirmation {
-            background: #e6f4ea; border: 1px solid #34a853; color: #1e4620;
-            border-radius: 6px; padding: 0.75rem 1rem; margin: 1rem 0;
-        }
-        .error {
-            background: #fdecea; border: 1px solid #d93025; color: #5f2120;
-            border-radius: 6px; padding: 0.75rem 1rem; margin: 1rem 0;
-        }
-    </style>
-</head>
-<body>
-    <h1>Welcome to KuantorFlow</h1>
+{% extends "base.html" %}
 
-    {% for text, topic in get_flashed_messages() %}
-        <div class="confirmation">
-            {{ text }}
-            {% if topic %}
-                <a href="{{ url_for('flashcards', topic=topic) }}">View topic &rarr;</a>
-            {% endif %}
-        </div>
-    {% endfor %}
+{% block content %}
+    <h1 class="page-title">Welcome to KuantorFlow</h1>
 
     {% if message %}
-        <div class="error"><strong>{{ message }}</strong></div>
+        <div class="banner error"><strong>{{ message }}</strong></div>
     {% endif %}
 
-    <h2>Look up a word (Reverso)</h2>
-    <form method="POST">
-        <input type="hidden" name="action" value="parse_word">
-        <label>Word: <input type="text" name="word" required></label>
-        <label>Topic: <input type="text" name="topic" placeholder="general"></label>
-        <button type="submit">Look up &amp; save</button>
-    </form>
+    <div class="panel">
+        <h2>Look up a word (Reverso)</h2>
+        <form method="POST">
+            <input type="hidden" name="action" value="parse_word">
+            <div class="form-row">
+                <div>
+                    <label for="word">Word</label>
+                    <input type="text" id="word" name="word" required
+                           placeholder="e.g. streamline">
+                </div>
+                <div>
+                    <label for="word-topic">Topic</label>
+                    <input type="text" id="word-topic" name="topic" placeholder="general">
+                </div>
+            </div>
+            <button type="submit">Look up &amp; save</button>
+        </form>
+    </div>
 
-    <h2>Upload notes (.mht)</h2>
-    <form method="POST" enctype="multipart/form-data">
-        <input type="hidden" name="action" value="upload_mht">
-        <label>File: <input type="file" name="mht_file" accept=".mht,.mhtml" required></label>
-        <label>Topic: <input type="text" name="topic" placeholder="general"></label>
-        <button type="submit">Upload &amp; save</button>
-    </form>
+    <div class="panel">
+        <h2>Upload notes (.mht)</h2>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="upload_mht">
+            <div class="form-row">
+                <div>
+                    <label for="mht-file">File</label>
+                    <input type="file" id="mht-file" name="mht_file" accept=".mht,.mhtml" required>
+                </div>
+                <div>
+                    <label for="mht-topic">Topic</label>
+                    <input type="text" id="mht-topic" name="topic" placeholder="general">
+                </div>
+            </div>
+            <button type="submit">Upload &amp; save</button>
+        </form>
+    </div>
 
-    <h2>Browse flashcards</h2>
-    <form method="GET" onsubmit="window.location='/flashcards/' + encodeURIComponent(this.topic.value); return false;">
-        <label>Topic: <input type="text" name="topic" required></label>
-        <button type="submit">Show flashcards</button>
-    </form>
+    <div class="panel">
+        <h2>Browse flashcards</h2>
+        <form method="GET" onsubmit="window.location='/flashcards/' + encodeURIComponent(this.topic.value); return false;">
+            <label for="browse-topic">Topic</label>
+            <input type="text" id="browse-topic" name="topic" required
+                   placeholder="Type a topic name">
+            <button type="submit">Show flashcards</button>
+        </form>
+    </div>
 
-    <hr>
-    <form method="POST">
-        <input type="hidden" name="action" value="test_db">
-        <button type="submit">Test DB Connection</button>
-    </form>
-</body>
-</html>
+    <div class="panel">
+        <h2>Database</h2>
+        <form method="POST">
+            <input type="hidden" name="action" value="test_db">
+            <button type="submit">Test DB Connection</button>
+        </form>
+    </div>
+{% endblock %}

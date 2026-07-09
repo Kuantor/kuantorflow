@@ -1,0 +1,185 @@
+/* KuantorFlow — shared styles.
+   Background: static/img/background.jpg (blue -> yellow "Programming is an
+   Art" wallpaper); the gradient below matches its palette and shows while
+   the image loads or if it is missing. */
+
+:root {
+    --blue: #2e6ba0;
+    --blue-dark: #245680;
+    --yellow: #f3c73a;
+    --ink: #22303c;
+    --muted: #5b6b7a;
+    --ok-bg: #e6f4ea;
+    --ok-border: #34a853;
+    --ok-ink: #1e4620;
+    --bad-bg: #fdecea;
+    --bad-border: #d93025;
+    --bad-ink: #5f2120;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+    background-color: var(--blue);
+    background-image: url("../img/background.jpg"),
+        linear-gradient(115deg, #2e6ba0 0%, #3f7aa8 40%, #d9b13c 78%, #f3c73a 100%);
+    background-size: cover, cover;
+    background-position: center;
+    background-attachment: fixed;
+}
+
+/* Header */
+.site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.9rem 1.4rem;
+    background: rgba(20, 40, 60, 0.55);
+    backdrop-filter: blur(6px);
+}
+.brand {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #fff;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+}
+.brand span { color: var(--yellow); }
+.site-header nav a {
+    color: #e8eef4;
+    text-decoration: none;
+    margin-left: 1.2rem;
+    font-size: 0.95rem;
+}
+.site-header nav a:hover { color: var(--yellow); }
+
+/* Layout */
+.page {
+    max-width: 860px;
+    margin: 2rem auto 3rem;
+    padding: 0 1rem;
+}
+.page-title {
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    margin: 0.5rem 0 1.2rem;
+}
+.site-footer {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    font-size: 0.85rem;
+    padding: 1rem 0 2rem;
+}
+
+/* Panels (translucent cards over the background) */
+.panel {
+    background: rgba(255, 255, 255, 0.93);
+    backdrop-filter: blur(4px);
+    border-radius: 12px;
+    padding: 1.3rem 1.5rem;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.panel h2 { margin-top: 0; font-size: 1.15rem; color: var(--blue-dark); }
+
+/* Forms */
+label { display: block; margin: 0.6rem 0 0.25rem; font-size: 0.9rem; color: var(--muted); }
+input[type="text"], input[type="file"] {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #c5d0da;
+    border-radius: 8px;
+    font-size: 1rem;
+    background: #fff;
+}
+input[type="text"]:focus {
+    outline: 2px solid var(--blue);
+    outline-offset: 0;
+    border-color: var(--blue);
+}
+button {
+    margin-top: 0.9rem;
+    padding: 0.55rem 1.6rem;
+    border: none;
+    border-radius: 8px;
+    background: var(--blue);
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+}
+button:hover { background: var(--blue-dark); }
+.form-row { display: flex; gap: 1rem; }
+.form-row > div { flex: 1; }
+
+/* Banners */
+.banner {
+    border-radius: 10px;
+    padding: 0.8rem 1.1rem;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+.banner a { font-weight: 600; }
+.confirmation { background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok-ink); }
+.error { background: var(--bad-bg); border: 1px solid var(--bad-border); color: var(--bad-ink); }
+
+/* Flashcards */
+.card { border-left: 5px solid var(--blue); }
+.word { font-size: 1.3rem; font-weight: 700; }
+.pos {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #4a3a00;
+    background: var(--yellow);
+    border-radius: 999px;
+    padding: 0.15rem 0.65rem;
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.lang { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.7rem; }
+.card ul { margin: 0.3rem 0; padding-left: 1.3rem; }
+.card p { margin: 0.35rem 0; }
+
+/* Quiz */
+.question input[type="text"] { margin-top: 0.5rem; }
+.question.correct { background: var(--ok-bg); border-left: 5px solid var(--ok-border); }
+.question.wrong { background: var(--bad-bg); border-left: 5px solid var(--bad-border); }
+.expected { color: var(--muted); }
+.score {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    margin: 0.5rem 0 1.2rem;
+}
+.lang-switch { margin-bottom: 1.2rem; }
+.lang-switch a, .lang-switch span {
+    display: inline-block;
+    padding: 0.35rem 1.1rem;
+    margin-right: 0.5rem;
+    border-radius: 999px;
+    text-decoration: none;
+    font-size: 0.95rem;
+}
+.lang-switch a { background: rgba(255, 255, 255, 0.85); color: var(--blue-dark); }
+.lang-switch a:hover { background: #fff; }
+.lang-switch span { background: var(--yellow); color: #4a3a00; font-weight: 600; }
+
+/* Breadcrumbs / small links above titles */
+.crumbs { margin: 0 0 0.8rem; }
+.crumbs a {
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    text-decoration: none;
+    font-size: 0.92rem;
+}
+.crumbs a:hover { color: var(--yellow); }
+
+@media (max-width: 600px) {
+    .form-row { flex-direction: column; gap: 0; }
+}

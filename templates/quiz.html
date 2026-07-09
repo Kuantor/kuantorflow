@@ -1,31 +1,13 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Quiz — {{ topic }}</title>
-    <style>
-        body { font-family: sans-serif; max-width: 720px; margin: 2rem auto; }
-        .question { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
-        .word { font-size: 1.2rem; font-weight: bold; }
-        input[type="text"] { width: 100%; box-sizing: border-box; padding: 0.4rem; margin-top: 0.5rem; }
-        .correct { border-color: #34a853; background: #e6f4ea; }
-        .wrong { border-color: #d93025; background: #fdecea; }
-        .expected { color: #555; }
-        .score { font-size: 1.4rem; margin: 1rem 0; }
-        button { padding: 0.5rem 1.5rem; }
-        .lang-switch a, .lang-switch span {
-            display: inline-block; padding: 0.3rem 1rem; margin-right: 0.5rem;
-            border: 1px solid #ccc; border-radius: 999px; text-decoration: none;
-        }
-        .lang-switch span { background: #1a73e8; border-color: #1a73e8; color: #fff; }
-    </style>
-</head>
-<body>
-    <p>
+{% extends "base.html" %}
+
+{% block title %}Quiz — {{ topic }} | KuantorFlow{% endblock %}
+
+{% block content %}
+    <p class="crumbs">
         <a href="{{ url_for('index') }}">&larr; Home</a> |
         <a href="{{ url_for('flashcards', topic=topic) }}">Flashcards: {{ topic }}</a>
     </p>
-    <h1>Quiz: {{ topic }}</h1>
+    <h1 class="page-title">Quiz: {{ topic }}</h1>
 
     <p class="lang-switch">
         {% for code, name in langs.items() %}
@@ -38,13 +20,17 @@
     </p>
 
     {% if not cards %}
-        <p>No flashcards with {{ lang_name }} translations in this topic yet — nothing to quiz on.</p>
+        <div class="panel">
+            <p>No flashcards with {{ lang_name }} translations in this topic yet — nothing to quiz on.</p>
+        </div>
 
     {% elif results is none %}
-        <p>Type the {{ lang_name }} translation for each English word ({{ cards|length }} questions):</p>
+        <div class="panel">
+            <p>Type the {{ lang_name }} translation for each English word ({{ cards|length }} questions):</p>
+        </div>
         <form method="POST" action="{{ url_for('quiz', topic=topic, lang=lang) }}">
             {% for card in cards %}
-                <div class="question">
+                <div class="panel question">
                     <div class="word">{{ loop.index }}. {{ card.word }}{% if card.pos %} ({{ card.pos }}){% endif %}</div>
                     <input type="text" name="answer_{{ card.id }}" autocomplete="off" lang="{{ 'uk' if lang == 'ukr' else 'ru' }}">
                 </div>
@@ -55,7 +41,7 @@
     {% else %}
         <p class="score">Score: {{ score }} / {{ results|length }}</p>
         {% for r in results %}
-            <div class="question {{ 'correct' if r.correct else 'wrong' }}">
+            <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
                 <div class="word">{{ loop.index }}. {{ r.word }}{% if r.pos %} ({{ r.pos }}){% endif %}</div>
                 <p>Your answer: {{ r.user_answer or '—' }}</p>
                 {% if not r.correct %}
@@ -63,7 +49,6 @@
                 {% endif %}
             </div>
         {% endfor %}
-        <p><a href="{{ url_for('quiz', topic=topic, lang=lang) }}">Try again</a></p>
+        <p class="crumbs"><a href="{{ url_for('quiz', topic=topic, lang=lang) }}">Try again</a></p>
     {% endif %}
-</body>
-</html>
+{% endblock %}
