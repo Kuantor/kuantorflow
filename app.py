@@ -64,7 +64,8 @@ def index():
             elif action == "test_db":
                 conn = get_db_connection()
                 conn.close()
-                message = "Database connection successful!"
+                flash(("Database connection successful!", None))
+                return redirect(url_for("index"))
         except Exception as e:
             message = f"Error: {e}"
 
