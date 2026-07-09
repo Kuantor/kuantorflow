@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 
 REVERSO_URL = "https://context.reverso.net/translation/english-{lang}/{word}"
 REVERSO_LANGS = {"ukr": "ukrainian", "rus": "russian"}
+DEFINITION_URL = "https://dictionary.reverso.net/english-definition/{word}"
 
 # Reverso blocks requests without a browser-like User-Agent.
 HEADERS = {
@@ -25,6 +26,7 @@ HEADERS = {
 MAX_TRANSLATIONS = 3
 MAX_EXAMPLES = 3
 MAX_EXAMPLES_FETCH = 12
+MAX_DEFINITIONS = 3
 
 # Reverso tags each translation element with a part-of-speech CSS class.
 POS_CLASSES = {"n": "noun", "v": "verb", "adj": "adjective", "adv": "adverb"}
@@ -91,11 +93,56 @@ def _match_examples(terms, examples):
     return [en for en, _ in matched], [target for _, target in matched]
 
 
+def _fetch_definitions(word):
+    """
+    Fetch short English definitions from Reverso's dictionary
+    (dictionary.reverso.net), grouped by part of speech.
+    Returns e.g. {'verb': ['simplify a process...'], 'noun': [...]}.
+    Definitions marked 'very common' on the page are preferred.
+    """
+    url = DEFINITION_URL.format(word=quote(word))
+    resp = requests.get(url, headers=HEADERS, timeout=10)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    # POS labels and definition entries are siblings, so walk the page in
+    # document order and remember which POS section we are in.
+    collected = {}  # pos -> list of (is_common, text)
+    current_pos = None
+    for el in soup.select(".definition-pos-block__pos, .definition-example__def"):
+        classes = el.get("class", [])
+        if "definition-pos-block__pos" in classes:
+            current_pos = el.get_text(strip=True).lower()
+            continue
+        if current_pos is None:
+            continue
+        # The clean sense text lives in the mention-sentence child; the
+        # element also contains category/domain chips we don't want.
+        sentence = el.select_one(".definition-example__mention-sentence")
+        text = (sentence or el).get_text(" ", strip=True)
+        if text:
+            is_common = any("very-common" in cls for cls in classes)
+            collected.setdefault(current_pos, []).append((is_common, text))
+
+    definitions = {}
+    for pos, entries in collected.items():
+        ordered = [t for c, t in entries if c] + [t for c, t in entries if not c]
+        defs = []
+        for text in ordered:
+            if text not in defs:
+                defs.append(text)
+            if len(defs) >= MAX_DEFINITIONS:
+                break
+        definitions[pos] = defs
+    return definitions
+
+
 def parse_reverso_word(word, topic=None):
     """
     Look up a word on Reverso Context (English→Ukrainian and English→Russian)
     and build flashcard entries — one per part of speech found, so e.g.
-    'run' produces separate verb and noun cards.
+    'run' produces separate verb and noun cards. English definitions from
+    Reverso's dictionary are attached to the matching cards.
     """
     cards = {}  # pos -> entry dict
 
@@ -126,6 +173,14 @@ def parse_reverso_word(word, topic=None):
 
     if not cards:
         raise ValueError(f"No Reverso results found for '{word}'")
+
+    try:
+        definitions = _fetch_definitions(word)
+    except requests.RequestException:
+        definitions = {}  # cards are still useful without definitions
+    for pos, defs in definitions.items():
+        if pos in cards:
+            cards[pos]["explanation_en"] = "; ".join(defs)
 
     return list(cards.values())
 
