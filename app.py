@@ -5,6 +5,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from parsers import parse_google_word, parse_mht_file
 from utils import (
+    delete_flashcard,
     get_db_connection,
     get_flashcards_by_topic,
     get_topics,
@@ -87,6 +88,17 @@ def flashcards(topic):
     """Display all flashcards saved under the given topic."""
     cards = get_flashcards_by_topic(topic)
     return render_template("flashcards.html", topic=topic, cards=cards)
+
+
+@app.route("/flashcards/<topic>/delete/<int:card_id>", methods=["POST"])
+def delete_card(topic, card_id):
+    """Delete one flashcard and return to its topic page."""
+    word = delete_flashcard(card_id)
+    if word:
+        flash((f"Deleted card '{word}'.", None))
+    else:
+        flash(("Card not found — it may have already been deleted.", None))
+    return redirect(url_for("flashcards", topic=topic))
 
 
 def _answer_variants(translation):
