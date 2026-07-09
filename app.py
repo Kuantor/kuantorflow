@@ -67,5 +67,47 @@ def flashcards(topic):
     return render_template("flashcards.html", topic=topic, cards=cards)
 
 
+def _answer_variants(translation):
+    """
+    Split a stored translation like 'дом, здание, жильё' into normalized
+    variants accepted as correct answers.
+    """
+    return {
+        variant.strip().lower().replace("ё", "е")
+        for variant in translation.split(",")
+        if variant.strip()
+    }
+
+
+@app.route("/quiz/<topic>", methods=["GET", "POST"])
+def quiz(topic):
+    """
+    Quiz on the given topic: show each English word, the user types the
+    Russian translation. Cards without a Russian translation are skipped.
+    On POST, grade the answers and show the results.
+    """
+    cards = [c for c in get_flashcards_by_topic(topic) if c.get("translation_rus")]
+
+    if request.method == "POST":
+        results = []
+        for card in cards:
+            user_answer = (request.form.get(f"answer_{card['id']}") or "").strip()
+            normalized = user_answer.lower().replace("ё", "е")
+            correct = normalized in _answer_variants(card["translation_rus"])
+            results.append({
+                "word": card["word"],
+                "user_answer": user_answer,
+                "expected": card["translation_rus"],
+                "correct": correct,
+            })
+        score = sum(1 for r in results if r["correct"])
+        return render_template(
+            "quiz.html", topic=topic, cards=cards,
+            results=results, score=score,
+        )
+
+    return render_template("quiz.html", topic=topic, cards=cards, results=None)
+
+
 if __name__ == "__main__":
     app.run(debug=True)
