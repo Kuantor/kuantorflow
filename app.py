@@ -79,34 +79,48 @@ def _answer_variants(translation):
     }
 
 
+QUIZ_LANGS = {"rus": "Russian", "ukr": "Ukrainian"}
+
+
 @app.route("/quiz/<topic>", methods=["GET", "POST"])
 def quiz(topic):
     """
     Quiz on the given topic: show each English word, the user types the
-    Russian translation. Cards without a Russian translation are skipped.
+    translation in the chosen language (?lang=rus or ?lang=ukr, Russian
+    by default). Cards without that translation are skipped.
     On POST, grade the answers and show the results.
     """
-    cards = [c for c in get_flashcards_by_topic(topic) if c.get("translation_rus")]
+    lang = request.args.get("lang", "rus")
+    if lang not in QUIZ_LANGS:
+        lang = "rus"
+    field = f"translation_{lang}"
+
+    cards = [c for c in get_flashcards_by_topic(topic) if c.get(field)]
 
     if request.method == "POST":
         results = []
         for card in cards:
             user_answer = (request.form.get(f"answer_{card['id']}") or "").strip()
             normalized = user_answer.lower().replace("ё", "е")
-            correct = normalized in _answer_variants(card["translation_rus"])
+            correct = normalized in _answer_variants(card[field])
             results.append({
                 "word": card["word"],
                 "user_answer": user_answer,
-                "expected": card["translation_rus"],
+                "expected": card[field],
                 "correct": correct,
             })
         score = sum(1 for r in results if r["correct"])
         return render_template(
             "quiz.html", topic=topic, cards=cards,
+            lang=lang, lang_name=QUIZ_LANGS[lang], langs=QUIZ_LANGS,
             results=results, score=score,
         )
 
-    return render_template("quiz.html", topic=topic, cards=cards, results=None)
+    return render_template(
+        "quiz.html", topic=topic, cards=cards,
+        lang=lang, lang_name=QUIZ_LANGS[lang], langs=QUIZ_LANGS,
+        results=None,
+    )
 
 
 if __name__ == "__main__":

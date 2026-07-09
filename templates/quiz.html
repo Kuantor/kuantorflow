@@ -13,6 +13,11 @@
         .expected { color: #555; }
         .score { font-size: 1.4rem; margin: 1rem 0; }
         button { padding: 0.5rem 1.5rem; }
+        .lang-switch a, .lang-switch span {
+            display: inline-block; padding: 0.3rem 1rem; margin-right: 0.5rem;
+            border: 1px solid #ccc; border-radius: 999px; text-decoration: none;
+        }
+        .lang-switch span { background: #1a73e8; border-color: #1a73e8; color: #fff; }
     </style>
 </head>
 <body>
@@ -22,16 +27,26 @@
     </p>
     <h1>Quiz: {{ topic }}</h1>
 
+    <p class="lang-switch">
+        {% for code, name in langs.items() %}
+            {% if code == lang %}
+                <span>{{ name }}</span>
+            {% else %}
+                <a href="{{ url_for('quiz', topic=topic, lang=code) }}">{{ name }}</a>
+            {% endif %}
+        {% endfor %}
+    </p>
+
     {% if not cards %}
-        <p>No flashcards with Russian translations in this topic yet — nothing to quiz on.</p>
+        <p>No flashcards with {{ lang_name }} translations in this topic yet — nothing to quiz on.</p>
 
     {% elif results is none %}
-        <p>Type the Russian translation for each English word ({{ cards|length }} questions):</p>
-        <form method="POST">
+        <p>Type the {{ lang_name }} translation for each English word ({{ cards|length }} questions):</p>
+        <form method="POST" action="{{ url_for('quiz', topic=topic, lang=lang) }}">
             {% for card in cards %}
                 <div class="question">
                     <div class="word">{{ loop.index }}. {{ card.word }}</div>
-                    <input type="text" name="answer_{{ card.id }}" autocomplete="off" lang="ru">
+                    <input type="text" name="answer_{{ card.id }}" autocomplete="off" lang="{{ 'uk' if lang == 'ukr' else 'ru' }}">
                 </div>
             {% endfor %}
             <button type="submit">Check answers</button>
@@ -48,7 +63,7 @@
                 {% endif %}
             </div>
         {% endfor %}
-        <p><a href="{{ url_for('quiz', topic=topic) }}">Try again</a></p>
+        <p><a href="{{ url_for('quiz', topic=topic, lang=lang) }}">Try again</a></p>
     {% endif %}
 </body>
 </html>
