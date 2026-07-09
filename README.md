@@ -28,10 +28,3 @@ kuantorflow/
 ├── static/             # CSS, JS, images
 └── uploads/            # Uploaded MHT files (optional)
 ```
-├── utils.py            # Database connection + helper functions
-├── requirements.txt    # Python dependencies
-├── README.md           # Project documentation
-├── .gitignore          # Ignore secrets, venv, cache files
-├── templates/          # HTML templates (index.html, flashcards.html, quiz.html)
-├── static/             # CSS, JS, images
-└── uploads/            # Uploaded MHT files (optional)
