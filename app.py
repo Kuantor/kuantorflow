@@ -27,9 +27,15 @@ def index():
                 if not word:
                     message = "Please enter a word."
                 else:
-                    entry = parse_reverso_word(word, topic=topic)
-                    save_flashcard(entry)
-                    flash((f"Saved to Database — '{word}' added to topic '{topic}'.", topic))
+                    entries = parse_reverso_word(word, topic=topic)
+                    for entry in entries:
+                        save_flashcard(entry)
+                    pos_list = ", ".join(e["pos"] for e in entries)
+                    flash((
+                        f"Saved to Database — '{word}' added to topic "
+                        f"'{topic}' as {len(entries)} card(s): {pos_list}.",
+                        topic,
+                    ))
                     return redirect(url_for("index"))
 
             elif action == "upload_mht":
@@ -105,6 +111,7 @@ def quiz(topic):
             correct = normalized in _answer_variants(card[field])
             results.append({
                 "word": card["word"],
+                "pos": card.get("pos"),
                 "user_answer": user_answer,
                 "expected": card[field],
                 "correct": correct,

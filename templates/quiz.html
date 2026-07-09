@@ -45,7 +45,7 @@
         <form method="POST" action="{{ url_for('quiz', topic=topic, lang=lang) }}">
             {% for card in cards %}
                 <div class="question">
-                    <div class="word">{{ loop.index }}. {{ card.word }}</div>
+                    <div class="word">{{ loop.index }}. {{ card.word }}{% if card.pos %} ({{ card.pos }}){% endif %}</div>
                     <input type="text" name="answer_{{ card.id }}" autocomplete="off" lang="{{ 'uk' if lang == 'ukr' else 'ru' }}">
                 </div>
             {% endfor %}
@@ -56,7 +56,7 @@
         <p class="score">Score: {{ score }} / {{ results|length }}</p>
         {% for r in results %}
             <div class="question {{ 'correct' if r.correct else 'wrong' }}">
-                <div class="word">{{ loop.index }}. {{ r.word }}</div>
+                <div class="word">{{ loop.index }}. {{ r.word }}{% if r.pos %} ({{ r.pos }}){% endif %}</div>
                 <p>Your answer: {{ r.user_answer or '—' }}</p>
                 {% if not r.correct %}
                     <p class="expected">Correct answer: {{ r.expected }}</p>

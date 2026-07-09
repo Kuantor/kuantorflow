@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS flashcards (
     id INT AUTO_INCREMENT PRIMARY KEY,
     word VARCHAR(255) NOT NULL,
+    pos VARCHAR(20),
     explanation_en TEXT,
     examples_en TEXT,
     translation_ukr VARCHAR(255),
@@ -15,3 +16,6 @@ CREATE TABLE IF NOT EXISTS flashcards (
     INDEX idx_topic (topic),
     INDEX idx_word (word)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- If the flashcards table already exists without the pos column, run:
+-- ALTER TABLE flashcards ADD COLUMN pos VARCHAR(20) AFTER word;
