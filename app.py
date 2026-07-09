@@ -1,9 +1,14 @@
-from flask import Flask, redirect, render_template, request, url_for
+import os
+
+from flask import Flask, flash, redirect, render_template, request, url_for
 
 from parsers import parse_mht_file, parse_reverso_word
 from utils import get_db_connection, get_flashcards_by_topic, save_flashcard
 
 app = Flask(__name__)
+# Needed for flash messages (session cookie). Override in production:
+# set the SECRET_KEY environment variable on PythonAnywhere.
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -24,7 +29,8 @@ def index():
                 else:
                     entry = parse_reverso_word(word, topic=topic)
                     save_flashcard(entry)
-                    return redirect(url_for("flashcards", topic=topic))
+                    flash((f"Saved to Database — '{word}' added to topic '{topic}'.", topic))
+                    return redirect(url_for("index"))
 
             elif action == "upload_mht":
                 file = request.files.get("mht_file")
@@ -37,7 +43,12 @@ def index():
                     else:
                         for entry in entries:
                             save_flashcard(entry)
-                        return redirect(url_for("flashcards", topic=topic))
+                        flash((
+                            f"Saved to Database — {len(entries)} flashcard(s) "
+                            f"from '{file.filename}' added to topic '{topic}'.",
+                            topic,
+                        ))
+                        return redirect(url_for("index"))
 
             elif action == "test_db":
                 conn = get_db_connection()
