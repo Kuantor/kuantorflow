@@ -1,16 +1,42 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8">
     <title>KuantorFlow</title>
 </head>
 <body>
     <h1>Welcome to KuantorFlow</h1>
-    <form method="POST">
-        <button type="submit">Test DB Connection</button>
-    </form>
 
     {% if message %}
-        <p>{{ message }}</p>
+        <p><strong>{{ message }}</strong></p>
     {% endif %}
+
+    <h2>Look up a word (Reverso)</h2>
+    <form method="POST">
+        <input type="hidden" name="action" value="parse_word">
+        <label>Word: <input type="text" name="word" required></label>
+        <label>Topic: <input type="text" name="topic" placeholder="general"></label>
+        <button type="submit">Look up &amp; save</button>
+    </form>
+
+    <h2>Upload notes (.mht)</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="upload_mht">
+        <label>File: <input type="file" name="mht_file" accept=".mht,.mhtml" required></label>
+        <label>Topic: <input type="text" name="topic" placeholder="general"></label>
+        <button type="submit">Upload &amp; save</button>
+    </form>
+
+    <h2>Browse flashcards</h2>
+    <form method="GET" onsubmit="window.location='/flashcards/' + encodeURIComponent(this.topic.value); return false;">
+        <label>Topic: <input type="text" name="topic" required></label>
+        <button type="submit">Show flashcards</button>
+    </form>
+
+    <hr>
+    <form method="POST">
+        <input type="hidden" name="action" value="test_db">
+        <button type="submit">Test DB Connection</button>
+    </form>
 </body>
 </html>
