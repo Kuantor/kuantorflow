@@ -3,7 +3,12 @@ import os
 from flask import Flask, flash, redirect, render_template, request, url_for
 
 from parsers import parse_mht_file, parse_reverso_word
-from utils import get_db_connection, get_flashcards_by_topic, save_flashcard
+from utils import (
+    get_db_connection,
+    get_flashcards_by_topic,
+    get_topics,
+    save_flashcard,
+)
 
 app = Flask(__name__)
 # Needed for flash messages (session cookie). Override in production:
@@ -63,7 +68,12 @@ def index():
         except Exception as e:
             message = f"Error: {e}"
 
-    return render_template("index.html", message=message)
+    try:
+        topics = get_topics()
+    except Exception:
+        topics = []  # DB unreachable (e.g. locally) — page still works
+
+    return render_template("index.html", message=message, topics=topics)
 
 
 @app.route("/flashcards/<topic>")

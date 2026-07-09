@@ -1,34 +1,22 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Flashcards — {{ topic }}</title>
-    <style>
-        body { font-family: sans-serif; max-width: 720px; margin: 2rem auto; }
-        .card { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
-        .word { font-size: 1.3rem; font-weight: bold; }
-        .pos {
-            font-size: 0.75rem; font-weight: normal; color: #fff;
-            background: #1a73e8; border-radius: 999px; padding: 0.1rem 0.6rem;
-            vertical-align: middle;
-        }
-        .lang { color: #555; font-size: 0.85rem; text-transform: uppercase; margin-top: 0.5rem; }
-        ul { margin: 0.25rem 0; }
-    </style>
-</head>
-<body>
-    <p>
+{% extends "base.html" %}
+
+{% block title %}Flashcards — {{ topic }} | KuantorFlow{% endblock %}
+
+{% block content %}
+    <p class="crumbs">
         <a href="{{ url_for('index') }}">&larr; Home</a> |
         <a href="{{ url_for('quiz', topic=topic) }}">Take quiz</a>
     </p>
-    <h1>Flashcards: {{ topic }}</h1>
+    <h1 class="page-title">Flashcards: {{ topic }}</h1>
 
     {% if not cards %}
-        <p>No flashcards saved under this topic yet.</p>
+        <div class="panel">
+            <p>No flashcards saved under this topic yet.</p>
+        </div>
     {% endif %}
 
     {% for card in cards %}
-        <div class="card">
+        <div class="panel card">
             <div class="word">{{ card.word }}
                 {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
             </div>
@@ -58,5 +46,4 @@
             {% endif %}
         </div>
     {% endfor %}
-</body>
-</html>
+{% endblock %}

@@ -10,7 +10,8 @@ def get_db_connection():
         user="kuantorflow",
         password="password",
         host="kuantorflow.mysql.pythonanywhere-services.com",
-        database="kuantorflow$default"
+        database="kuantorflow$default",
+        connection_timeout=5,
     )
     return conn
 
@@ -55,6 +56,26 @@ def save_flashcard(entry):
         return row_id
     finally:
         conn.close()
+
+
+def get_topics():
+    """
+    Return all topics that have flashcards, as (topic, card_count) tuples
+    sorted by topic name.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT topic, COUNT(*) FROM flashcards "
+            "WHERE topic IS NOT NULL AND topic != '' "
+            "GROUP BY topic ORDER BY topic"
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+    finally:
+        conn.close()
+    return rows
 
 
 LIST_FIELDS = ("examples_en", "examples_ukr", "examples_rus")
