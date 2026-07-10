@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Enter keyword | KuantorFlow</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/icon.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="gate-body">
+    <div class="gate-card">
+        <img class="gate-image" src="{{ url_for('static', filename='img/hi_there.jpg') }}" alt="Hi there">
+        <h1 class="gate-title">Please enter the keyword to access my website.</h1>
+        {% if error %}
+            <p class="gate-error">{{ error }}</p>
+        {% endif %}
+        <form method="POST" class="gate-form">
+            <input type="password" name="keyword" placeholder="Keyword" autofocus required>
+            <button type="submit">Enter</button>
+        </form>
+    </div>
+</body>
+</html>

@@ -267,6 +267,57 @@ button:hover { background: var(--blue-dark); }
 .modal-actions .secondary { background: #e4e9ee; color: var(--ink); }
 .modal-actions .secondary:hover { background: #d3dae1; }
 
+/* Keyword gate (access screen) */
+.gate-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+.gate-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(4px);
+    border-radius: 16px;
+    padding: 2rem 2.2rem;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+.gate-image {
+    max-width: 220px;
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    margin-bottom: 1.2rem;
+}
+.gate-title {
+    font-size: 1.25rem;
+    color: var(--blue-dark);
+    margin: 0 0 1.2rem;
+}
+.gate-error {
+    background: var(--bad-bg);
+    border: 1px solid var(--bad-border);
+    color: var(--bad-ink);
+    border-radius: 8px;
+    padding: 0.6rem 0.9rem;
+    margin: 0 0 1rem;
+}
+.gate-form input[type="password"] {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid #c5d0da;
+    border-radius: 8px;
+    font-size: 1rem;
+    text-align: center;
+}
+.gate-form input[type="password"]:focus {
+    outline: 2px solid var(--blue);
+    border-color: var(--blue);
+}
+.gate-form button { width: 100%; }
+
 @media (max-width: 600px) {
     .form-row { flex-direction: column; gap: 0; }
 }
