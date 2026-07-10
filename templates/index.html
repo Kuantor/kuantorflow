@@ -71,6 +71,88 @@
         </form>
     </div>
 
+    {% if proposed %}
+        <div class="modal-overlay" id="proposal-modal">
+            <div class="modal modal-dialog proposal-dialog">
+                <p class="proposal-title">Do you want to add the card(s) to the database?</p>
+                <div class="modal-scroll">
+                    {% for card in proposed %}
+                        <form class="proposal-card" data-add-url="{{ url_for('add_card') }}">
+                            <button type="button" class="card-delete proposal-remove"
+                                    aria-label="Remove this card">&times;</button>
+                            <div class="word">{{ card.word }}
+                                {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
+                            </div>
+                            <input type="hidden" name="word" value="{{ card.word }}">
+                            <input type="hidden" name="pos" value="{{ card.pos or '' }}">
+                            <input type="hidden" name="topic" value="{{ proposed_topic }}">
+                            <label>English explanation</label>
+                            <textarea name="explanation_en" rows="2">{{ card.explanation_en or '' }}</textarea>
+                            <label>Ukrainian translation</label>
+                            <input type="text" name="translation_ukr" value="{{ card.translation_ukr or '' }}">
+                            <label>Russian translation</label>
+                            <input type="text" name="translation_rus" value="{{ card.translation_rus or '' }}">
+                            <button type="submit" class="add-btn">Add</button>
+                        </form>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <script>
+            (function () {
+                var overlay = document.getElementById("proposal-modal");
+                var addedCount = 0;
+
+                function close() {
+                    overlay.hidden = true;
+                    // refresh so the topic chips reflect the new cards
+                    if (addedCount > 0) window.location.href = "{{ url_for('index') }}";
+                }
+                function maybeAutoClose() {
+                    // close once no card is left to act on (added ones don't count)
+                    if (!overlay.querySelector(".proposal-card:not(.added)")) close();
+                }
+
+                overlay.querySelectorAll(".proposal-card").forEach(function (form) {
+                    form.addEventListener("submit", function (e) {
+                        e.preventDefault();
+                        var btn = form.querySelector(".add-btn");
+                        btn.disabled = true;
+                        btn.textContent = "Adding…";
+                        fetch(form.dataset.addUrl, { method: "POST", body: new FormData(form) })
+                            .then(function (resp) {
+                                if (!resp.ok) throw new Error("save failed");
+                                addedCount++;
+                                form.classList.add("added");
+                                btn.textContent = "Added ✓";
+                                form.querySelectorAll("input, textarea").forEach(function (el) {
+                                    el.disabled = true;
+                                });
+                                setTimeout(maybeAutoClose, 700);
+                            })
+                            .catch(function () {
+                                btn.disabled = false;
+                                btn.textContent = "Add";
+                                alert("Saving failed — please try again.");
+                            });
+                    });
+                    form.querySelector(".proposal-remove").addEventListener("click", function () {
+                        form.remove();
+                        maybeAutoClose();
+                    });
+                });
+
+                overlay.addEventListener("click", function (e) {
+                    if (e.target === overlay) close();
+                });
+                document.addEventListener("keydown", function (e) {
+                    if (e.key === "Escape" && !overlay.hidden) close();
+                });
+            })();
+        </script>
+    {% endif %}
+
     <script>
         // A Reverso lookup makes several web requests and takes a few
         // seconds: disable the button so users don't double-submit.

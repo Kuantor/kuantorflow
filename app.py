@@ -65,6 +65,8 @@ def index():
     Successful submissions save flashcards and redirect to the topic page.
     """
     message = None
+    proposed = None
+    proposed_topic = None
     if request.method == "POST":
         action = request.form.get("action")
         topic = (request.form.get("topic") or "general").strip() or "general"
@@ -74,16 +76,9 @@ def index():
                 if not word:
                     message = "Please enter a word."
                 else:
-                    entries = parse_google_word(word, topic=topic)
-                    for entry in entries:
-                        save_flashcard(entry)
-                    pos_list = ", ".join(e["pos"] for e in entries)
-                    flash((
-                        f"Saved to Database — '{word}' added to topic "
-                        f"'{topic}' as {len(entries)} card(s): {pos_list}.",
-                        topic,
-                    ))
-                    return redirect(url_for("index"))
+                    # Don't save yet: show the cards for review/editing first.
+                    proposed = parse_google_word(word, topic=topic)
+                    proposed_topic = topic
 
             elif action == "upload_mht":
                 file = request.files.get("mht_file")
@@ -116,7 +111,34 @@ def index():
     except Exception:
         topics = []  # DB unreachable (e.g. locally) — page still works
 
-    return render_template("index.html", message=message, topics=topics)
+    return render_template(
+        "index.html", message=message, topics=topics,
+        proposed=proposed, proposed_topic=proposed_topic,
+    )
+
+
+@app.route("/cards/add", methods=["POST"])
+def add_card():
+    """
+    Save one reviewed (possibly edited) card from the lookup popup.
+    Returns JSON so the popup can stay open for the remaining cards.
+    """
+    def cleaned(field):
+        return (request.form.get(field) or "").strip() or None
+
+    word = cleaned("word")
+    if not word:
+        return {"ok": False, "error": "word is required"}, 400
+    entry = {
+        "word": word,
+        "pos": cleaned("pos"),
+        "topic": cleaned("topic") or "general",
+        "explanation_en": cleaned("explanation_en"),
+        "translation_ukr": cleaned("translation_ukr"),
+        "translation_rus": cleaned("translation_rus"),
+    }
+    save_flashcard(entry)
+    return {"ok": True}
 
 
 @app.route("/flashcards/<topic>")

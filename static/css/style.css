@@ -251,6 +251,40 @@ button:hover { background: var(--blue-dark); }
 }
 .modal-close:hover { background: #e0b52a; }
 
+/* Lookup review popup (proposed cards) */
+.proposal-dialog { width: min(92vw, 560px); max-width: none; }
+.proposal-title { font-size: 1.1rem; font-weight: 600; margin: 0 0 1rem; }
+.modal-scroll {
+    max-height: 65vh;
+    overflow-y: auto;
+    padding-right: 0.4rem;  /* keep the scroll bar off the content */
+}
+.proposal-card {
+    position: relative;
+    border: 1px solid #c5d0da;
+    border-left: 5px solid var(--blue);
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.9rem;
+}
+.proposal-card textarea {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #c5d0da;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    resize: vertical;
+    background: #fff;
+}
+.proposal-card textarea:focus {
+    outline: 2px solid var(--blue);
+    border-color: var(--blue);
+}
+.proposal-card .add-btn { margin-top: 0.8rem; }
+.proposal-card.added { opacity: 0.6; border-left-color: var(--ok-border); }
+.proposal-card.added .add-btn { background: var(--ok-border); }
+
 /* Confirmation dialog (card deletion) */
 .modal-dialog {
     background: #fff;
