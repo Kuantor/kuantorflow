@@ -1,0 +1,18 @@
+{# Link preview (Open Graph) for Telegram, Viber, WhatsApp, Facebook...
+   Included on both the normal pages and the keyword gate, so previews
+   keep working while the gate is on (crawlers land on the gate page).
+   Callers may set `preview_title`; it defaults to the site name. #}
+{% set preview_description = "Turn words and notes into bilingual flashcards "
+    "and quizzes — English with Ukrainian and Russian translations. "
+    "Look up a word, get cards per part of speech, then test yourself." %}
+<meta name="description" content="{{ preview_description }}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="KuantorFlow">
+<meta property="og:title" content="{{ preview_title | default('KuantorFlow', true) }}">
+<meta property="og:description" content="{{ preview_description }}">
+<meta property="og:url" content="{{ request.base_url }}">
+<meta property="og:image" content="{{ url_for('static', filename='img/preview.jpg', _external=True) }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ preview_title | default('KuantorFlow', true) }}">
+<meta name="twitter:description" content="{{ preview_description }}">
+<meta name="twitter:image" content="{{ url_for('static', filename='img/preview.jpg', _external=True) }}">

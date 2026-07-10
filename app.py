@@ -1,6 +1,14 @@
 import os
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import (
+    Flask,
+    flash,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from parsers import parse_google_word, parse_mht_file
@@ -20,6 +28,34 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 # PythonAnywhere serves the app behind a proxy; trust its X-Forwarded-*
 # headers so absolute URLs (og:image etc.) use https and the real host.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# Keyword that gates access to the whole site (set ACCESS_KEYWORD in .env).
+ACCESS_KEYWORD = os.environ.get("ACCESS_KEYWORD", "password")
+
+
+@app.before_request
+def require_keyword():
+    """Block every page behind the keyword gate until it's been entered."""
+    if session.get("access_granted"):
+        return None
+    # The gate page and static assets (its image, CSS, favicon) must load.
+    if request.endpoint in ("gate", "static"):
+        return None
+    return redirect(url_for("gate"))
+
+
+@app.route("/enter", methods=["GET", "POST"])
+def gate():
+    """Keyword entry screen shown before any access to the site."""
+    if session.get("access_granted"):
+        return redirect(url_for("index"))
+    error = None
+    if request.method == "POST":
+        if (request.form.get("keyword") or "") == ACCESS_KEYWORD:
+            session["access_granted"] = True
+            return redirect(url_for("index"))
+        error = "Incorrect keyword. Please try again."
+    return render_template("gate.html", error=error)
 
 
 @app.route("/", methods=["GET", "POST"])
