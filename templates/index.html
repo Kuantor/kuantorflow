@@ -73,35 +73,52 @@
 
     {% if proposed %}
         <div class="modal-overlay" id="proposal-modal">
-            <div class="modal modal-dialog proposal-dialog">
-                <p class="proposal-title">Do you want to add the card(s) to the database?</p>
-                <div class="modal-scroll">
-                    {% for card in proposed %}
-                        <form class="proposal-card" data-add-url="{{ url_for('add_card') }}">
-                            <button type="button" class="card-delete proposal-remove"
-                                    aria-label="Remove this card">&times;</button>
-                            <div class="word">{{ card.word }}
-                                {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
-                            </div>
-                            <input type="hidden" name="word" value="{{ card.word }}">
-                            <input type="hidden" name="pos" value="{{ card.pos or '' }}">
-                            <input type="hidden" name="topic" value="{{ proposed_topic }}">
-                            <label>English explanation</label>
-                            <textarea name="explanation_en" rows="2">{{ card.explanation_en or '' }}</textarea>
-                            <label>Ukrainian translation</label>
-                            <input type="text" name="translation_ukr" value="{{ card.translation_ukr or '' }}">
-                            <label>Russian translation</label>
-                            <input type="text" name="translation_rus" value="{{ card.translation_rus or '' }}">
-                            <button type="submit" class="add-btn">Add</button>
-                        </form>
-                    {% endfor %}
+            <div class="modal modal-dialog proposal-dialog{% if mht_content %} proposal-dialog--mht{% endif %}">
+                <p class="proposal-title">
+                    {% if mht_content %}Review the cards parsed from your file{% else %}Do you want to add the card(s) to the database?{% endif %}
+                </p>
+                <div class="proposal-body">
+                    {% if mht_content %}
+                        <div class="proposal-source">
+                            <h3 class="proposal-pane-title">File content</h3>
+                            <pre>{{ mht_content }}</pre>
+                        </div>
+                    {% endif %}
+                    <div class="modal-scroll proposal-cards-pane">
+                        {% if mht_content %}<h3 class="proposal-pane-title">Cards to add ({{ proposed|length }})</h3>{% endif %}
+                        {% for card in proposed %}
+                            <form class="proposal-card" data-add-url="{{ url_for('add_card') }}">
+                                <button type="button" class="card-delete proposal-remove"
+                                        aria-label="Remove this card">&times;</button>
+                                <div class="word">{{ card.word }}
+                                    {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
+                                </div>
+                                <input type="hidden" name="word" value="{{ card.word }}">
+                                <input type="hidden" name="pos" value="{{ card.pos or '' }}">
+                                <input type="hidden" name="topic" value="{{ proposed_topic }}">
+                                <label>English explanation</label>
+                                <textarea name="explanation_en" rows="2">{{ card.explanation_en or '' }}</textarea>
+                                <label>Ukrainian translation</label>
+                                <input type="text" name="translation_ukr" value="{{ card.translation_ukr or '' }}">
+                                <label>Russian translation</label>
+                                <input type="text" name="translation_rus" value="{{ card.translation_rus or '' }}">
+                                <button type="submit" class="add-btn">Add</button>
+                            </form>
+                        {% endfor %}
+                    </div>
                 </div>
+                {% if mht_content %}
+                    <div class="proposal-footer">
+                        <button type="button" id="proposal-add-all" class="add-btn">Add All</button>
+                    </div>
+                {% endif %}
             </div>
         </div>
 
         <script>
             (function () {
                 var overlay = document.getElementById("proposal-modal");
+                if (!overlay) return;
                 var addedCount = 0;
 
                 function close() {
@@ -113,35 +130,70 @@
                     // close once no card is left to act on (added ones don't count)
                     if (!overlay.querySelector(".proposal-card:not(.added)")) close();
                 }
+                // Save one card via /cards/add. Returns a promise that rejects
+                // on failure. Shared by the per-card button and "Add All".
+                function addCard(form) {
+                    if (form.classList.contains("added")) return Promise.resolve();
+                    var btn = form.querySelector(".add-btn");
+                    btn.disabled = true;
+                    btn.textContent = "Adding…";
+                    return fetch(form.dataset.addUrl, { method: "POST", body: new FormData(form) })
+                        .then(function (resp) {
+                            if (!resp.ok) throw new Error("save failed");
+                            addedCount++;
+                            form.classList.add("added");
+                            btn.textContent = "Added ✓";
+                            form.querySelectorAll("input, textarea").forEach(function (el) {
+                                el.disabled = true;
+                            });
+                        })
+                        .catch(function (err) {
+                            btn.disabled = false;
+                            btn.textContent = "Add";
+                            throw err;
+                        });
+                }
 
                 overlay.querySelectorAll(".proposal-card").forEach(function (form) {
                     form.addEventListener("submit", function (e) {
                         e.preventDefault();
-                        var btn = form.querySelector(".add-btn");
-                        btn.disabled = true;
-                        btn.textContent = "Adding…";
-                        fetch(form.dataset.addUrl, { method: "POST", body: new FormData(form) })
-                            .then(function (resp) {
-                                if (!resp.ok) throw new Error("save failed");
-                                addedCount++;
-                                form.classList.add("added");
-                                btn.textContent = "Added ✓";
-                                form.querySelectorAll("input, textarea").forEach(function (el) {
-                                    el.disabled = true;
-                                });
-                                setTimeout(maybeAutoClose, 700);
-                            })
-                            .catch(function () {
-                                btn.disabled = false;
-                                btn.textContent = "Add";
-                                alert("Saving failed — please try again.");
-                            });
+                        addCard(form)
+                            .then(function () { setTimeout(maybeAutoClose, 700); })
+                            .catch(function () { alert("Saving failed — please try again."); });
                     });
                     form.querySelector(".proposal-remove").addEventListener("click", function () {
                         form.remove();
                         maybeAutoClose();
                     });
                 });
+
+                var addAllBtn = document.getElementById("proposal-add-all");
+                if (addAllBtn) {
+                    addAllBtn.addEventListener("click", function () {
+                        addAllBtn.disabled = true;
+                        addAllBtn.textContent = "Adding…";
+                        var forms = Array.prototype.slice.call(
+                            overlay.querySelectorAll(".proposal-card:not(.added)"));
+                        var failed = 0;
+                        // Add sequentially so we don't hammer the database.
+                        var chain = Promise.resolve();
+                        forms.forEach(function (form) {
+                            chain = chain
+                                .then(function () { return addCard(form); })
+                                .catch(function () { failed++; });
+                        });
+                        chain.then(function () {
+                            if (failed) {
+                                addAllBtn.disabled = false;
+                                addAllBtn.textContent = "Add All";
+                                alert(failed + " card(s) could not be saved — please try again.");
+                            } else {
+                                addAllBtn.textContent = "Added ✓";
+                            }
+                            setTimeout(maybeAutoClose, 700);
+                        });
+                    });
+                }
 
                 overlay.addEventListener("click", function (e) {
                     if (e.target === overlay) close();

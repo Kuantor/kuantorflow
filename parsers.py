@@ -316,13 +316,11 @@ def _entry_from_line(text, topic):
     return None
 
 
-def parse_mht_file(data, topic=None):
-    """
-    Parse an .mht (MIME HTML, e.g. OneNote export) file and extract flashcard
-    entries from lines shaped like 'word — explanation'.
+TEXT_NODES = ["p", "li", "td", "h1", "h2", "h3", "h4"]
 
-    `data` is the raw file content as bytes. Returns a list of entry dicts.
-    """
+
+def _mht_soup(data):
+    """Decode an .mht (MIME HTML) byte payload and return its HTML as soup."""
     if isinstance(data, str):
         data = data.encode("utf-8")
     msg = email.message_from_bytes(data, policy=policy.default)
@@ -334,8 +332,11 @@ def parse_mht_file(data, topic=None):
             break
     if html is None:
         raise ValueError("No HTML content found in the MHT file")
+    return BeautifulSoup(html, "lxml")
 
-    soup = BeautifulSoup(html, "lxml")
+
+def _entries_from_soup(soup, topic):
+    """Extract flashcard entries from 'word — explanation' lines in the soup."""
     entries = []
     seen_words = set()
     for node in soup.find_all(["p", "li", "td"]):
@@ -345,3 +346,38 @@ def parse_mht_file(data, topic=None):
             seen_words.add(entry["word"].lower())
             entries.append(entry)
     return entries
+
+
+def _readable_text(soup):
+    """The document's visible text, one line per block — shown in the review
+    popup next to the parsed cards so the user can see the source."""
+    lines = []
+    for node in soup.find_all(TEXT_NODES):
+        text = " ".join(node.get_text(" ", strip=True).split())
+        if text:
+            lines.append(text)
+    if not lines:  # fallback for documents without those block tags
+        raw = soup.get_text("\n", strip=True)
+        lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+    return "\n".join(lines)
+
+
+def parse_mht_file(data, topic=None):
+    """
+    Parse an .mht (MIME HTML, e.g. OneNote export) file and extract flashcard
+    entries from lines shaped like 'word — explanation'.
+
+    `data` is the raw file content as bytes. Returns a list of entry dicts.
+    """
+    return _entries_from_soup(_mht_soup(data), topic)
+
+
+def parse_mht_preview(data, topic=None):
+    """
+    Like parse_mht_file, but also return the file's readable text so the UI can
+    show the source alongside the parsed cards for review before saving.
+
+    Returns (entries, source_text).
+    """
+    soup = _mht_soup(data)
+    return _entries_from_soup(soup, topic), _readable_text(soup)

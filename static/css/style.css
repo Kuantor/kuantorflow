@@ -390,6 +390,53 @@ body.welcome-active {
 .proposal-card.added { opacity: 0.6; border-left-color: var(--ok-border); }
 .proposal-card.added .add-btn { background: var(--ok-border); }
 
+/* MHT review: two columns (file content | parsed cards) + Add All footer.
+   Extra specificity so this wins over .modal-dialog's max-width: 420px. */
+.proposal-dialog.proposal-dialog--mht { width: min(95vw, 940px); max-width: none; }
+.proposal-dialog--mht .proposal-body {
+    display: flex;
+    gap: 1.2rem;
+    align-items: stretch;
+}
+.proposal-source,
+.proposal-dialog--mht .proposal-cards-pane { flex: 1 1 0; min-width: 0; }
+.proposal-source { display: flex; flex-direction: column; max-height: 65vh; }
+.proposal-source pre {
+    flex: 1;
+    overflow: auto;
+    margin: 0;
+    padding: 0.8rem;
+    border: 1px solid #c5d0da;
+    border-radius: 8px;
+    background: #f4f6f8;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.proposal-pane-title {
+    margin: 0 0 0.6rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+}
+.proposal-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid #e4e9ee;
+}
+.proposal-footer .add-btn { margin: 0; }
+
+/* Stack the two columns on narrow screens */
+@media (max-width: 640px) {
+    .proposal-dialog--mht .proposal-body { flex-direction: column; }
+    .proposal-source { max-height: 30vh; }
+}
+
 /* Confirmation dialog (card deletion) */
 .modal-dialog {
     background: #fff;
