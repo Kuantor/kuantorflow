@@ -145,6 +145,7 @@
                 <a href="{{ url_for('tynna_about') }}" class="tynna-name" title="About Tynna">Tynna</a>
                 <small>your English study companion</small>
             </div>
+            <button type="button" class="tynna-max" aria-label="Open full chat" title="Open full chat page">&#9633;</button>
             <button type="button" class="tynna-min" aria-label="Minimize" title="Minimize">&#8210;</button>
             <button type="button" class="tynna-close" aria-label="Close" title="Close">&times;</button>
         </div>
@@ -173,6 +174,7 @@
             var form = document.getElementById("tynna-form");
             var input = document.getElementById("tynna-input");
             var send = document.getElementById("tynna-send");
+            var maxBtn = panel.querySelector(".tynna-max");
             var minBtn = panel.querySelector(".tynna-min");
             var closeBtn = panel.querySelector(".tynna-close");
             var avatar = document.getElementById("tynna-avatar");
@@ -236,6 +238,9 @@
 
             launcher.addEventListener("click", openPanel);
             closeBtn.addEventListener("click", closePanel);
+            maxBtn.addEventListener("click", function () {
+                window.location.href = "{{ url_for('tynna_chat_page') }}";
+            });
             minBtn.addEventListener("click", function () {
                 setMinimized(!panel.classList.contains("minimized"));
             });
