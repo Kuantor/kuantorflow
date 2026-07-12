@@ -4,3 +4,8 @@ python-dotenv==1.0.1
 beautifulsoup4==4.12.3
 lxml==5.2.2
 requests==2.32.3
+
+# Tynna AI chat — imported from the sibling ai_agent repo (see AI_AGENT_PATH).
+# These are the agent's runtime deps; without them Tynna is simply disabled.
+anthropic
+scikit-learn
