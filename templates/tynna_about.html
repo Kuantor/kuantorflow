@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block title %}About Tynna{% endblock %}
+
+{% block content %}
+{# Shared content lives in the ai_agent repo (_tynna_about.html), reused here
+   via the cross-repo Jinja loader configured in app.py. #}
+{% include "_tynna_about.html" %}
+{% endblock %}
