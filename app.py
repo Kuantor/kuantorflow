@@ -1,9 +1,10 @@
+import inspect
 import os
 import re
 import sys
 import uuid
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import (
     Flask,
@@ -34,6 +35,11 @@ app = Flask(__name__)
 # Needed for flash messages (session cookie). Override in production:
 # set the SECRET_KEY environment variable on PythonAnywhere.
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+
+# How long a signed-in session survives once marked permanent (see the OAuth
+# callback). Keeps the visitor greeted by name across browser restarts without
+# any server-side storage — the identity still lives only in the signed cookie.
+app.permanent_session_lifetime = timedelta(days=30)
 
 # PythonAnywhere serves the app behind a proxy; trust its X-Forwarded-*
 # headers so absolute URLs (og:image etc.) use https and the real host.
@@ -123,6 +129,24 @@ def _render_ai_agent_template(template_name: str, **context):
     return template.render(**context)
 
 
+def _current_first_name():
+    """First name of the signed-in visitor, if any — for Tynna to address them
+    by (the opening greeting uses the full name; the chat uses the first name)."""
+    name = ((session.get("user") or {}).get("name") or "").strip()
+    return name.split()[0] if name else None
+
+
+def _agent_answer(question, history):
+    """Call the agent, passing the signed-in first name when the installed
+    ai_agent version supports it. Feature-detected so the chat keeps working
+    even if the ai_agent side hasn't been updated yet."""
+    agent = get_tynna()
+    first_name = _current_first_name()
+    if first_name and "user_name" in inspect.signature(agent.answer).parameters:
+        return agent.answer(question, history, user_name=first_name)
+    return agent.answer(question, history)
+
+
 def _handle_tynna_chat_request():
     """Shared JSON chat handler for widget and full ai_agent-style page."""
     if not TYNNA_AVAILABLE:
@@ -139,7 +163,7 @@ def _handle_tynna_chat_request():
         return jsonify({"error": "Please type a question."}), 400
 
     try:
-        result = get_tynna().answer(question, history)
+        result = _agent_answer(question, history)
         _append_chat_log(chat_id, question, result.get("response", ""))
         result["chat_id"] = chat_id
         return jsonify(result)
@@ -288,6 +312,9 @@ def auth_google_callback():
         app.logger.exception("Google OAuth callback failed")
         return redirect(url_for("index"))
     info = token.get("userinfo") or {}
+    # Persist the signed-in session across browser restarts (30 days, see
+    # app.permanent_session_lifetime). Anonymous sessions stay non-permanent.
+    session.permanent = True
     session["user"] = {
         "name": info.get("name") or info.get("given_name") or "there",
         "email": info.get("email"),
