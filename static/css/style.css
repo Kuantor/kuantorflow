@@ -316,7 +316,7 @@ button:hover { background: var(--blue-dark); }
     flex-direction: column;
     max-height: calc(92vh - 2rem);
 }
-.welcome-tynna-layout {
+.welcome-mykola-layout {
     display: grid;
     grid-template-columns: minmax(240px, 320px) 1fr;
     gap: 1.2rem;
@@ -324,13 +324,13 @@ button:hover { background: var(--blue-dark); }
     flex: 1;
     min-height: 0;
 }
-.welcome-tynna-image {
+.welcome-mykola-image {
     width: 100%;
     border-radius: 12px;
     object-fit: cover;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
-.welcome-tynna-text {
+.welcome-mykola-text {
     margin: 0;
     line-height: 1.52;
     color: var(--ink);
@@ -339,10 +339,10 @@ button:hover { background: var(--blue-dark); }
     overflow-y: auto;
     padding-right: 0.35rem;
 }
-.welcome-tynna-text p {
+.welcome-mykola-text p {
     margin: 0 0 0.65rem;
 }
-.welcome-tynna-text .welcome-quote {
+.welcome-mykola-text .welcome-quote {
     font-style: italic;
     margin-bottom: 0;
 }
@@ -509,19 +509,19 @@ body.welcome-active {
 
     .welcome-step { padding: 0.8rem; }
     .welcome-step h2 { font-size: 1.2rem; }
-    .welcome-tynna-layout {
+    .welcome-mykola-layout {
         grid-template-columns: 1fr;
         gap: 0.8rem;
     }
-    .welcome-tynna-text {
+    .welcome-mykola-text {
         font-size: 0.92rem;
         max-height: 45vh;
     }
     .welcome-main-image { max-height: 60vh; }
 }
 
-/* Tynna chat widget (bottom-right) */
-#tynna-launcher {
+/* Mykola chat widget (bottom-right) */
+#mykola-launcher {
     position: fixed;
     right: 1.2rem;
     bottom: 1.2rem;
@@ -540,8 +540,8 @@ body.welcome-active {
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
     isolation: isolate;
 }
-#tynna-launcher:hover { background: var(--blue-dark); }
-#tynna-launcher img {
+#mykola-launcher:hover { background: var(--blue-dark); }
+#mykola-launcher img {
     width: 2.1rem;
     height: 2.1rem;
     border-radius: 50%;
@@ -551,8 +551,8 @@ body.welcome-active {
 
 /* Attractive startup pulse for the widget launcher. The waves sit behind the
    button and become visible once the welcome popup is closed. */
-#tynna-launcher::before,
-#tynna-launcher::after {
+#mykola-launcher::before,
+#mykola-launcher::after {
     content: "";
     position: absolute;
     inset: -10px;
@@ -562,17 +562,17 @@ body.welcome-active {
     pointer-events: none;
     opacity: 0;
     transform: scale(0.95);
-    animation: tynna-wave 2s ease-out infinite;
+    animation: mykola-wave 2s ease-out infinite;
     box-shadow: 0 0 0 2px rgba(243, 199, 58, 0.25);
 }
 
-#tynna-launcher::after {
+#mykola-launcher::after {
     border-color: rgba(117, 204, 255, 0.85);
     box-shadow: 0 0 0 2px rgba(117, 204, 255, 0.24);
     animation-delay: 1s;
 }
 
-@keyframes tynna-wave {
+@keyframes mykola-wave {
     0% {
         opacity: 0;
         transform: scale(0.95);
@@ -587,14 +587,14 @@ body.welcome-active {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #tynna-launcher::before,
-    #tynna-launcher::after {
+    #mykola-launcher::before,
+    #mykola-launcher::after {
         animation: none;
         opacity: 0;
     }
 }
 
-#tynna-panel {
+#mykola-panel {
     position: fixed;
     right: 1.2rem;
     bottom: 1.2rem;
@@ -608,7 +608,7 @@ body.welcome-active {
     overflow: hidden;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
-.tynna-header {
+.mykola-header {
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -616,16 +616,16 @@ body.welcome-active {
     background: var(--blue);
     color: #fff;
 }
-.tynna-header img {
+.mykola-header img {
     width: 2.2rem;
     height: 2.2rem;
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid #fff;
 }
-.tynna-header div { flex: 1; line-height: 1.15; }
-.tynna-header small { display: block; opacity: 0.85; font-size: 0.72rem; }
-.tynna-close {
+.mykola-header div { flex: 1; line-height: 1.15; }
+.mykola-header small { display: block; opacity: 0.85; font-size: 0.72rem; }
+.mykola-close {
     margin: 0;
     padding: 0;
     width: 1.8rem;
@@ -638,15 +638,15 @@ body.welcome-active {
     line-height: 1;
     cursor: pointer;
 }
-.tynna-close:hover { background: rgba(255, 255, 255, 0.35); }
+.mykola-close:hover { background: rgba(255, 255, 255, 0.35); }
 
-#tynna-messages {
+#mykola-messages {
     flex: 1;
     overflow-y: auto;
     padding: 0.8rem;
     background: #f4f6f8;
 }
-.tynna-msg {
+.mykola-msg {
     max-width: 85%;
     margin-bottom: 0.6rem;
     padding: 0.5rem 0.75rem;
@@ -656,35 +656,35 @@ body.welcome-active {
     white-space: pre-wrap;
     word-wrap: break-word;
 }
-.tynna-msg.tynna { background: #fff; border: 1px solid #dce3ea; color: var(--ink); }
-.tynna-msg.user {
+.mykola-msg.mykola { background: #fff; border: 1px solid #dce3ea; color: var(--ink); }
+.mykola-msg.user {
     margin-left: auto;
     background: var(--blue);
     color: #fff;
 }
-.tynna-msg.error { background: var(--bad-bg); border: 1px solid var(--bad-border); color: var(--bad-ink); }
-.tynna-msg.typing { opacity: 0.7; font-style: italic; }
-.tynna-sources {
+.mykola-msg.error { background: var(--bad-bg); border: 1px solid var(--bad-border); color: var(--bad-ink); }
+.mykola-msg.typing { opacity: 0.7; font-style: italic; }
+.mykola-sources {
     margin-top: 0.35rem;
     font-size: 0.72rem;
     color: var(--muted);
 }
-#tynna-form {
+#mykola-form {
     display: flex;
     gap: 0.4rem;
     padding: 0.6rem;
     border-top: 1px solid #e4e9ee;
     background: #fff;
 }
-#tynna-form input {
+#mykola-form input {
     flex: 1;
     padding: 0.5rem 0.7rem;
     border: 1px solid #c5d0da;
     border-radius: 999px;
     font-size: 0.92rem;
 }
-#tynna-form input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
-#tynna-form button {
+#mykola-form input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
+#mykola-form button {
     margin: 0;
     padding: 0.5rem 1rem;
     border: none;
@@ -694,28 +694,28 @@ body.welcome-active {
     font-weight: 600;
     cursor: pointer;
 }
-#tynna-form button:hover { background: var(--blue-dark); }
-#tynna-form button:disabled { opacity: 0.6; cursor: default; }
+#mykola-form button:hover { background: var(--blue-dark); }
+#mykola-form button:disabled { opacity: 0.6; cursor: default; }
 
 /* The panel/launcher use display:flex, which overrides the UA [hidden] rule,
    so hiding needs to be explicit (same pattern as .modal-overlay above).
    Without this the close button appears to do nothing. */
-#tynna-launcher[hidden],
-.tynna-video-overlay[hidden] { display: none; }
+#mykola-launcher[hidden],
+.mykola-video-overlay[hidden] { display: none; }
 
 /* Clickable avatar (opens the animation) and name link in the header. */
-.tynna-avatar { cursor: pointer; transition: transform 0.15s; }
-.tynna-avatar:hover { transform: scale(1.06); }
-.tynna-name {
+.mykola-avatar { cursor: pointer; transition: transform 0.15s; }
+.mykola-avatar:hover { transform: scale(1.06); }
+.mykola-name {
     font-weight: 700;
     color: #fff;
     text-decoration: none;
     cursor: pointer;
 }
-.tynna-name:hover { text-decoration: underline; }
+.mykola-name:hover { text-decoration: underline; }
 
 /* Open-full-page control in widget header (kept for later use). */
-.tynna-max {
+.mykola-max {
     margin: 0 0.25rem 0 0;
     padding: 0;
     width: 1.8rem;
@@ -728,16 +728,16 @@ body.welcome-active {
     line-height: 1;
     cursor: pointer;
 }
-.tynna-max:hover { background: rgba(255, 255, 255, 0.35); }
+.mykola-max:hover { background: rgba(255, 255, 255, 0.35); }
 
 /* Hide while panel is expanded; keep available in minimized mode. */
-#tynna-panel:not(.minimized) .tynna-max { display: none; }
+#mykola-panel:not(.minimized) .mykola-max { display: none; }
 
 /* Also hide in minimized mode to avoid duplicate maximize controls. */
-#tynna-panel.minimized .tynna-max { display: none; }
+#mykola-panel.minimized .mykola-max { display: none; }
 
-/* Minimize / maximize toggle — mirrors .tynna-close, sits to its left. */
-.tynna-min {
+/* Minimize / maximize toggle — mirrors .mykola-close, sits to its left. */
+.mykola-min {
     margin: 0 0.25rem 0 0;
     padding: 0;
     width: 1.8rem;
@@ -750,21 +750,21 @@ body.welcome-active {
     line-height: 1;
     cursor: pointer;
 }
-.tynna-min:hover { background: rgba(255, 255, 255, 0.35); }
+.mykola-min:hover { background: rgba(255, 255, 255, 0.35); }
 
 /* Minimized: collapse to just the header, keeping the panel's original
    narrow width and bottom-right position (messages + form hidden). */
-#tynna-panel.minimized { height: auto; }
-#tynna-panel.minimized #tynna-messages,
-#tynna-panel.minimized #tynna-form,
-#tynna-panel.minimized .tynna-consent,
-#tynna-panel.minimized .tynna-auth { display: none; }
+#mykola-panel.minimized { height: auto; }
+#mykola-panel.minimized #mykola-messages,
+#mykola-panel.minimized #mykola-form,
+#mykola-panel.minimized .mykola-consent,
+#mykola-panel.minimized .mykola-auth { display: none; }
 
 /* Must come after .minimized so a hidden panel always stays hidden. */
-#tynna-panel[hidden] { display: none; }
+#mykola-panel[hidden] { display: none; }
 
-/* Fullscreen Tynna animation overlay — video scaled to the screen height. */
-.tynna-video-overlay {
+/* Fullscreen Mykola animation overlay — video scaled to the screen height. */
+.mykola-video-overlay {
     position: fixed;
     inset: 0;
     z-index: 300;
@@ -773,12 +773,12 @@ body.welcome-active {
     justify-content: center;
     background: rgba(0, 0, 0, 0.85);
 }
-.tynna-video-overlay video {
+.mykola-video-overlay video {
     height: 100vh;
     width: auto;
     max-width: 100vw;
 }
-.tynna-video-close {
+.mykola-video-close {
     position: absolute;
     top: 1rem;
     right: 1.2rem;
@@ -793,20 +793,20 @@ body.welcome-active {
     cursor: pointer;
     z-index: 1;
 }
-.tynna-video-close:hover { background: rgba(255, 255, 255, 0.45); }
+.mykola-video-close:hover { background: rgba(255, 255, 255, 0.45); }
 
 /* ---- Optional Google sign-in (consent popup + auth footer) ------------------ */
-.tynna-consent {
+.mykola-consent {
     padding: 0.7rem 0.9rem;
     background: #eef4fb;
     border-bottom: 1px solid #d7e3f0;
     font-size: 0.85rem;
     color: var(--ink);
 }
-.tynna-consent[hidden] { display: none; }
-.tynna-consent-text { margin: 0 0 0.5rem; }
-.tynna-consent-actions { display: flex; gap: 0.5rem; align-items: center; }
-.tynna-consent-yes {
+.mykola-consent[hidden] { display: none; }
+.mykola-consent-text { margin: 0 0 0.5rem; }
+.mykola-consent-actions { display: flex; gap: 0.5rem; align-items: center; }
+.mykola-consent-yes {
     padding: 0.4rem 0.8rem;
     border-radius: 999px;
     background: var(--blue);
@@ -814,8 +814,8 @@ body.welcome-active {
     font-weight: 600;
     text-decoration: none;
 }
-.tynna-consent-yes:hover { background: var(--blue-dark); }
-.tynna-consent-no {
+.mykola-consent-yes:hover { background: var(--blue-dark); }
+.mykola-consent-no {
     margin: 0;
     padding: 0.4rem 0.7rem;
     border: 1px solid #c5d0da;
@@ -825,10 +825,10 @@ body.welcome-active {
     font-size: 0.82rem;
     cursor: pointer;
 }
-.tynna-consent-no:hover { background: #f4f6f8; }
-.tynna-consent-note { margin: 0.5rem 0 0; font-size: 0.72rem; color: var(--muted); }
+.mykola-consent-no:hover { background: #f4f6f8; }
+.mykola-consent-note { margin: 0.5rem 0 0; font-size: 0.72rem; color: var(--muted); }
 
-.tynna-auth {
+.mykola-auth {
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -839,16 +839,16 @@ body.welcome-active {
     font-size: 0.78rem;
     color: var(--muted);
 }
-.tynna-auth-user {
+.mykola-auth-user {
     margin-right: auto;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.tynna-auth-link { color: var(--blue); text-decoration: none; font-weight: 600; white-space: nowrap; }
-.tynna-auth-link:hover { text-decoration: underline; }
+.mykola-auth-link { color: var(--blue); text-decoration: none; font-weight: 600; white-space: nowrap; }
+.mykola-auth-link:hover { text-decoration: underline; }
 
-/* ---- About-Tynna page (shared partial from the ai_agent repo) ---------------
+/* ---- About-Mykola page (shared partial from the ai_agent repo) ---------------
    Ported from ai_agent's stylesheet, mapped to KuantorFlow's palette so the
    reused markup renders consistently here. */
 .about-container {
