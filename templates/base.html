@@ -117,7 +117,7 @@
             var welcomeStart = document.getElementById("welcome-start");
 
             if (welcomeOverlay && welcomeStep1 && welcomeStep2 && welcomeNext && welcomeStart) {
-                var welcomeSeenKey = "kf_welcome_seen";
+                var welcomeSeenKey = "kf_welcome_seen_{{ app_boot_id }}";
                 function openWelcome() {
                     welcomeOverlay.hidden = false;
                     document.body.classList.add("welcome-active");
