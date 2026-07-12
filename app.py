@@ -35,6 +35,12 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 # Keyword that gates access to the whole site (set ACCESS_KEYWORD in .env).
 ACCESS_KEYWORD = os.environ.get("ACCESS_KEYWORD", "password")
 
+# Reject oversized Tynna chat payloads before they reach the model — guards
+# against memory blowups and runaway Anthropic API costs. Scoped to the chat
+# endpoint rather than a global MAX_CONTENT_LENGTH, so it can't clip legitimate
+# (and much larger) .mht uploads on the index route. 1 MB is generous for text.
+MAX_TYNNA_REQUEST_BYTES = 1024 * 1024
+
 # --- Tynna AI chat, imported from the ai_agent repo (NOT duplicated here) ---
 # The agent lives in a separate repo; point AI_AGENT_PATH at its checkout.
 # Default: a sibling folder next to this repo (matches the PythonAnywhere
@@ -104,6 +110,9 @@ def tynna_chat():
     """
     if not TYNNA_AVAILABLE:
         return jsonify({"error": "Tynna is not available on this server."}), 503
+
+    if request.content_length and request.content_length > MAX_TYNNA_REQUEST_BYTES:
+        return jsonify({"error": "Your message is too long. Please shorten it and try again."}), 413
 
     data = request.get_json(silent=True) or {}
     question = (data.get("question") or "").strip()
