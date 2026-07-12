@@ -1,6 +1,9 @@
 import os
+import re
 import sys
+import uuid
 from pathlib import Path
+from datetime import datetime
 
 from flask import (
     Flask,
@@ -44,6 +47,9 @@ ACCESS_KEYWORD = os.environ.get("ACCESS_KEYWORD", "password")
 # (and much larger) .mht uploads on the index route. 1 MB is generous for text.
 MAX_TYNNA_REQUEST_BYTES = 1024 * 1024
 
+LOG_DIR = Path(__file__).parent / "tynna_logs"
+LOG_DIR.mkdir(exist_ok=True)
+
 # --- Tynna AI chat, imported from the ai_agent repo (NOT duplicated here) ---
 # The agent lives in a separate repo; point AI_AGENT_PATH at its checkout.
 # Default: a sibling folder next to this repo (matches the PythonAnywhere
@@ -63,6 +69,27 @@ except Exception:  # pragma: no cover - depends on the deployment environment
     TYNNA_AVAILABLE = False
 
 _tynna_agent = None
+
+
+def _safe_chat_id(raw_chat_id: str | None) -> str:
+    """Allow only safe filename chars and always return a usable chat id."""
+    if not raw_chat_id:
+        return f"web_{uuid.uuid4().hex}"
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", raw_chat_id.strip())
+    return safe[:64] or f"web_{uuid.uuid4().hex}"
+
+
+def _append_chat_log(chat_id: str, user_text: str, assistant_text: str) -> None:
+    """Append one user/assistant exchange to tynna_logs/chat_<chat_id>.txt."""
+    log_path = LOG_DIR / f"chat_{chat_id}.txt"
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(f"[{ts}]\n")
+        f.write("User:\n")
+        f.write((user_text or "").strip() + "\n\n")
+        f.write("Tynna:\n")
+        f.write((assistant_text or "").strip() + "\n")
+        f.write("\n" + ("=" * 60) + "\n\n")
 
 # When the agent repo is present, let kuantorflow's Jinja also find its
 # templates (e.g. the shared _tynna_about.html partial). kuantorflow's own
@@ -154,11 +181,15 @@ def tynna_chat():
     data = request.get_json(silent=True) or {}
     question = (data.get("question") or "").strip()
     history = data.get("history", [])
+    chat_id = _safe_chat_id(data.get("chat_id"))
     if not question:
         return jsonify({"error": "Please type a question."}), 400
 
     try:
-        return jsonify(get_tynna().answer(question, history))
+        result = get_tynna().answer(question, history)
+        _append_chat_log(chat_id, question, result.get("response", ""))
+        result["chat_id"] = chat_id
+        return jsonify(result)
     except Exception as e:  # format Anthropic errors nicely, log the rest
         import anthropic
         if isinstance(e, anthropic.APIError):
