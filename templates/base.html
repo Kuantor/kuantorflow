@@ -38,33 +38,30 @@
             </section>
 
             <section class="welcome-step" id="welcome-step-2" hidden>
-                <h2 id="welcome-title">Meet Tynna - AI Agent for English Learning</h2>
-                <div class="welcome-tynna-layout">
-                    <img class="welcome-tynna-image"
-                         src="{{ tynna_media('tynna.jpg') if tynna_enabled else url_for('static', filename='img/tynna_avatar.jpg') }}"
-                         alt="Tynna">
-                    <div class="welcome-tynna-text">
+                <h2 id="welcome-title">Meet Mykola - AI Agent for English Learning</h2>
+                <div class="welcome-mykola-layout">
+                    <img class="welcome-mykola-image"
+                         src="{{ mykola_media('mykola_poster.jpg') if mykola_enabled else url_for('static', filename='img/mykola_avatar.jpg') }}"
+                         alt="Mykola">
+                    <div class="welcome-mykola-text">
                         <p>
-                            Tynna is your dedicated English learning assistant, designed to make your journey engaging,
-                            supportive, and enjoyable. She combines warmth, patience, and clear guidance to help you
-                            build confidence step by step.
+                            Meet Mykola, a distinguished male AI Agent named in honor of Mykola Leontovych, the
+                            Ukrainian composer who transformed folk melodies into world‑class choral music. His
+                            masterpiece “Shchedryk” — later known as “Carol of the Bells” — remains a symbol of
+                            artistry and cultural diplomacy. Inspired by this legacy, Mykola AI brings intelligence,
+                            refinement, and creativity to your English‑learning journey.
                         </p>
                         <p>
-                            Whether you are preparing for exams, improving conversation skills, or expanding your
-                            vocabulary, Tynna helps you practice with purpose. She explains grammar clearly, gives
-                            practical examples, and turns difficult topics into manageable learning moments.
-                        </p>
-                        <p>
-                            Tynna's approach blends structure with creativity: focused explanations, useful exercises,
-                            and interactive practice that keeps you motivated. From vocabulary building to communication
-                            skills, she helps you learn in a way that feels natural and rewarding.
-                        </p>
-                        <p>
-                            Above all, Tynna reminds you that learning English is more than memorizing rules. It is
-                            about expressing yourself, connecting with others, and opening doors to new opportunities.
+                            Residing in England, Mykola AI speaks with posh British poise and treats every learner
+                            with royal courtesy. Fluent in English and conversant in French, he draws elegant
+                            connections between the two languages. Music flows through his veins — with a master’s
+                            degree in choir conducting, he enriches lessons with examples from The Beatles, Queen,
+                            and Depeche Mode. Sensitive, sensible, and attentive, he is both a gentleman of intellect
+                            and art, guiding you into a world where language learning is elevated by culture,
+                            history, and music.
                         </p>
                         <p class="welcome-quote">
-                            "Learning a language opens doors to new worlds. Let's explore them together!"
+                            "Language, like music, is best learned in good company. Shall we begin?"
                         </p>
                     </div>
                 </div>
@@ -147,77 +144,77 @@
         })();
     </script>
 
-    {% if tynna_enabled %}
-    <!-- Tynna AI chat widget (bottom-right). Logic lives in the ai_agent repo. -->
-    <button type="button" id="tynna-launcher" aria-label="Chat with Tynna">
-        <img src="{{ url_for('static', filename='img/tynna_avatar.jpg') }}" alt="Tynna">
-        <span>Ask&nbsp;Tynna</span>
+    {% if mykola_enabled %}
+    <!-- Mykola AI chat widget (bottom-right). Logic lives in the ai_agent repo. -->
+    <button type="button" id="mykola-launcher" aria-label="Chat with Mykola">
+        <img src="{{ url_for('static', filename='img/mykola_avatar.jpg') }}" alt="Mykola">
+        <span>Ask&nbsp;Mykola</span>
     </button>
 
-    <div id="tynna-panel" hidden>
-        <div class="tynna-header">
-            <img src="{{ url_for('static', filename='img/tynna_avatar.jpg') }}"
-                 id="tynna-avatar" class="tynna-avatar" alt="See Tynna's animation"
-                 title="See Tynna dance">
+    <div id="mykola-panel" hidden>
+        <div class="mykola-header">
+            <img src="{{ url_for('static', filename='img/mykola_avatar.jpg') }}"
+                 id="mykola-avatar" class="mykola-avatar" alt="See Mykola's animation"
+                 title="See Mykola conduct">
             <div>
-                <a href="{{ url_for('tynna_about') }}" class="tynna-name" title="About Tynna">Tynna</a>
-                <small>your English study companion</small>
+                <a href="{{ url_for('mykola_about') }}" class="mykola-name" title="About Mykola">Mykola</a>
+                <small>your distinguished English companion</small>
             </div>
-            <button type="button" class="tynna-max" aria-label="Open full chat" title="Open full chat page">&#9633;</button>
-            <button type="button" class="tynna-min" aria-label="Minimize" title="Minimize">&#8210;</button>
-            <button type="button" class="tynna-close" aria-label="Close" title="Close">&times;</button>
+            <button type="button" class="mykola-max" aria-label="Open full chat" title="Open full chat page">&#9633;</button>
+            <button type="button" class="mykola-min" aria-label="Minimize" title="Minimize">&#8210;</button>
+            <button type="button" class="mykola-close" aria-label="Close" title="Close">&times;</button>
         </div>
         {% if google_auth_enabled and not current_user %}
-        <div id="tynna-consent" class="tynna-consent" hidden>
-            <p class="tynna-consent-text">Want Tynna to greet you by name? Sign in with Google — or stay anonymous.</p>
-            <div class="tynna-consent-actions">
-                <a class="tynna-consent-yes" href="{{ url_for('login_google') }}">Sign in with Google</a>
-                <button type="button" class="tynna-consent-no">Stay anonymous</button>
+        <div id="mykola-consent" class="mykola-consent" hidden>
+            <p class="mykola-consent-text">Want Mykola to greet you by name? Sign in with Google — or stay anonymous.</p>
+            <div class="mykola-consent-actions">
+                <a class="mykola-consent-yes" href="{{ url_for('login_google') }}">Sign in with Google</a>
+                <button type="button" class="mykola-consent-no">Stay anonymous</button>
             </div>
-            <p class="tynna-consent-note">Only your name is used, to greet you — nothing is stored on our server.</p>
+            <p class="mykola-consent-note">Only your name is used, to greet you — nothing is stored on our server.</p>
         </div>
         {% endif %}
-        <div id="tynna-messages">
-            <div class="tynna-msg tynna">Hi{% if current_user %} {{ current_user.name }}{% endif %}! I'm Tynna 👋 Ask me anything about English or how to use KuantorFlow.</div>
+        <div id="mykola-messages">
+            <div class="mykola-msg mykola">Good day{% if current_user %}, {{ current_user.name }}{% endif %}! I'm Mykola 🎩 Ask me anything about English or how to use KuantorFlow — it would be my pleasure.</div>
         </div>
-        <form id="tynna-form" autocomplete="off">
-            <input type="text" id="tynna-input" placeholder="Type your question…" required>
-            <button type="submit" id="tynna-send">Send</button>
+        <form id="mykola-form" autocomplete="off">
+            <input type="text" id="mykola-input" placeholder="Type your question…" required>
+            <button type="submit" id="mykola-send">Send</button>
         </form>
         {% if google_auth_enabled %}
-        <div class="tynna-auth">
+        <div class="mykola-auth">
             {% if current_user %}
-            <span class="tynna-auth-user" title="{{ current_user.email }}">👤 {{ current_user.name }}</span>
-            <a class="tynna-auth-link" href="{{ url_for('logout') }}">Sign out</a>
+            <span class="mykola-auth-user" title="{{ current_user.email }}">👤 {{ current_user.name }}</span>
+            <a class="mykola-auth-link" href="{{ url_for('logout') }}">Sign out</a>
             {% else %}
-            <a class="tynna-auth-link" href="{{ url_for('login_google') }}">Sign in with Google</a>
+            <a class="mykola-auth-link" href="{{ url_for('login_google') }}">Sign in with Google</a>
             {% endif %}
         </div>
         {% endif %}
     </div>
 
-    <!-- Fullscreen Tynna animation (opened by clicking her avatar). The video
-         is served from the ai_agent repo via the /tynna-media route. -->
-    <div id="tynna-video-overlay" class="tynna-video-overlay" hidden>
-        <button type="button" class="tynna-video-close" aria-label="Close">&times;</button>
-        <video id="tynna-video" loop playsinline controls preload="none"
-               src="{{ tynna_media('tynna_jive.mp4') }}"></video>
+    <!-- Fullscreen Mykola animation (opened by clicking his avatar). The video
+         is served from the ai_agent repo via the /mykola-media route. -->
+    <div id="mykola-video-overlay" class="mykola-video-overlay" hidden>
+        <button type="button" class="mykola-video-close" aria-label="Close">&times;</button>
+        <video id="mykola-video" loop playsinline controls preload="none"
+               src="{{ mykola_media('mykola_choir.mp4') }}"></video>
     </div>
 
     <script>
         (function () {
-            var launcher = document.getElementById("tynna-launcher");
-            var panel = document.getElementById("tynna-panel");
-            var messages = document.getElementById("tynna-messages");
-            var form = document.getElementById("tynna-form");
-            var input = document.getElementById("tynna-input");
-            var send = document.getElementById("tynna-send");
-            var maxBtn = panel.querySelector(".tynna-max");
-            var minBtn = panel.querySelector(".tynna-min");
-            var closeBtn = panel.querySelector(".tynna-close");
-            var avatar = document.getElementById("tynna-avatar");
-            var videoOverlay = document.getElementById("tynna-video-overlay");
-            var video = document.getElementById("tynna-video");
+            var launcher = document.getElementById("mykola-launcher");
+            var panel = document.getElementById("mykola-panel");
+            var messages = document.getElementById("mykola-messages");
+            var form = document.getElementById("mykola-form");
+            var input = document.getElementById("mykola-input");
+            var send = document.getElementById("mykola-send");
+            var maxBtn = panel.querySelector(".mykola-max");
+            var minBtn = panel.querySelector(".mykola-min");
+            var closeBtn = panel.querySelector(".mykola-close");
+            var avatar = document.getElementById("mykola-avatar");
+            var videoOverlay = document.getElementById("mykola-video-overlay");
+            var video = document.getElementById("mykola-video");
             var history = [];
             var chatId = "web_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10);
 
@@ -234,12 +231,12 @@
             }
             function addMessage(kind, text, sources) {
                 var el = document.createElement("div");
-                el.className = "tynna-msg " + kind;
-                // Only Tynna's own replies get markdown; user/error stay plain.
-                el.innerHTML = kind.indexOf("tynna") === 0 ? markdownLite(text) : esc(text);
+                el.className = "mykola-msg " + kind;
+                // Only Mykola's own replies get markdown; user/error stay plain.
+                el.innerHTML = kind.indexOf("mykola") === 0 ? markdownLite(text) : esc(text);
                 if (sources && sources.length) {
                     var s = document.createElement("div");
-                    s.className = "tynna-sources";
+                    s.className = "mykola-sources";
                     s.textContent = "sources: " + sources.map(function (x) {
                         return x.file.replace(/\.md$/, "") + " / " + x.heading;
                     }).join("; ");
@@ -255,18 +252,18 @@
                 minBtn.setAttribute("aria-label", on ? "Maximize" : "Minimize");
                 minBtn.setAttribute("title", on ? "Maximize" : "Minimize");
             }
-            var consent = document.getElementById("tynna-consent");
+            var consent = document.getElementById("mykola-consent");
             function maybeShowConsent() {
                 // Offer Google sign-in once; respect a prior "Stay anonymous".
                 if (!consent) return;
                 var dismissed = false;
-                try { dismissed = localStorage.getItem("kf_tynna_auth_dismissed") === "1"; } catch (e) {}
+                try { dismissed = localStorage.getItem("kf_mykola_auth_dismissed") === "1"; } catch (e) {}
                 if (!dismissed) consent.hidden = false;
             }
             if (consent) {
-                consent.querySelector(".tynna-consent-no").addEventListener("click", function () {
+                consent.querySelector(".mykola-consent-no").addEventListener("click", function () {
                     consent.hidden = true;
-                    try { localStorage.setItem("kf_tynna_auth_dismissed", "1"); } catch (e) {}
+                    try { localStorage.setItem("kf_mykola_auth_dismissed", "1"); } catch (e) {}
                 });
             }
             function openPanel() {
@@ -292,13 +289,13 @@
             launcher.addEventListener("click", openPanel);
             closeBtn.addEventListener("click", closePanel);
             maxBtn.addEventListener("click", function () {
-                window.location.href = "{{ url_for('tynna_chat_page') }}";
+                window.location.href = "{{ url_for('mykola_chat_page') }}";
             });
             minBtn.addEventListener("click", function () {
                 setMinimized(!panel.classList.contains("minimized"));
             });
             avatar.addEventListener("click", openVideo);
-            videoOverlay.querySelector(".tynna-video-close").addEventListener("click", closeVideo);
+            videoOverlay.querySelector(".mykola-video-close").addEventListener("click", closeVideo);
             videoOverlay.addEventListener("click", function (e) {
                 if (e.target === videoOverlay) closeVideo();   // click backdrop
             });
@@ -315,9 +312,9 @@
                 addMessage("user", question);
                 input.value = "";
                 send.disabled = true;
-                var typing = addMessage("tynna typing", "Tynna is thinking…");
+                var typing = addMessage("mykola typing", "Mykola is thinking…");
 
-                fetch("{{ url_for('tynna_chat') }}", {
+                fetch("{{ url_for('mykola_chat') }}", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ question: question, history: history, chat_id: chatId }),
@@ -331,7 +328,7 @@
                         addMessage("error", r.data.error || "Something went wrong.");
                     } else {
                         chatId = r.data.chat_id || chatId;
-                        addMessage("tynna", r.data.response || "(no answer)", r.data.sources);
+                        addMessage("mykola", r.data.response || "(no answer)", r.data.sources);
                         history = r.data.history || history;
                     }
                 }).catch(function () {

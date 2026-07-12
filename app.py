@@ -68,17 +68,17 @@ if GOOGLE_AUTH_AVAILABLE:
         client_kwargs={"scope": "openid email profile"},
     )
 
-# Reject oversized Tynna chat payloads before they reach the model — guards
+# Reject oversized Mykola chat payloads before they reach the model — guards
 # against memory blowups and runaway Anthropic API costs. Scoped to the chat
 # endpoint rather than a global MAX_CONTENT_LENGTH, so it can't clip legitimate
 # (and much larger) .mht uploads on the index route. 1 MB is generous for text.
-MAX_TYNNA_REQUEST_BYTES = 1024 * 1024
+MAX_MYKOLA_REQUEST_BYTES = 1024 * 1024
 
-LOG_DIR = Path(__file__).parent / "tynna_logs"
+LOG_DIR = Path(__file__).parent / "mykola_logs"
 LOG_DIR.mkdir(exist_ok=True)
 APP_BOOT_ID = uuid.uuid4().hex
 
-# --- Tynna AI chat, imported from the ai_agent repo (NOT duplicated here) ---
+# --- Mykola AI chat, imported from the ai_agent repo (NOT duplicated here) ---
 # The agent lives in a separate repo; point AI_AGENT_PATH at its checkout.
 # Default: a sibling folder next to this repo (matches the PythonAnywhere
 # layout /home/<user>/ai_agent alongside /home/<user>/kuantorflow).
@@ -90,13 +90,13 @@ if AI_AGENT_PATH not in sys.path:
 
 try:
     # Importing pulls in the agent's own .env (ANTHROPIC_API_KEY) and knowledge
-    # base module. If the repo or its deps are missing, Tynna is simply disabled.
-    from agent import TynnaAgent, api_error_response
-    TYNNA_AVAILABLE = True
+    # base module. If the repo or its deps are missing, Mykola is simply disabled.
+    from agent import MykolaAgent, api_error_response
+    MYKOLA_AVAILABLE = True
 except Exception:  # pragma: no cover - depends on the deployment environment
-    TYNNA_AVAILABLE = False
+    MYKOLA_AVAILABLE = False
 
-_tynna_agent = None
+_mykola_agent = None
 
 
 class _RequestPathProxy:
@@ -109,14 +109,14 @@ class _RequestPathProxy:
         return getattr(self._original_request, name)
 
 
-def _tynna_template_url_for(endpoint, **values):
+def _mykola_template_url_for(endpoint, **values):
     """Map ai_agent template endpoint names to kuantorflow routes."""
     if endpoint == "home":
-        return url_for("tynna_chat_page", **values)
+        return url_for("mykola_chat_page", **values)
     if endpoint == "about":
-        return url_for("tynna_about", **values)
+        return url_for("mykola_about", **values)
     if endpoint == "static":
-        return url_for("tynna_static_file", **values)
+        return url_for("mykola_static_file", **values)
     return url_for(endpoint, **values)
 
 
@@ -124,13 +124,13 @@ def _render_ai_agent_template(template_name: str, **context):
     """Render a template straight from ai_agent/templates (no duplication)."""
     env = Environment(loader=FileSystemLoader(os.path.join(AI_AGENT_PATH, "templates")))
     request_proxy = _RequestPathProxy(request, "/") if template_name == "index.html" else request
-    env.globals.update(url_for=_tynna_template_url_for, request=request_proxy)
+    env.globals.update(url_for=_mykola_template_url_for, request=request_proxy)
     template = env.get_template(template_name)
     return template.render(**context)
 
 
 def _current_first_name():
-    """First name of the signed-in visitor, if any — for Tynna to address them
+    """First name of the signed-in visitor, if any — for Mykola to address them
     by (the opening greeting uses the full name; the chat uses the first name)."""
     name = ((session.get("user") or {}).get("name") or "").strip()
     return name.split()[0] if name else None
@@ -140,19 +140,19 @@ def _agent_answer(question, history):
     """Call the agent, passing the signed-in first name when the installed
     ai_agent version supports it. Feature-detected so the chat keeps working
     even if the ai_agent side hasn't been updated yet."""
-    agent = get_tynna()
+    agent = get_mykola()
     first_name = _current_first_name()
     if first_name and "user_name" in inspect.signature(agent.answer).parameters:
         return agent.answer(question, history, user_name=first_name)
     return agent.answer(question, history)
 
 
-def _handle_tynna_chat_request():
+def _handle_mykola_chat_request():
     """Shared JSON chat handler for widget and full ai_agent-style page."""
-    if not TYNNA_AVAILABLE:
-        return jsonify({"error": "Tynna is not available on this server."}), 503
+    if not MYKOLA_AVAILABLE:
+        return jsonify({"error": "Mykola is not available on this server."}), 503
 
-    if request.content_length and request.content_length > MAX_TYNNA_REQUEST_BYTES:
+    if request.content_length and request.content_length > MAX_MYKOLA_REQUEST_BYTES:
         return jsonify({"error": "Your message is too long. Please shorten it and try again."}), 413
 
     data = request.get_json(silent=True) or {}
@@ -172,7 +172,7 @@ def _handle_tynna_chat_request():
         if isinstance(e, anthropic.APIError):
             body, status = api_error_response(e)
             return jsonify(body), status
-        app.logger.exception("Tynna chat failed")
+        app.logger.exception("Mykola chat failed")
         return jsonify({"error": "Internal server error. Please try again later."}), 500
 
 
@@ -185,21 +185,21 @@ def _safe_chat_id(raw_chat_id: str | None) -> str:
 
 
 def _append_chat_log(chat_id: str, user_text: str, assistant_text: str) -> None:
-    """Append one user/assistant exchange to tynna_logs/chat_<chat_id>.txt."""
+    """Append one user/assistant exchange to mykola_logs/chat_<chat_id>.txt."""
     log_path = LOG_DIR / f"chat_{chat_id}.txt"
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with log_path.open("a", encoding="utf-8") as f:
         f.write(f"[{ts}]\n")
         f.write("User:\n")
         f.write((user_text or "").strip() + "\n\n")
-        f.write("Tynna:\n")
+        f.write("Mykola:\n")
         f.write((assistant_text or "").strip() + "\n")
         f.write("\n" + ("=" * 60) + "\n\n")
 
 # When the agent repo is present, let kuantorflow's Jinja also find its
-# templates (e.g. the shared _tynna_about.html partial). kuantorflow's own
+# templates (e.g. the shared _mykola_about.html partial). kuantorflow's own
 # templates stay first, so they win on any name clash (base.html, etc.).
-if TYNNA_AVAILABLE:
+if MYKOLA_AVAILABLE:
     app.jinja_loader = ChoiceLoader([
         app.jinja_loader,
         FileSystemLoader(os.path.join(AI_AGENT_PATH, "templates")),
@@ -207,59 +207,59 @@ if TYNNA_AVAILABLE:
 
 
 @app.context_processor
-def inject_tynna_media():
-    """Resolve Tynna asset names to the /tynna-media route (which serves them
+def inject_mykola_media():
+    """Resolve Mykola asset names to the /mykola-media route (which serves them
     straight from the ai_agent repo). Mirrors the helper ai_agent defines for
     itself, so the shared About partial's asset URLs work here too."""
-    return {"tynna_media": lambda f: url_for("tynna_media_file", filename=f)}
+    return {"mykola_media": lambda f: url_for("mykola_media_file", filename=f)}
 
 
-@app.route("/tynna-media/<path:filename>")
-def tynna_media_file(filename):
-    """Serve Tynna's images/video from the ai_agent repo — no copies in this
+@app.route("/mykola-media/<path:filename>")
+def mykola_media_file(filename):
+    """Serve Mykola's images/video from the ai_agent repo — no copies in this
     repo. Behind the keyword gate like everything else."""
-    if not TYNNA_AVAILABLE:
+    if not MYKOLA_AVAILABLE:
         abort(404)
     return send_from_directory(os.path.join(AI_AGENT_PATH, "static", "img"), filename)
 
 
-@app.route("/tynna-static/<path:filename>")
-def tynna_static_file(filename):
+@app.route("/mykola-static/<path:filename>")
+def mykola_static_file(filename):
     """Serve static files directly from ai_agent/static for full chat page."""
-    if not TYNNA_AVAILABLE:
+    if not MYKOLA_AVAILABLE:
         abort(404)
     return send_from_directory(os.path.join(AI_AGENT_PATH, "static"), filename)
 
 
-@app.route("/tynna/about")
-def tynna_about():
-    """About-Tynna page: kuantorflow chrome wrapping the shared ai_agent partial."""
-    if not TYNNA_AVAILABLE:
+@app.route("/mykola/about")
+def mykola_about():
+    """About-Mykola page: kuantorflow chrome wrapping the shared ai_agent partial."""
+    if not MYKOLA_AVAILABLE:
         abort(404)
-    return render_template("tynna_about.html")
+    return render_template("mykola_about.html")
 
 
-@app.route("/tynna/chat-page")
-def tynna_chat_page():
+@app.route("/mykola/chat-page")
+def mykola_chat_page():
     """Open ai_agent's own chat page template from this app."""
-    if not TYNNA_AVAILABLE:
+    if not MYKOLA_AVAILABLE:
         abort(404)
     return _render_ai_agent_template("index.html")
 
 
-def get_tynna():
-    """Lazily build the TynnaAgent (loads the knowledge base) on first use."""
-    global _tynna_agent
-    if _tynna_agent is None:
-        _tynna_agent = TynnaAgent()
-    return _tynna_agent
+def get_mykola():
+    """Lazily build the MykolaAgent (loads the knowledge base) on first use."""
+    global _mykola_agent
+    if _mykola_agent is None:
+        _mykola_agent = MykolaAgent()
+    return _mykola_agent
 
 
 @app.context_processor
-def inject_tynna():
+def inject_mykola():
     """Expose whether the chat widget should render."""
     return {
-        "tynna_enabled": TYNNA_AVAILABLE,
+        "mykola_enabled": MYKOLA_AVAILABLE,
         "app_boot_id": APP_BOOT_ID,
     }
 
@@ -339,20 +339,20 @@ def inject_auth():
     }
 
 
-@app.route("/tynna/chat", methods=["POST"])
-def tynna_chat():
+@app.route("/mykola/chat", methods=["POST"])
+def mykola_chat():
     """
-    Chat endpoint for the Tynna widget. Delegates to the imported TynnaAgent
+    Chat endpoint for the Mykola widget. Delegates to the imported MykolaAgent
     (from the ai_agent repo) and returns its {response, sources, history} JSON.
     Behind the keyword gate like every other route.
     """
-    return _handle_tynna_chat_request()
+    return _handle_mykola_chat_request()
 
 
 @app.route("/api/chat", methods=["POST"])
-def tynna_chat_api():
+def mykola_chat_api():
     """Compatibility endpoint used by ai_agent chat page JS."""
-    return _handle_tynna_chat_request()
+    return _handle_mykola_chat_request()
 
 
 @app.route("/", methods=["GET", "POST"])

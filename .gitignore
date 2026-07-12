@@ -25,7 +25,7 @@ Thumbs.db
 instance/
 uploads/
 *.mht
-tynna_logs/chat_*.txt
+mykola_logs/chat_*.txt
 
 # Secrets
 *.env

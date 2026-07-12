@@ -9,7 +9,7 @@ requests==2.32.3
 # the feature disables itself — see GOOGLE_CLIENT_ID in app.py.
 Authlib==1.7.2
 
-# Tynna AI chat — imported from the sibling ai_agent repo (see AI_AGENT_PATH).
-# These are the agent's runtime deps; without them Tynna is simply disabled.
+# Mykola AI chat — imported from the sibling ai_agent repo (see AI_AGENT_PATH).
+# These are the agent's runtime deps; without them Mykola is simply disabled.
 anthropic==0.116.0
 scikit-learn==1.9.0
