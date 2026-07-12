@@ -17,7 +17,7 @@ from flask import (
     session,
     url_for,
 )
-from jinja2 import ChoiceLoader, FileSystemLoader
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from parsers import parse_google_word, parse_mht_file
@@ -71,6 +71,65 @@ except Exception:  # pragma: no cover - depends on the deployment environment
 _tynna_agent = None
 
 
+class _RequestPathProxy:
+    """Expose request with an overridden path for imported template rendering."""
+    def __init__(self, original_request, path_override: str):
+        self._original_request = original_request
+        self.path = path_override
+
+    def __getattr__(self, name):
+        return getattr(self._original_request, name)
+
+
+def _tynna_template_url_for(endpoint, **values):
+    """Map ai_agent template endpoint names to kuantorflow routes."""
+    if endpoint == "home":
+        return url_for("tynna_chat_page", **values)
+    if endpoint == "about":
+        return url_for("tynna_about", **values)
+    if endpoint == "static":
+        return url_for("tynna_static_file", **values)
+    return url_for(endpoint, **values)
+
+
+def _render_ai_agent_template(template_name: str, **context):
+    """Render a template straight from ai_agent/templates (no duplication)."""
+    env = Environment(loader=FileSystemLoader(os.path.join(AI_AGENT_PATH, "templates")))
+    request_proxy = _RequestPathProxy(request, "/") if template_name == "index.html" else request
+    env.globals.update(url_for=_tynna_template_url_for, request=request_proxy)
+    template = env.get_template(template_name)
+    return template.render(**context)
+
+
+def _handle_tynna_chat_request():
+    """Shared JSON chat handler for widget and full ai_agent-style page."""
+    if not TYNNA_AVAILABLE:
+        return jsonify({"error": "Tynna is not available on this server."}), 503
+
+    if request.content_length and request.content_length > MAX_TYNNA_REQUEST_BYTES:
+        return jsonify({"error": "Your message is too long. Please shorten it and try again."}), 413
+
+    data = request.get_json(silent=True) or {}
+    question = (data.get("question") or "").strip()
+    history = data.get("history", [])
+    chat_id = _safe_chat_id(data.get("chat_id"))
+    if not question:
+        return jsonify({"error": "Please type a question."}), 400
+
+    try:
+        result = get_tynna().answer(question, history)
+        _append_chat_log(chat_id, question, result.get("response", ""))
+        result["chat_id"] = chat_id
+        return jsonify(result)
+    except Exception as e:  # format Anthropic errors nicely, log the rest
+        import anthropic
+        if isinstance(e, anthropic.APIError):
+            body, status = api_error_response(e)
+            return jsonify(body), status
+        app.logger.exception("Tynna chat failed")
+        return jsonify({"error": "Internal server error. Please try again later."}), 500
+
+
 def _safe_chat_id(raw_chat_id: str | None) -> str:
     """Allow only safe filename chars and always return a usable chat id."""
     if not raw_chat_id:
@@ -118,12 +177,28 @@ def tynna_media_file(filename):
     return send_from_directory(os.path.join(AI_AGENT_PATH, "static", "img"), filename)
 
 
+@app.route("/tynna-static/<path:filename>")
+def tynna_static_file(filename):
+    """Serve static files directly from ai_agent/static for full chat page."""
+    if not TYNNA_AVAILABLE:
+        abort(404)
+    return send_from_directory(os.path.join(AI_AGENT_PATH, "static"), filename)
+
+
 @app.route("/tynna/about")
 def tynna_about():
     """About-Tynna page: kuantorflow chrome wrapping the shared ai_agent partial."""
     if not TYNNA_AVAILABLE:
         abort(404)
     return render_template("tynna_about.html")
+
+
+@app.route("/tynna/chat-page")
+def tynna_chat_page():
+    """Open ai_agent's own chat page template from this app."""
+    if not TYNNA_AVAILABLE:
+        abort(404)
+    return _render_ai_agent_template("index.html")
 
 
 def get_tynna():
@@ -172,31 +247,13 @@ def tynna_chat():
     (from the ai_agent repo) and returns its {response, sources, history} JSON.
     Behind the keyword gate like every other route.
     """
-    if not TYNNA_AVAILABLE:
-        return jsonify({"error": "Tynna is not available on this server."}), 503
+    return _handle_tynna_chat_request()
 
-    if request.content_length and request.content_length > MAX_TYNNA_REQUEST_BYTES:
-        return jsonify({"error": "Your message is too long. Please shorten it and try again."}), 413
 
-    data = request.get_json(silent=True) or {}
-    question = (data.get("question") or "").strip()
-    history = data.get("history", [])
-    chat_id = _safe_chat_id(data.get("chat_id"))
-    if not question:
-        return jsonify({"error": "Please type a question."}), 400
-
-    try:
-        result = get_tynna().answer(question, history)
-        _append_chat_log(chat_id, question, result.get("response", ""))
-        result["chat_id"] = chat_id
-        return jsonify(result)
-    except Exception as e:  # format Anthropic errors nicely, log the rest
-        import anthropic
-        if isinstance(e, anthropic.APIError):
-            body, status = api_error_response(e)
-            return jsonify(body), status
-        app.logger.exception("Tynna chat failed")
-        return jsonify({"error": "Internal server error. Please try again later."}), 500
+@app.route("/api/chat", methods=["POST"])
+def tynna_chat_api():
+    """Compatibility endpoint used by ai_agent chat page JS."""
+    return _handle_tynna_chat_request()
 
 
 @app.route("/", methods=["GET", "POST"])

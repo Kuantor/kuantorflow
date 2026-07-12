@@ -594,6 +594,22 @@ body.welcome-active {
 }
 .tynna-name:hover { text-decoration: underline; }
 
+/* Always-visible open-full-page control in widget header. */
+.tynna-max {
+    margin: 0 0.25rem 0 0;
+    padding: 0;
+    width: 1.8rem;
+    height: 1.8rem;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.tynna-max:hover { background: rgba(255, 255, 255, 0.35); }
+
 /* Minimize / maximize toggle — mirrors .tynna-close, sits to its left. */
 .tynna-min {
     margin: 0 0.25rem 0 0;
