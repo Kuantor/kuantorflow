@@ -56,7 +56,7 @@ the intelligence still comes straight from the `ai_agent` package.
 
 KuantorFlow now shows a two-step welcome popup when the page loads:
 
-1. Step 1 shows `static/img/main_image.png` and a `Next >` button in the
+1. Step 1 shows `static/img/main_image.jpg` and a `Next >` button in the
    bottom-right area.
 2. Step 2 introduces Mykola with title/text and image (`mykola_poster.jpg` via
    `/mykola-media` when available; falls back to local avatar otherwise).

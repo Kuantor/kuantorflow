@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}KuantorFlow{% endblock %}</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/icon.png') }}">
+    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='img/icon.jpg') }}">
 
     {% set preview_title = self.title() %}
     {% include "_preview_meta.html" %}
@@ -23,7 +23,7 @@
     <div class="modal-overlay" id="about-modal" hidden>
         <div class="modal">
             <button type="button" class="modal-close" aria-label="Close">&times;</button>
-            <img src="{{ url_for('static', filename='img/main_image.png') }}" alt="About KuantorFlow">
+            <img src="{{ url_for('static', filename='img/main_image.jpg') }}" alt="About KuantorFlow">
         </div>
     </div>
 
@@ -31,7 +31,7 @@
     <div class="welcome-overlay" id="welcome-overlay" hidden>
         <div class="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
             <section class="welcome-step" id="welcome-step-1">
-                <img class="welcome-main-image" src="{{ url_for('static', filename='img/main_image.png') }}" alt="Welcome to KuantorFlow">
+                <img class="welcome-main-image" src="{{ url_for('static', filename='img/main_image.jpg') }}" alt="Welcome to KuantorFlow">
                 <div class="welcome-actions next-only">
                     <button type="button" id="welcome-next" class="welcome-next">Next &gt;</button>
                 </div>
