@@ -251,6 +251,88 @@ button:hover { background: var(--blue-dark); }
 }
 .modal-close:hover { background: #e0b52a; }
 
+/* Welcome popup (Issue #18) */
+.welcome-overlay[hidden] { display: none; }
+.welcome-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 250;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(10, 25, 40, 0.75);
+    backdrop-filter: blur(4px);
+}
+.welcome-modal {
+    width: min(960px, 96vw);
+    max-height: 92vh;
+    overflow: auto;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.45);
+}
+.welcome-step { padding: 1rem; }
+.welcome-main-image {
+    display: block;
+    width: 100%;
+    max-height: 72vh;
+    object-fit: contain;
+    border-radius: 10px;
+}
+.welcome-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 1rem;
+}
+.welcome-actions.next-only { justify-content: flex-end; }
+.welcome-next,
+.welcome-start {
+    margin: 0;
+    padding: 0.65rem 1.4rem;
+    border: none;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.welcome-next {
+    background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+}
+.welcome-next:hover { filter: brightness(1.05); }
+.welcome-start {
+    background: linear-gradient(135deg, #f6c83f, #e0b52a);
+    color: #4a3a00;
+}
+.welcome-start:hover { filter: brightness(1.04); }
+.welcome-step h2 {
+    margin: 0.2rem 0 1rem;
+    color: var(--blue-dark);
+}
+.welcome-tynna-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 320px) 1fr;
+    gap: 1.2rem;
+    align-items: start;
+}
+.welcome-tynna-image {
+    width: 100%;
+    border-radius: 12px;
+    object-fit: cover;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+.welcome-tynna-text {
+    margin: 0;
+    line-height: 1.7;
+    color: var(--ink);
+    font-size: 1.03rem;
+}
+
+body.welcome-active {
+    overflow: hidden;
+}
+
 /* Lookup review popup (proposed cards) */
 .proposal-dialog { width: min(92vw, 560px); max-width: none; }
 .proposal-title { font-size: 1.1rem; font-weight: 600; margin: 0 0 1rem; }
@@ -354,6 +436,14 @@ button:hover { background: var(--blue-dark); }
 
 @media (max-width: 600px) {
     .form-row { flex-direction: column; gap: 0; }
+
+    .welcome-step { padding: 0.8rem; }
+    .welcome-step h2 { font-size: 1.2rem; }
+    .welcome-tynna-layout {
+        grid-template-columns: 1fr;
+        gap: 0.8rem;
+    }
+    .welcome-main-image { max-height: 60vh; }
 }
 
 /* Tynna chat widget (bottom-right) */
