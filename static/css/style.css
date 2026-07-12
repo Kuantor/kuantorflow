@@ -640,6 +640,9 @@ body.welcome-active {
 /* Hide while panel is expanded; keep available in minimized mode. */
 #tynna-panel:not(.minimized) .tynna-max { display: none; }
 
+/* Also hide in minimized mode to avoid duplicate maximize controls. */
+#tynna-panel.minimized .tynna-max { display: none; }
+
 /* Minimize / maximize toggle — mirrors .tynna-close, sits to its left. */
 .tynna-min {
     margin: 0 0.25rem 0 0;
