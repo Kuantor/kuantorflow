@@ -709,7 +709,9 @@ body.welcome-active {
    narrow width and bottom-right position (messages + form hidden). */
 #tynna-panel.minimized { height: auto; }
 #tynna-panel.minimized #tynna-messages,
-#tynna-panel.minimized #tynna-form { display: none; }
+#tynna-panel.minimized #tynna-form,
+#tynna-panel.minimized .tynna-consent,
+#tynna-panel.minimized .tynna-auth { display: none; }
 
 /* Must come after .minimized so a hidden panel always stays hidden. */
 #tynna-panel[hidden] { display: none; }
@@ -745,6 +747,59 @@ body.welcome-active {
     z-index: 1;
 }
 .tynna-video-close:hover { background: rgba(255, 255, 255, 0.45); }
+
+/* ---- Optional Google sign-in (consent popup + auth footer) ------------------ */
+.tynna-consent {
+    padding: 0.7rem 0.9rem;
+    background: #eef4fb;
+    border-bottom: 1px solid #d7e3f0;
+    font-size: 0.85rem;
+    color: var(--ink);
+}
+.tynna-consent[hidden] { display: none; }
+.tynna-consent-text { margin: 0 0 0.5rem; }
+.tynna-consent-actions { display: flex; gap: 0.5rem; align-items: center; }
+.tynna-consent-yes {
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    background: var(--blue);
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+}
+.tynna-consent-yes:hover { background: var(--blue-dark); }
+.tynna-consent-no {
+    margin: 0;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid #c5d0da;
+    border-radius: 999px;
+    background: #fff;
+    color: var(--muted);
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.tynna-consent-no:hover { background: #f4f6f8; }
+.tynna-consent-note { margin: 0.5rem 0 0; font-size: 0.72rem; color: var(--muted); }
+
+.tynna-auth {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    padding: 0.35rem 0.7rem;
+    border-top: 1px solid #e4e9ee;
+    background: #fff;
+    font-size: 0.78rem;
+    color: var(--muted);
+}
+.tynna-auth-user {
+    margin-right: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tynna-auth-link { color: var(--blue); text-decoration: none; font-weight: 600; white-space: nowrap; }
+.tynna-auth-link:hover { text-decoration: underline; }
 
 /* ---- About-Tynna page (shared partial from the ai_agent repo) ---------------
    Ported from ai_agent's stylesheet, mapped to KuantorFlow's palette so the

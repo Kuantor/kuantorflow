@@ -167,13 +167,33 @@
             <button type="button" class="tynna-min" aria-label="Minimize" title="Minimize">&#8210;</button>
             <button type="button" class="tynna-close" aria-label="Close" title="Close">&times;</button>
         </div>
+        {% if google_auth_enabled and not current_user %}
+        <div id="tynna-consent" class="tynna-consent" hidden>
+            <p class="tynna-consent-text">Want Tynna to greet you by name? Sign in with Google — or stay anonymous.</p>
+            <div class="tynna-consent-actions">
+                <a class="tynna-consent-yes" href="{{ url_for('login_google') }}">Sign in with Google</a>
+                <button type="button" class="tynna-consent-no">Stay anonymous</button>
+            </div>
+            <p class="tynna-consent-note">Only your name is used, to greet you — nothing is stored on our server.</p>
+        </div>
+        {% endif %}
         <div id="tynna-messages">
-            <div class="tynna-msg tynna">Hi! I'm Tynna 👋 Ask me anything about English or how to use KuantorFlow.</div>
+            <div class="tynna-msg tynna">Hi{% if current_user %} {{ current_user.name }}{% endif %}! I'm Tynna 👋 Ask me anything about English or how to use KuantorFlow.</div>
         </div>
         <form id="tynna-form" autocomplete="off">
             <input type="text" id="tynna-input" placeholder="Type your question…" required>
             <button type="submit" id="tynna-send">Send</button>
         </form>
+        {% if google_auth_enabled %}
+        <div class="tynna-auth">
+            {% if current_user %}
+            <span class="tynna-auth-user" title="{{ current_user.email }}">👤 {{ current_user.name }}</span>
+            <a class="tynna-auth-link" href="{{ url_for('logout') }}">Sign out</a>
+            {% else %}
+            <a class="tynna-auth-link" href="{{ url_for('login_google') }}">Sign in with Google</a>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 
     <!-- Fullscreen Tynna animation (opened by clicking her avatar). The video
@@ -235,10 +255,25 @@
                 minBtn.setAttribute("aria-label", on ? "Maximize" : "Minimize");
                 minBtn.setAttribute("title", on ? "Maximize" : "Minimize");
             }
+            var consent = document.getElementById("tynna-consent");
+            function maybeShowConsent() {
+                // Offer Google sign-in once; respect a prior "Stay anonymous".
+                if (!consent) return;
+                var dismissed = false;
+                try { dismissed = localStorage.getItem("kf_tynna_auth_dismissed") === "1"; } catch (e) {}
+                if (!dismissed) consent.hidden = false;
+            }
+            if (consent) {
+                consent.querySelector(".tynna-consent-no").addEventListener("click", function () {
+                    consent.hidden = true;
+                    try { localStorage.setItem("kf_tynna_auth_dismissed", "1"); } catch (e) {}
+                });
+            }
             function openPanel() {
                 panel.hidden = false;
                 launcher.hidden = true;
                 input.focus();
+                maybeShowConsent();
             }
             function closePanel() {
                 panel.hidden = true;
