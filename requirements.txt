@@ -2,10 +2,10 @@ Flask==3.0.3
 mysql-connector-python==9.0.0
 python-dotenv==1.0.1
 beautifulsoup4==4.12.3
-lxml==5.2.2
+lxml==6.1.1
 requests==2.32.3
 
 # Tynna AI chat — imported from the sibling ai_agent repo (see AI_AGENT_PATH).
 # These are the agent's runtime deps; without them Tynna is simply disabled.
-anthropic
-scikit-learn
+anthropic==0.116.0
+scikit-learn==1.9.0
