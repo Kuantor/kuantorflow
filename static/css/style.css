@@ -621,7 +621,7 @@ body.welcome-active {
 }
 .tynna-name:hover { text-decoration: underline; }
 
-/* Always-visible open-full-page control in widget header. */
+/* Open-full-page control in widget header (kept for later use). */
 .tynna-max {
     margin: 0 0.25rem 0 0;
     padding: 0;
@@ -636,6 +636,9 @@ body.welcome-active {
     cursor: pointer;
 }
 .tynna-max:hover { background: rgba(255, 255, 255, 0.35); }
+
+/* Hide while panel is expanded; keep available in minimized mode. */
+#tynna-panel:not(.minimized) .tynna-max { display: none; }
 
 /* Minimize / maximize toggle — mirrors .tynna-close, sits to its left. */
 .tynna-min {
