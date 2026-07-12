@@ -17,6 +17,7 @@ from flask import (
     session,
     url_for,
 )
+from authlib.integrations.flask_client import OAuth
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -40,6 +41,26 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # Keyword that gates access to the whole site (set ACCESS_KEYWORD in .env).
 ACCESS_KEYWORD = os.environ.get("ACCESS_KEYWORD", "password")
+
+# --- Optional "Sign in with Google" (OAuth 2.0 / OpenID Connect) -------------
+# Purely optional: a visitor can sign in to be greeted by name, or stay
+# anonymous ("invisible") and use the site exactly as before. Enabled only when
+# both credentials are set (see .env.example) — otherwise it disables itself and
+# no sign-in button is shown. The identity lives only in the Flask session; no
+# IP address or name is ever written to the database.
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+GOOGLE_AUTH_AVAILABLE = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+
+oauth = OAuth(app)
+if GOOGLE_AUTH_AVAILABLE:
+    oauth.register(
+        name="google",
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
 
 # Reject oversized Tynna chat payloads before they reach the model — guards
 # against memory blowups and runaway Anthropic API costs. Scoped to the chat
@@ -224,8 +245,10 @@ def require_keyword():
     """Block every page behind the keyword gate until it's been entered."""
     if session.get("access_granted"):
         return None
-    # The gate page and static assets (its image, CSS, favicon) must load.
-    if request.endpoint in ("gate", "static"):
+    # The gate page, static assets, and the Google OAuth handshake must load
+    # even before the keyword is entered (the OAuth callback carries no keyword
+    # session, and signing in exposes no gated content on its own).
+    if request.endpoint in ("gate", "static", "login_google", "auth_google_callback"):
         return None
     return redirect(url_for("gate"))
 
@@ -242,6 +265,51 @@ def gate():
             return redirect(url_for("index"))
         error = "Incorrect keyword. Please try again."
     return render_template("gate.html", error=error)
+
+
+@app.route("/login/google")
+def login_google():
+    """Start the Google OAuth flow (redirects to Google's consent screen)."""
+    if not GOOGLE_AUTH_AVAILABLE:
+        abort(404)
+    redirect_uri = url_for("auth_google_callback", _external=True)
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+@app.route("/auth/google/callback")
+def auth_google_callback():
+    """Google redirects back here. Store the display name/email in the session
+    only — nothing is persisted. On any failure, fall back to anonymous."""
+    if not GOOGLE_AUTH_AVAILABLE:
+        abort(404)
+    try:
+        token = oauth.google.authorize_access_token()
+    except Exception:  # invalid state, user declined, network error, etc.
+        app.logger.exception("Google OAuth callback failed")
+        return redirect(url_for("index"))
+    info = token.get("userinfo") or {}
+    session["user"] = {
+        "name": info.get("name") or info.get("given_name") or "there",
+        "email": info.get("email"),
+        "picture": info.get("picture"),
+    }
+    return redirect(url_for("index"))
+
+
+@app.route("/logout")
+def logout():
+    """Sign out: drop the session identity and return to anonymous browsing."""
+    session.pop("user", None)
+    return redirect(url_for("index"))
+
+
+@app.context_processor
+def inject_auth():
+    """Expose the signed-in user (if any) and whether Google sign-in is on."""
+    return {
+        "current_user": session.get("user"),
+        "google_auth_enabled": GOOGLE_AUTH_AVAILABLE,
+    }
 
 
 @app.route("/tynna/chat", methods=["POST"])
