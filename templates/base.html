@@ -27,6 +27,7 @@
         </div>
     </div>
 
+    {% if request.endpoint == 'index' %}
     <div class="welcome-overlay" id="welcome-overlay" hidden>
         <div class="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
             <section class="welcome-step" id="welcome-step-1">
@@ -55,6 +56,7 @@
             </section>
         </div>
     </div>
+    {% endif %}
 
     <main class="page">
         {% for text, topic in get_flashed_messages() %}
@@ -96,6 +98,7 @@
             var welcomeStart = document.getElementById("welcome-start");
 
             if (welcomeOverlay && welcomeStep1 && welcomeStep2 && welcomeNext && welcomeStart) {
+                var welcomeSeenKey = "kf_welcome_seen";
                 function openWelcome() {
                     welcomeOverlay.hidden = false;
                     document.body.classList.add("welcome-active");
@@ -104,9 +107,14 @@
                 function closeWelcome() {
                     welcomeOverlay.hidden = true;
                     document.body.classList.remove("welcome-active");
+                    try { sessionStorage.setItem(welcomeSeenKey, "1"); } catch (e) {}
                 }
 
-                openWelcome();
+                var shouldOpen = true;
+                try {
+                    shouldOpen = sessionStorage.getItem(welcomeSeenKey) !== "1";
+                } catch (e) {}
+                if (shouldOpen) openWelcome();
 
                 welcomeNext.addEventListener("click", function () {
                     welcomeStep1.hidden = true;
