@@ -1,3 +1,4 @@
+import inspect
 import os
 import re
 import sys
@@ -128,6 +129,24 @@ def _render_ai_agent_template(template_name: str, **context):
     return template.render(**context)
 
 
+def _current_first_name():
+    """First name of the signed-in visitor, if any — for Tynna to address them
+    by (the opening greeting uses the full name; the chat uses the first name)."""
+    name = ((session.get("user") or {}).get("name") or "").strip()
+    return name.split()[0] if name else None
+
+
+def _agent_answer(question, history):
+    """Call the agent, passing the signed-in first name when the installed
+    ai_agent version supports it. Feature-detected so the chat keeps working
+    even if the ai_agent side hasn't been updated yet."""
+    agent = get_tynna()
+    first_name = _current_first_name()
+    if first_name and "user_name" in inspect.signature(agent.answer).parameters:
+        return agent.answer(question, history, user_name=first_name)
+    return agent.answer(question, history)
+
+
 def _handle_tynna_chat_request():
     """Shared JSON chat handler for widget and full ai_agent-style page."""
     if not TYNNA_AVAILABLE:
@@ -144,7 +163,7 @@ def _handle_tynna_chat_request():
         return jsonify({"error": "Please type a question."}), 400
 
     try:
-        result = get_tynna().answer(question, history)
+        result = _agent_answer(question, history)
         _append_chat_log(chat_id, question, result.get("response", ""))
         result["chat_id"] = chat_id
         return jsonify(result)
