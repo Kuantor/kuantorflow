@@ -52,6 +52,25 @@ the intelligence still comes straight from the `ai_agent` package.
 
 ---
 
+## 👋 Welcome screen popup
+
+KuantorFlow now shows a two-step welcome popup when the page loads:
+
+1. Step 1 shows `static/img/main_image.png` and a `Next >` button in the
+   bottom-right area.
+2. Step 2 introduces Tynna with title/text and image (`tynna.jpg` via
+   `/tynna-media` when available; falls back to local avatar otherwise).
+3. Pressing `Start Learning!` closes the popup and reveals the main app page.
+
+Implementation details:
+
+- Markup and behavior are in `templates/base.html`.
+- Styling is in `static/css/style.css` under the "Welcome popup" section.
+- No extra Flask route is required; it is template-driven and compatible with
+  the existing layout and gate flow.
+
+---
+
 ## 📂 Project Structure
 
 ```

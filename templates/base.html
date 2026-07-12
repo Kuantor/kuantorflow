@@ -27,6 +27,35 @@
         </div>
     </div>
 
+    <div class="welcome-overlay" id="welcome-overlay" hidden>
+        <div class="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+            <section class="welcome-step" id="welcome-step-1">
+                <img class="welcome-main-image" src="{{ url_for('static', filename='img/main_image.png') }}" alt="Welcome to KuantorFlow">
+                <div class="welcome-actions next-only">
+                    <button type="button" id="welcome-next" class="welcome-next">Next &gt;</button>
+                </div>
+            </section>
+
+            <section class="welcome-step" id="welcome-step-2" hidden>
+                <h2 id="welcome-title">Meet Tynna - AI Agent for English Learning</h2>
+                <div class="welcome-tynna-layout">
+                    <img class="welcome-tynna-image"
+                         src="{{ tynna_media('tynna.jpg') if tynna_enabled else url_for('static', filename='img/tynna_avatar.jpg') }}"
+                         alt="Tynna">
+                    <p class="welcome-tynna-text">
+                        Tynna is your dedicated English learning assistant, designed to make your journey engaging,
+                        supportive, and fun. She helps with grammar, vocabulary, and learning strategies, bringing
+                        warmth and clarity to every interaction. Learning a language opens doors to new worlds.
+                        Let's explore them together!
+                    </p>
+                </div>
+                <div class="welcome-actions">
+                    <button type="button" id="welcome-start" class="welcome-start">Start Learning!</button>
+                </div>
+            </section>
+        </div>
+    </div>
+
     <main class="page">
         {% for text, topic in get_flashed_messages() %}
             <div class="banner confirmation">
@@ -59,6 +88,36 @@
             document.addEventListener("keydown", function (e) {
                 if (e.key === "Escape") close();
             });
+
+            var welcomeOverlay = document.getElementById("welcome-overlay");
+            var welcomeStep1 = document.getElementById("welcome-step-1");
+            var welcomeStep2 = document.getElementById("welcome-step-2");
+            var welcomeNext = document.getElementById("welcome-next");
+            var welcomeStart = document.getElementById("welcome-start");
+
+            if (welcomeOverlay && welcomeStep1 && welcomeStep2 && welcomeNext && welcomeStart) {
+                function openWelcome() {
+                    welcomeOverlay.hidden = false;
+                    document.body.classList.add("welcome-active");
+                }
+
+                function closeWelcome() {
+                    welcomeOverlay.hidden = true;
+                    document.body.classList.remove("welcome-active");
+                }
+
+                openWelcome();
+
+                welcomeNext.addEventListener("click", function () {
+                    welcomeStep1.hidden = true;
+                    welcomeStep2.hidden = false;
+                });
+
+                welcomeStart.addEventListener("click", closeWelcome);
+                welcomeOverlay.addEventListener("click", function (e) {
+                    if (e.target === welcomeOverlay) closeWelcome();
+                });
+            }
         })();
     </script>
 
