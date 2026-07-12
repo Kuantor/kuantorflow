@@ -22,7 +22,7 @@ from authlib.integrations.flask_client import OAuth
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from parsers import parse_google_word, parse_mht_file
+from parsers import parse_google_word, parse_mht_preview
 from utils import (
     delete_flashcard,
     get_db_connection,
@@ -364,6 +364,7 @@ def index():
     message = None
     proposed = None
     proposed_topic = None
+    mht_content = None  # readable text of an uploaded .mht, shown beside its cards
     if request.method == "POST":
         action = request.form.get("action")
         topic = (request.form.get("topic") or "general").strip() or "general"
@@ -382,18 +383,14 @@ def index():
                 if file is None or not file.filename:
                     message = "Please choose an .mht file."
                 else:
-                    entries = parse_mht_file(file.read(), topic=topic)
+                    # Don't save yet: show the parsed cards next to the file
+                    # content for review/editing, like the word lookup does.
+                    entries, mht_content = parse_mht_preview(file.read(), topic=topic)
                     if not entries:
                         message = "No 'word — explanation' lines found in that file."
                     else:
-                        for entry in entries:
-                            save_flashcard(entry)
-                        flash((
-                            f"Saved to Database — {len(entries)} flashcard(s) "
-                            f"from '{file.filename}' added to topic '{topic}'.",
-                            topic,
-                        ))
-                        return redirect(url_for("index"))
+                        proposed = entries
+                        proposed_topic = topic
 
             elif action == "test_db":
                 conn = get_db_connection()
@@ -411,6 +408,7 @@ def index():
     return render_template(
         "index.html", message=message, topics=topics,
         proposed=proposed, proposed_topic=proposed_topic,
+        mht_content=mht_content,
     )
 
 
