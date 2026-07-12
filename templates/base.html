@@ -43,15 +43,33 @@
                     <img class="welcome-tynna-image"
                          src="{{ tynna_media('tynna.jpg') if tynna_enabled else url_for('static', filename='img/tynna_avatar.jpg') }}"
                          alt="Tynna">
-                    <p class="welcome-tynna-text">
-                        Tynna is your dedicated English learning assistant, designed to make your journey engaging,
-                        supportive, and fun. She helps with grammar, vocabulary, and learning strategies, bringing
-                        warmth and clarity to every interaction. Learning a language opens doors to new worlds.
-                        Let's explore them together!
-                    </p>
+                    <div class="welcome-tynna-text">
+                        <p>
+                            Tynna is your dedicated English learning assistant, designed to make your journey engaging,
+                            supportive, and enjoyable. She combines warmth, patience, and clear guidance to help you
+                            build confidence step by step.
+                        </p>
+                        <p>
+                            Whether you are preparing for exams, improving conversation skills, or expanding your
+                            vocabulary, Tynna helps you practice with purpose. She explains grammar clearly, gives
+                            practical examples, and turns difficult topics into manageable learning moments.
+                        </p>
+                        <p>
+                            Tynna's approach blends structure with creativity: focused explanations, useful exercises,
+                            and interactive practice that keeps you motivated. From vocabulary building to communication
+                            skills, she helps you learn in a way that feels natural and rewarding.
+                        </p>
+                        <p>
+                            Above all, Tynna reminds you that learning English is more than memorizing rules. It is
+                            about expressing yourself, connecting with others, and opening doors to new opportunities.
+                        </p>
+                        <p class="welcome-quote">
+                            "Learning a language opens doors to new worlds. Let's explore them together!"
+                        </p>
+                    </div>
                 </div>
                 <div class="welcome-actions">
-                    <button type="button" id="welcome-start" class="welcome-start">Start Learning!</button>
+                    <button type="button" id="welcome-start" class="welcome-start">Start</button>
                 </div>
             </section>
         </div>
@@ -98,7 +116,7 @@
             var welcomeStart = document.getElementById("welcome-start");
 
             if (welcomeOverlay && welcomeStep1 && welcomeStep2 && welcomeNext && welcomeStart) {
-                var welcomeSeenKey = "kf_welcome_seen";
+                var welcomeSeenKey = "kf_welcome_seen_{{ app_boot_id }}";
                 function openWelcome() {
                     welcomeOverlay.hidden = false;
                     document.body.classList.add("welcome-active");

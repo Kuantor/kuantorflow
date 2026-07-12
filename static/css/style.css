@@ -310,11 +310,19 @@ button:hover { background: var(--blue-dark); }
     margin: 0.2rem 0 1rem;
     color: var(--blue-dark);
 }
+#welcome-title { text-align: center; }
+#welcome-step-2:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(92vh - 2rem);
+}
 .welcome-tynna-layout {
     display: grid;
     grid-template-columns: minmax(240px, 320px) 1fr;
     gap: 1.2rem;
     align-items: start;
+    flex: 1;
+    min-height: 0;
 }
 .welcome-tynna-image {
     width: 100%;
@@ -324,9 +332,24 @@ button:hover { background: var(--blue-dark); }
 }
 .welcome-tynna-text {
     margin: 0;
-    line-height: 1.7;
+    line-height: 1.52;
     color: var(--ink);
-    font-size: 1.03rem;
+    font-size: 0.97rem;
+    max-height: calc(92vh - 11.5rem);
+    overflow-y: auto;
+    padding-right: 0.35rem;
+}
+.welcome-tynna-text p {
+    margin: 0 0 0.65rem;
+}
+.welcome-tynna-text .welcome-quote {
+    font-style: italic;
+    margin-bottom: 0;
+}
+#welcome-step-2 .welcome-actions {
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+    padding-bottom: 0;
 }
 
 body.welcome-active {
@@ -442,6 +465,10 @@ body.welcome-active {
     .welcome-tynna-layout {
         grid-template-columns: 1fr;
         gap: 0.8rem;
+    }
+    .welcome-tynna-text {
+        font-size: 0.92rem;
+        max-height: 45vh;
     }
     .welcome-main-image { max-height: 60vh; }
 }
@@ -594,7 +621,7 @@ body.welcome-active {
 }
 .tynna-name:hover { text-decoration: underline; }
 
-/* Always-visible open-full-page control in widget header. */
+/* Open-full-page control in widget header (kept for later use). */
 .tynna-max {
     margin: 0 0.25rem 0 0;
     padding: 0;
@@ -609,6 +636,12 @@ body.welcome-active {
     cursor: pointer;
 }
 .tynna-max:hover { background: rgba(255, 255, 255, 0.35); }
+
+/* Hide while panel is expanded; keep available in minimized mode. */
+#tynna-panel:not(.minimized) .tynna-max { display: none; }
+
+/* Also hide in minimized mode to avoid duplicate maximize controls. */
+#tynna-panel.minimized .tynna-max { display: none; }
 
 /* Minimize / maximize toggle — mirrors .tynna-close, sits to its left. */
 .tynna-min {

@@ -49,6 +49,7 @@ MAX_TYNNA_REQUEST_BYTES = 1024 * 1024
 
 LOG_DIR = Path(__file__).parent / "tynna_logs"
 LOG_DIR.mkdir(exist_ok=True)
+APP_BOOT_ID = uuid.uuid4().hex
 
 # --- Tynna AI chat, imported from the ai_agent repo (NOT duplicated here) ---
 # The agent lives in a separate repo; point AI_AGENT_PATH at its checkout.
@@ -212,7 +213,10 @@ def get_tynna():
 @app.context_processor
 def inject_tynna():
     """Expose whether the chat widget should render."""
-    return {"tynna_enabled": TYNNA_AVAILABLE}
+    return {
+        "tynna_enabled": TYNNA_AVAILABLE,
+        "app_boot_id": APP_BOOT_ID,
+    }
 
 
 @app.before_request
