@@ -247,11 +247,24 @@ def mykola_chat_page():
     return _render_ai_agent_template("index.html")
 
 
+def _save_card_from_chat(entry):
+    """Card saver injected into the agent: persists a flashcard Mykola was
+    asked to add in chat, through the same save_flashcard mechanism as the
+    Look up & save flow (issue: ai_agent#20)."""
+    save_flashcard(entry)
+    return entry
+
+
 def get_mykola():
     """Lazily build the MykolaAgent (loads the knowledge base) on first use."""
     global _mykola_agent
     if _mykola_agent is None:
-        _mykola_agent = MykolaAgent()
+        # Inject our DB writer when the installed agent supports it —
+        # feature-detected so older ai_agent checkouts keep working.
+        kwargs = {}
+        if "card_saver" in inspect.signature(MykolaAgent.__init__).parameters:
+            kwargs["card_saver"] = _save_card_from_chat
+        _mykola_agent = MykolaAgent(**kwargs)
     return _mykola_agent
 
 
