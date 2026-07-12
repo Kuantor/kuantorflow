@@ -310,11 +310,17 @@ button:hover { background: var(--blue-dark); }
     margin: 0.2rem 0 1rem;
     color: var(--blue-dark);
 }
+#welcome-step-2 {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(92vh - 2rem);
+}
 .welcome-tynna-layout {
     display: grid;
     grid-template-columns: minmax(240px, 320px) 1fr;
     gap: 1.2rem;
     align-items: start;
+    min-height: 0;
 }
 .welcome-tynna-image {
     width: 100%;
@@ -324,9 +330,28 @@ button:hover { background: var(--blue-dark); }
 }
 .welcome-tynna-text {
     margin: 0;
-    line-height: 1.7;
+    line-height: 1.52;
     color: var(--ink);
-    font-size: 1.03rem;
+    font-size: 0.97rem;
+    max-height: calc(92vh - 15rem);
+    overflow-y: auto;
+    padding-right: 0.35rem;
+}
+.welcome-tynna-text h3 {
+    margin: 0 0 0.55rem;
+    color: var(--blue-dark);
+    font-size: 1.1rem;
+}
+.welcome-tynna-text p {
+    margin: 0 0 0.65rem;
+}
+.welcome-tynna-text .welcome-quote {
+    font-style: italic;
+    margin-bottom: 0;
+}
+#welcome-step-2 .welcome-actions {
+    margin-top: 0.75rem;
+    padding-bottom: 0.25rem;
 }
 
 body.welcome-active {
@@ -443,6 +468,11 @@ body.welcome-active {
         grid-template-columns: 1fr;
         gap: 0.8rem;
     }
+    .welcome-tynna-text {
+        font-size: 0.92rem;
+        max-height: 38vh;
+    }
+    .welcome-tynna-text h3 { font-size: 1rem; }
     .welcome-main-image { max-height: 60vh; }
 }
 
