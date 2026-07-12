@@ -4,14 +4,17 @@ from pathlib import Path
 
 from flask import (
     Flask,
+    abort,
     flash,
     jsonify,
     redirect,
     render_template,
     request,
+    send_from_directory,
     session,
     url_for,
 )
+from jinja2 import ChoiceLoader, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from parsers import parse_google_word, parse_mht_file
@@ -60,6 +63,40 @@ except Exception:  # pragma: no cover - depends on the deployment environment
     TYNNA_AVAILABLE = False
 
 _tynna_agent = None
+
+# When the agent repo is present, let kuantorflow's Jinja also find its
+# templates (e.g. the shared _tynna_about.html partial). kuantorflow's own
+# templates stay first, so they win on any name clash (base.html, etc.).
+if TYNNA_AVAILABLE:
+    app.jinja_loader = ChoiceLoader([
+        app.jinja_loader,
+        FileSystemLoader(os.path.join(AI_AGENT_PATH, "templates")),
+    ])
+
+
+@app.context_processor
+def inject_tynna_media():
+    """Resolve Tynna asset names to the /tynna-media route (which serves them
+    straight from the ai_agent repo). Mirrors the helper ai_agent defines for
+    itself, so the shared About partial's asset URLs work here too."""
+    return {"tynna_media": lambda f: url_for("tynna_media_file", filename=f)}
+
+
+@app.route("/tynna-media/<path:filename>")
+def tynna_media_file(filename):
+    """Serve Tynna's images/video from the ai_agent repo — no copies in this
+    repo. Behind the keyword gate like everything else."""
+    if not TYNNA_AVAILABLE:
+        abort(404)
+    return send_from_directory(os.path.join(AI_AGENT_PATH, "static", "img"), filename)
+
+
+@app.route("/tynna/about")
+def tynna_about():
+    """About-Tynna page: kuantorflow chrome wrapping the shared ai_agent partial."""
+    if not TYNNA_AVAILABLE:
+        abort(404)
+    return render_template("tynna_about.html")
 
 
 def get_tynna():

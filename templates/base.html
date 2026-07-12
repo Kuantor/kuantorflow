@@ -71,12 +71,15 @@
 
     <div id="tynna-panel" hidden>
         <div class="tynna-header">
-            <img src="{{ url_for('static', filename='img/tynna_avatar.jpg') }}" alt="">
+            <img src="{{ url_for('static', filename='img/tynna_avatar.jpg') }}"
+                 id="tynna-avatar" class="tynna-avatar" alt="See Tynna's animation"
+                 title="See Tynna dance">
             <div>
-                <strong>Tynna</strong>
-                <small>your English study buddy</small>
+                <a href="{{ url_for('tynna_about') }}" class="tynna-name" title="About Tynna">Tynna</a>
+                <small>your English study companion</small>
             </div>
-            <button type="button" class="tynna-close" aria-label="Close">&times;</button>
+            <button type="button" class="tynna-min" aria-label="Minimize" title="Minimize">&#8210;</button>
+            <button type="button" class="tynna-close" aria-label="Close" title="Close">&times;</button>
         </div>
         <div id="tynna-messages">
             <div class="tynna-msg tynna">Hi! I'm Tynna 👋 Ask me anything about English or how to use KuantorFlow.</div>
@@ -87,6 +90,14 @@
         </form>
     </div>
 
+    <!-- Fullscreen Tynna animation (opened by clicking her avatar). The video
+         is served from the ai_agent repo via the /tynna-media route. -->
+    <div id="tynna-video-overlay" class="tynna-video-overlay" hidden>
+        <button type="button" class="tynna-video-close" aria-label="Close">&times;</button>
+        <video id="tynna-video" loop playsinline controls preload="none"
+               src="{{ tynna_media('tynna_jive.mp4') }}"></video>
+    </div>
+
     <script>
         (function () {
             var launcher = document.getElementById("tynna-launcher");
@@ -95,6 +106,11 @@
             var form = document.getElementById("tynna-form");
             var input = document.getElementById("tynna-input");
             var send = document.getElementById("tynna-send");
+            var minBtn = panel.querySelector(".tynna-min");
+            var closeBtn = panel.querySelector(".tynna-close");
+            var avatar = document.getElementById("tynna-avatar");
+            var videoOverlay = document.getElementById("tynna-video-overlay");
+            var video = document.getElementById("tynna-video");
             var history = [];
 
             function esc(s) {
@@ -125,6 +141,12 @@
                 messages.scrollTop = messages.scrollHeight;
                 return el;
             }
+            function setMinimized(on) {
+                panel.classList.toggle("minimized", on);
+                minBtn.innerHTML = on ? "&#9633;" : "&#8210;";   // ▢ maximize / – minimize
+                minBtn.setAttribute("aria-label", on ? "Maximize" : "Minimize");
+                minBtn.setAttribute("title", on ? "Maximize" : "Minimize");
+            }
             function openPanel() {
                 panel.hidden = false;
                 launcher.hidden = true;
@@ -132,12 +154,32 @@
             }
             function closePanel() {
                 panel.hidden = true;
+                setMinimized(false);   // next open starts full-size
                 launcher.hidden = false;
             }
+            function openVideo() {
+                videoOverlay.hidden = false;
+                try { video.currentTime = 0; video.play(); } catch (e) {}
+            }
+            function closeVideo() {
+                videoOverlay.hidden = true;
+                video.pause();
+            }
+
             launcher.addEventListener("click", openPanel);
-            panel.querySelector(".tynna-close").addEventListener("click", closePanel);
+            closeBtn.addEventListener("click", closePanel);
+            minBtn.addEventListener("click", function () {
+                setMinimized(!panel.classList.contains("minimized"));
+            });
+            avatar.addEventListener("click", openVideo);
+            videoOverlay.querySelector(".tynna-video-close").addEventListener("click", closeVideo);
+            videoOverlay.addEventListener("click", function (e) {
+                if (e.target === videoOverlay) closeVideo();   // click backdrop
+            });
             document.addEventListener("keydown", function (e) {
-                if (e.key === "Escape" && !panel.hidden) closePanel();
+                if (e.key !== "Escape") return;
+                if (!videoOverlay.hidden) closeVideo();
+                else if (!panel.hidden) closePanel();
             });
 
             form.addEventListener("submit", function (e) {
