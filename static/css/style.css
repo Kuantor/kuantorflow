@@ -520,15 +520,9 @@ button:hover { background: var(--blue-dark); }
 }
 .tynna-min:hover { background: rgba(255, 255, 255, 0.35); }
 
-/* Minimized: collapse to just the header as a slim bar across the bottom. */
-#tynna-panel.minimized {
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    height: auto;
-    border-radius: 0;
-}
+/* Minimized: collapse to just the header, keeping the panel's original
+   narrow width and bottom-right position (messages + form hidden). */
+#tynna-panel.minimized { height: auto; }
 #tynna-panel.minimized #tynna-messages,
 #tynna-panel.minimized #tynna-form { display: none; }
 
