@@ -310,7 +310,7 @@ button:hover { background: var(--blue-dark); }
     margin: 0.2rem 0 1rem;
     color: var(--blue-dark);
 }
-#welcome-step-2 {
+#welcome-step-2:not([hidden]) {
     display: flex;
     flex-direction: column;
     max-height: calc(92vh - 2rem);
