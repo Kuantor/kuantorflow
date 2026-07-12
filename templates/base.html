@@ -112,6 +112,7 @@
             var videoOverlay = document.getElementById("tynna-video-overlay");
             var video = document.getElementById("tynna-video");
             var history = [];
+            var chatId = "web_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10);
 
             function esc(s) {
                 var d = document.createElement("div");
@@ -194,7 +195,7 @@
                 fetch("{{ url_for('tynna_chat') }}", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ question: question, history: history }),
+                    body: JSON.stringify({ question: question, history: history, chat_id: chatId }),
                 }).then(function (resp) {
                     return resp.json().then(function (data) {
                         return { ok: resp.ok, data: data };
@@ -204,6 +205,7 @@
                     if (!r.ok) {
                         addMessage("error", r.data.error || "Something went wrong.");
                     } else {
+                        chatId = r.data.chat_id || chatId;
                         addMessage("tynna", r.data.response || "(no answer)", r.data.sources);
                         history = r.data.history || history;
                     }
