@@ -184,9 +184,50 @@ def _safe_chat_id(raw_chat_id: str | None) -> str:
     return safe[:64] or f"web_{uuid.uuid4().hex}"
 
 
+def _safe_email_prefix(email: str | None) -> str | None:
+    """Filesystem-safe directory name from the part of an email before the @."""
+    prefix = (email or "").split("@", 1)[0].strip().lower()
+    safe = re.sub(r"[^a-z0-9_.-]", "_", prefix).strip("._")
+    return safe[:64] or None
+
+
+def _current_user_log_dir() -> Path:
+    """Log directory for this request: mykola_logs/<email_prefix>/ for
+    signed-in visitors (issue ai_agent#30), the shared mykola_logs/ otherwise."""
+    email = (session.get("user") or {}).get("email")
+    prefix = _safe_email_prefix(email)
+    if not prefix:
+        return LOG_DIR
+    user_dir = LOG_DIR / prefix
+    user_dir.mkdir(exist_ok=True)
+    return user_dir
+
+
+def _read_user_logs(max_chars: int = 12000) -> str:
+    """Most recent chat-log text of the signed-in user, chronological order,
+    capped at max_chars. Empty string for anonymous users or no history."""
+    user_dir = _current_user_log_dir()
+    if user_dir == LOG_DIR:
+        return ""
+    files = sorted(user_dir.glob("chat_*.txt"), key=lambda p: p.stat().st_mtime,
+                   reverse=True)
+    collected, total = [], 0
+    for path in files:  # newest first, stop once the budget is spent
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        collected.append(text)
+        total += len(text)
+        if total >= max_chars:
+            break
+    return "\n".join(reversed(collected))[-max_chars:]
+
+
 def _append_chat_log(chat_id: str, user_text: str, assistant_text: str) -> None:
-    """Append one user/assistant exchange to mykola_logs/chat_<chat_id>.txt."""
-    log_path = LOG_DIR / f"chat_{chat_id}.txt"
+    """Append one user/assistant exchange to chat_<chat_id>.txt in the shared
+    log dir, or in the signed-in user's subdirectory."""
+    log_path = _current_user_log_dir() / f"chat_{chat_id}.txt"
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with log_path.open("a", encoding="utf-8") as f:
         f.write(f"[{ts}]\n")
@@ -366,6 +407,28 @@ def mykola_chat():
 def mykola_chat_api():
     """Compatibility endpoint used by ai_agent chat page JS."""
     return _handle_mykola_chat_request()
+
+
+@app.route("/mykola/recap", methods=["POST"])
+def mykola_recap():
+    """Welcome-back recap of the signed-in user's previous conversations
+    (issue ai_agent#30). The recap is an optional nicety: anonymous visitors,
+    empty histories, older agent versions, and errors all return
+    {"recap": null} so the widget silently keeps its normal greeting."""
+    if not MYKOLA_AVAILABLE or not session.get("user"):
+        return jsonify({"recap": None})
+    agent = get_mykola()
+    if not hasattr(agent, "recap"):  # older ai_agent checkout
+        return jsonify({"recap": None})
+    logs = _read_user_logs()
+    if not logs:
+        return jsonify({"recap": None})
+    try:
+        text = agent.recap(logs, user_name=_current_first_name())
+        return jsonify({"recap": text or None})
+    except Exception:
+        app.logger.exception("Mykola recap failed")
+        return jsonify({"recap": None})
 
 
 @app.route("/", methods=["GET", "POST"])

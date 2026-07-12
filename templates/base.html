@@ -171,7 +171,7 @@
                 <a class="mykola-consent-yes" href="{{ url_for('login_google') }}">Sign in with Google</a>
                 <button type="button" class="mykola-consent-no">Stay anonymous</button>
             </div>
-            <p class="mykola-consent-note">Only your name is used, to greet you — nothing is stored on our server.</p>
+            <p class="mykola-consent-note">Signing in lets Mykola greet you by name and remember your chats between visits (saved under your account). Stay anonymous and nothing is kept under your name.</p>
         </div>
         {% endif %}
         <div id="mykola-messages">
@@ -266,11 +266,33 @@
                     try { localStorage.setItem("kf_mykola_auth_dismissed", "1"); } catch (e) {}
                 });
             }
+            {% if current_user %}
+            // Welcome-back recap for signed-in visitors (issue ai_agent#30):
+            // fetched once per page load, on first open. A null recap (no
+            // history, agent unavailable, error) keeps the normal greeting.
+            var recapRequested = false;
+            function requestRecap() {
+                if (recapRequested) return;
+                recapRequested = true;
+                var typing = addMessage("mykola typing", "Mykola is recalling your previous conversations…");
+                fetch("{{ url_for('mykola_recap') }}", { method: "POST" })
+                    .then(function (resp) { return resp.json(); })
+                    .then(function (data) {
+                        typing.remove();
+                        if (data.recap) {
+                            addMessage("mykola", data.recap);
+                            history.push({ role: "assistant", content: data.recap });
+                        }
+                    })
+                    .catch(function () { typing.remove(); });
+            }
+            {% endif %}
             function openPanel() {
                 panel.hidden = false;
                 launcher.hidden = true;
                 input.focus();
                 maybeShowConsent();
+                {% if current_user %}requestRecap();{% endif %}
             }
             function closePanel() {
                 panel.hidden = true;
