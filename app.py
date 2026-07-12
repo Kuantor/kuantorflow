@@ -3,7 +3,7 @@ import re
 import sys
 import uuid
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import (
     Flask,
@@ -34,6 +34,11 @@ app = Flask(__name__)
 # Needed for flash messages (session cookie). Override in production:
 # set the SECRET_KEY environment variable on PythonAnywhere.
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+
+# How long a signed-in session survives once marked permanent (see the OAuth
+# callback). Keeps the visitor greeted by name across browser restarts without
+# any server-side storage — the identity still lives only in the signed cookie.
+app.permanent_session_lifetime = timedelta(days=30)
 
 # PythonAnywhere serves the app behind a proxy; trust its X-Forwarded-*
 # headers so absolute URLs (og:image etc.) use https and the real host.
@@ -288,6 +293,9 @@ def auth_google_callback():
         app.logger.exception("Google OAuth callback failed")
         return redirect(url_for("index"))
     info = token.get("userinfo") or {}
+    # Persist the signed-in session across browser restarts (30 days, see
+    # app.permanent_session_lifetime). Anonymous sessions stay non-permanent.
+    session.permanent = True
     session["user"] = {
         "name": info.get("name") or info.get("given_name") or "there",
         "email": info.get("email"),
