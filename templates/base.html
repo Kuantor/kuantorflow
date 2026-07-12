@@ -61,5 +61,120 @@
             });
         })();
     </script>
+
+    {% if tynna_enabled %}
+    <!-- Tynna AI chat widget (bottom-right). Logic lives in the ai_agent repo. -->
+    <button type="button" id="tynna-launcher" aria-label="Chat with Tynna">
+        <img src="{{ url_for('static', filename='img/tynna_avatar.jpg') }}" alt="Tynna">
+        <span>Ask&nbsp;Tynna</span>
+    </button>
+
+    <div id="tynna-panel" hidden>
+        <div class="tynna-header">
+            <img src="{{ url_for('static', filename='img/tynna_avatar.jpg') }}" alt="">
+            <div>
+                <strong>Tynna</strong>
+                <small>your English study buddy</small>
+            </div>
+            <button type="button" class="tynna-close" aria-label="Close">&times;</button>
+        </div>
+        <div id="tynna-messages">
+            <div class="tynna-msg tynna">Hi! I'm Tynna 👋 Ask me anything about English or how to use KuantorFlow.</div>
+        </div>
+        <form id="tynna-form" autocomplete="off">
+            <input type="text" id="tynna-input" placeholder="Type your question…" required>
+            <button type="submit" id="tynna-send">Send</button>
+        </form>
+    </div>
+
+    <script>
+        (function () {
+            var launcher = document.getElementById("tynna-launcher");
+            var panel = document.getElementById("tynna-panel");
+            var messages = document.getElementById("tynna-messages");
+            var form = document.getElementById("tynna-form");
+            var input = document.getElementById("tynna-input");
+            var send = document.getElementById("tynna-send");
+            var history = [];
+
+            function esc(s) {
+                var d = document.createElement("div");
+                d.textContent = s;
+                return d.innerHTML;
+            }
+            function markdownLite(text) {
+                // Escape first (XSS-safe), then apply a little **bold** / *italic*.
+                return esc(text)
+                    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+                    .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
+            }
+            function addMessage(kind, text, sources) {
+                var el = document.createElement("div");
+                el.className = "tynna-msg " + kind;
+                // Only Tynna's own replies get markdown; user/error stay plain.
+                el.innerHTML = kind.indexOf("tynna") === 0 ? markdownLite(text) : esc(text);
+                if (sources && sources.length) {
+                    var s = document.createElement("div");
+                    s.className = "tynna-sources";
+                    s.textContent = "sources: " + sources.map(function (x) {
+                        return x.file.replace(/\.md$/, "") + " / " + x.heading;
+                    }).join("; ");
+                    el.appendChild(s);
+                }
+                messages.appendChild(el);
+                messages.scrollTop = messages.scrollHeight;
+                return el;
+            }
+            function openPanel() {
+                panel.hidden = false;
+                launcher.hidden = true;
+                input.focus();
+            }
+            function closePanel() {
+                panel.hidden = true;
+                launcher.hidden = false;
+            }
+            launcher.addEventListener("click", openPanel);
+            panel.querySelector(".tynna-close").addEventListener("click", closePanel);
+            document.addEventListener("keydown", function (e) {
+                if (e.key === "Escape" && !panel.hidden) closePanel();
+            });
+
+            form.addEventListener("submit", function (e) {
+                e.preventDefault();
+                var question = input.value.trim();
+                if (!question) return;
+                addMessage("user", question);
+                input.value = "";
+                send.disabled = true;
+                var typing = addMessage("tynna typing", "Tynna is thinking…");
+
+                fetch("{{ url_for('tynna_chat') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ question: question, history: history }),
+                }).then(function (resp) {
+                    return resp.json().then(function (data) {
+                        return { ok: resp.ok, data: data };
+                    });
+                }).then(function (r) {
+                    typing.remove();
+                    if (!r.ok) {
+                        addMessage("error", r.data.error || "Something went wrong.");
+                    } else {
+                        addMessage("tynna", r.data.response || "(no answer)", r.data.sources);
+                        history = r.data.history || history;
+                    }
+                }).catch(function () {
+                    typing.remove();
+                    addMessage("error", "Network error — please try again.");
+                }).then(function () {
+                    send.disabled = false;
+                    input.focus();
+                });
+            });
+        })();
+    </script>
+    {% endif %}
 </body>
 </html>

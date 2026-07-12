@@ -355,3 +355,134 @@ button:hover { background: var(--blue-dark); }
 @media (max-width: 600px) {
     .form-row { flex-direction: column; gap: 0; }
 }
+
+/* Tynna chat widget (bottom-right) */
+#tynna-launcher {
+    position: fixed;
+    right: 1.2rem;
+    bottom: 1.2rem;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.4rem 0.9rem 0.4rem 0.4rem;
+    border: none;
+    border-radius: 999px;
+    background: var(--blue);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+#tynna-launcher:hover { background: var(--blue-dark); }
+#tynna-launcher img {
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #fff;
+}
+
+#tynna-panel {
+    position: fixed;
+    right: 1.2rem;
+    bottom: 1.2rem;
+    z-index: 200;
+    width: min(340px, calc(100vw - 2rem));
+    height: min(460px, calc(100vh - 2rem));
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+.tynna-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 0.9rem;
+    background: var(--blue);
+    color: #fff;
+}
+.tynna-header img {
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #fff;
+}
+.tynna-header div { flex: 1; line-height: 1.15; }
+.tynna-header small { display: block; opacity: 0.85; font-size: 0.72rem; }
+.tynna-close {
+    margin: 0;
+    padding: 0;
+    width: 1.8rem;
+    height: 1.8rem;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.tynna-close:hover { background: rgba(255, 255, 255, 0.35); }
+
+#tynna-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.8rem;
+    background: #f4f6f8;
+}
+.tynna-msg {
+    max-width: 85%;
+    margin-bottom: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+.tynna-msg.tynna { background: #fff; border: 1px solid #dce3ea; color: var(--ink); }
+.tynna-msg.user {
+    margin-left: auto;
+    background: var(--blue);
+    color: #fff;
+}
+.tynna-msg.error { background: var(--bad-bg); border: 1px solid var(--bad-border); color: var(--bad-ink); }
+.tynna-msg.typing { opacity: 0.7; font-style: italic; }
+.tynna-sources {
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+}
+#tynna-form {
+    display: flex;
+    gap: 0.4rem;
+    padding: 0.6rem;
+    border-top: 1px solid #e4e9ee;
+    background: #fff;
+}
+#tynna-form input {
+    flex: 1;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid #c5d0da;
+    border-radius: 999px;
+    font-size: 0.92rem;
+}
+#tynna-form input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
+#tynna-form button {
+    margin: 0;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 999px;
+    background: var(--blue);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+}
+#tynna-form button:hover { background: var(--blue-dark); }
+#tynna-form button:disabled { opacity: 0.6; cursor: default; }

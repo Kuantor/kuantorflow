@@ -1,8 +1,11 @@
 import os
+import sys
+from pathlib import Path
 
 from flask import (
     Flask,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -32,6 +35,40 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 # Keyword that gates access to the whole site (set ACCESS_KEYWORD in .env).
 ACCESS_KEYWORD = os.environ.get("ACCESS_KEYWORD", "password")
 
+# --- Tynna AI chat, imported from the ai_agent repo (NOT duplicated here) ---
+# The agent lives in a separate repo; point AI_AGENT_PATH at its checkout.
+# Default: a sibling folder next to this repo (matches the PythonAnywhere
+# layout /home/<user>/ai_agent alongside /home/<user>/kuantorflow).
+AI_AGENT_PATH = os.environ.get(
+    "AI_AGENT_PATH", str(Path(__file__).resolve().parent.parent / "ai_agent")
+)
+if AI_AGENT_PATH not in sys.path:
+    sys.path.insert(0, AI_AGENT_PATH)
+
+try:
+    # Importing pulls in the agent's own .env (ANTHROPIC_API_KEY) and knowledge
+    # base module. If the repo or its deps are missing, Tynna is simply disabled.
+    from agent import TynnaAgent, api_error_response
+    TYNNA_AVAILABLE = True
+except Exception:  # pragma: no cover - depends on the deployment environment
+    TYNNA_AVAILABLE = False
+
+_tynna_agent = None
+
+
+def get_tynna():
+    """Lazily build the TynnaAgent (loads the knowledge base) on first use."""
+    global _tynna_agent
+    if _tynna_agent is None:
+        _tynna_agent = TynnaAgent()
+    return _tynna_agent
+
+
+@app.context_processor
+def inject_tynna():
+    """Expose whether the chat widget should render."""
+    return {"tynna_enabled": TYNNA_AVAILABLE}
+
 
 @app.before_request
 def require_keyword():
@@ -56,6 +93,33 @@ def gate():
             return redirect(url_for("index"))
         error = "Incorrect keyword. Please try again."
     return render_template("gate.html", error=error)
+
+
+@app.route("/tynna/chat", methods=["POST"])
+def tynna_chat():
+    """
+    Chat endpoint for the Tynna widget. Delegates to the imported TynnaAgent
+    (from the ai_agent repo) and returns its {response, sources, history} JSON.
+    Behind the keyword gate like every other route.
+    """
+    if not TYNNA_AVAILABLE:
+        return jsonify({"error": "Tynna is not available on this server."}), 503
+
+    data = request.get_json(silent=True) or {}
+    question = (data.get("question") or "").strip()
+    history = data.get("history", [])
+    if not question:
+        return jsonify({"error": "Please type a question."}), 400
+
+    try:
+        return jsonify(get_tynna().answer(question, history))
+    except Exception as e:  # format Anthropic errors nicely, log the rest
+        import anthropic
+        if isinstance(e, anthropic.APIError):
+            body, status = api_error_response(e)
+            return jsonify(body), status
+        app.logger.exception("Tynna chat failed")
+        return jsonify({"error": "Internal server error. Please try again later."}), 500
 
 
 @app.route("/", methods=["GET", "POST"])
