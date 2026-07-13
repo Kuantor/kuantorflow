@@ -310,6 +310,41 @@
                 videoOverlay.hidden = true;
                 video.pause();
             }
+            function refreshBrowseTopics() {
+                // Rebuild the index page's "Browse flashcards" chips after
+                // Mykola saved a card from the chat (issue #53). The section
+                // only exists on the index page — elsewhere this is a no-op —
+                // and the refresh is cosmetic, so errors stay silent.
+                var box = document.getElementById("browse-topics");
+                if (!box) return;
+                fetch("{{ url_for('topics_json') }}")
+                    .then(function (resp) { return resp.json(); })
+                    .then(function (data) {
+                        var topics = data.topics || [];
+                        while (box.firstChild) box.removeChild(box.firstChild);
+                        var p = document.createElement("p");
+                        if (!topics.length) {
+                            p.className = "hint";
+                            p.textContent = "No topics yet — look up a word or upload notes to create one.";
+                            box.appendChild(p);
+                            return;
+                        }
+                        p.className = "topic-chips";
+                        topics.forEach(function (t) {
+                            var a = document.createElement("a");
+                            a.className = "chip";
+                            a.href = "/flashcards/" + encodeURIComponent(t[0]);
+                            a.textContent = t[0] + " ";
+                            var small = document.createElement("small");
+                            small.textContent = "(" + t[1] + ")";
+                            a.appendChild(small);
+                            p.appendChild(a);
+                            p.appendChild(document.createTextNode(" "));
+                        });
+                        box.appendChild(p);
+                    })
+                    .catch(function () {});
+            }
 
             launcher.addEventListener("click", openPanel);
             closeBtn.addEventListener("click", closePanel);
@@ -355,6 +390,9 @@
                         chatId = r.data.chat_id || chatId;
                         addMessage("mykola", r.data.response || "(no answer)", r.data.sources);
                         history = r.data.history || history;
+                        if (r.data.saved_cards && r.data.saved_cards.length) {
+                            refreshBrowseTopics();
+                        }
                     }
                 }).catch(function () {
                     typing.remove();

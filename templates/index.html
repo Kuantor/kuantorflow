@@ -46,6 +46,9 @@
 
     <div class="panel">
         <h2>Browse flashcards</h2>
+        {# id used by the Mykola widget to refresh this block in place when a
+           card is added from the chat (issue #53). #}
+        <div id="browse-topics">
         {% if topics %}
             <p class="topic-chips">
                 {% for topic, count in topics %}
@@ -55,6 +58,7 @@
         {% else %}
             <p class="hint">No topics yet — look up a word or upload notes to create one.</p>
         {% endif %}
+        </div>
         <form method="GET" onsubmit="window.location='/flashcards/' + encodeURIComponent(this.topic.value); return false;">
             <label for="browse-topic">Or type a topic name</label>
             <input type="text" id="browse-topic" name="topic" required
