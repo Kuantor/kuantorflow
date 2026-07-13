@@ -190,34 +190,35 @@ named in honour of composer Mykola Leontovych ("Shchedryk" / "Carol of the Bells
 
 ## Plans for Next Week
 
-*Derived from open GitHub issues across all repositories (excluding this report's
-own ticket, kuantorflow#63). The GitHub Projects board statuses were not readable
-with current token scopes, so status is mapped from assignment: assigned items are
-listed as In Progress, unassigned as Todo.*
+*Statuses taken directly from the **KuantorFlow Improvements** GitHub Projects
+board (excluding this report's own ticket, kuantorflow#63, which the board lists
+as In Progress). The board also tracks 31 items as Done, matching the completed
+work summarized above.*
 
 ### In Progress
 
 | Repo | Issue | Title |
 |---|---|---|
-| kuantorflow | [#55](https://github.com/Kuantor/kuantorflow/issues/55) | Make config.json unique for each Gmail user |
+| kuantorflow | [#62](https://github.com/Kuantor/kuantorflow/issues/62) | Create DOCX tutorial documenting KuantorFlow development from scratch |
 | kuantorflow | [#54](https://github.com/Kuantor/kuantorflow/issues/54) | Investigation: Android app clone of the KuantorFlow website |
+| kuantorflow | [#55](https://github.com/Kuantor/kuantorflow/issues/55) | Make config.json unique for each Gmail user |
 | kuantorflow | [#46](https://github.com/Kuantor/kuantorflow/issues/46) | Settings: add language visibility switches |
 | kuantorflow | [#45](https://github.com/Kuantor/kuantorflow/issues/45) | UI: enhance behaviour of MHT-processing results window |
-| kuantorflow | [#22](https://github.com/Kuantor/kuantorflow/issues/22) | Redesign website for a modern look |
+| kuantorflow | [#30](https://github.com/Kuantor/kuantorflow/issues/30) | Create logs for various actions in the app |
+| kuantorflow | [#21](https://github.com/Kuantor/kuantorflow/issues/21) / [#20](https://github.com/Kuantor/kuantorflow/issues/20) | Dictionary selection feature in Settings |
 | kuantorflow | [#13](https://github.com/Kuantor/kuantorflow/issues/13) | Settings menu with auto-add cards option |
-| ai_agent | [#19](https://github.com/Kuantor/ai_agent/issues/19) | Teach Mykola to complement and extend the meanings of cards |
 
 ### Todo
 
 | Repo | Issue | Title |
 |---|---|---|
-| kuantorflow | [#62](https://github.com/Kuantor/kuantorflow/issues/62) | Create DOCX tutorial documenting KuantorFlow development from scratch |
+| kuantorflow | [#22](https://github.com/Kuantor/kuantorflow/issues/22) | Redesign website for a modern look |
 | kuantorflow | [#56](https://github.com/Kuantor/kuantorflow/issues/56) | Discussion: privacy disclosure & history bootstrap for per-user chat memory |
-| kuantorflow | [#30](https://github.com/Kuantor/kuantorflow/issues/30) | Create logs for various actions in the app |
 | kuantorflow | [#25](https://github.com/Kuantor/kuantorflow/issues/25) | Export/import cards (local ↔ remote database) |
-| kuantorflow | [#21](https://github.com/Kuantor/kuantorflow/issues/21) / [#20](https://github.com/Kuantor/kuantorflow/issues/20) | Dictionary selection feature in Settings |
 | kuantorflow | [#19](https://github.com/Kuantor/kuantorflow/issues/19) | Tutorial tip above "Look Up & Save" button |
 | kuantorflow | [#15](https://github.com/Kuantor/kuantorflow/issues/15) | Parallel PRs for features and tests |
+| kuantorflow | [#66](https://github.com/Kuantor/kuantorflow/issues/66) | Create a separate board for done items |
+| ai_agent | [#19](https://github.com/Kuantor/ai_agent/issues/19) | Teach Mykola to complement and extend the meanings of cards |
 | ai_agent | [#47](https://github.com/Kuantor/ai_agent/issues/47) | Audit issue-61 changes: remove/refactor code not needed by the embedded widget |
 | ai_agent | [#28](https://github.com/Kuantor/ai_agent/issues/28) | UI: sync Mykola's description on both screens |
 | kuantorflow_automation | [#4](https://github.com/Kuantor/kuantorflow_automation/issues/4) | Basic automated tests for the AI agent |
