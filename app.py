@@ -481,6 +481,18 @@ def mykola_recap():
         return jsonify({"recap": None})
 
 
+@app.route("/topics.json")
+def topics_json():
+    """Topic chips data for the Browse flashcards section — fetched by the
+    Mykola widget to refresh the chips after a card is added from chat
+    (issue #53). Same DB-unreachable fallback as the index page."""
+    try:
+        topics = get_topics()
+    except Exception:
+        topics = []
+    return jsonify({"topics": topics})
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     """
