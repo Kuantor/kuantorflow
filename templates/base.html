@@ -215,11 +215,53 @@
             var avatar = document.getElementById("mykola-avatar");
             var videoOverlay = document.getElementById("mykola-video-overlay");
             var video = document.getElementById("mykola-video");
+            var WIDGET_STORAGE_KEY = "kf_mykola_widget_state_v1";
             var history = [];
             // The server mints a readable date-time chat id on the first
             // message (ai_agent#25); we adopt it from the response and keep
             // it for the whole conversation.
             var chatId = null;
+
+            function hasStorage() {
+                try {
+                    var probe = "__kf_mykola_probe__";
+                    localStorage.setItem(probe, "1");
+                    localStorage.removeItem(probe);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }
+            function loadWidgetState() {
+                if (!hasStorage()) return null;
+                try {
+                    var raw = localStorage.getItem(WIDGET_STORAGE_KEY);
+                    return raw ? JSON.parse(raw) : null;
+                } catch (e) {
+                    return null;
+                }
+            }
+            function saveWidgetState() {
+                if (!hasStorage()) return;
+                var data = {
+                    panelOpen: !panel.hidden,
+                    minimized: panel.classList.contains("minimized"),
+                    messages: uiMessages,
+                    history: history,
+                    chatId: chatId,
+                    scrollTop: messages.scrollTop,
+                };
+                try {
+                    localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(data));
+                } catch (e) {}
+            }
+
+            function hasConversation() {
+                return (Array.isArray(history) && history.length > 0) ||
+                       (Array.isArray(uiMessages) && uiMessages.length > 1);
+            }
+
+            var uiMessages = [];
 
             function esc(s) {
                 var d = document.createElement("div");
@@ -232,7 +274,8 @@
                     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
                     .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
             }
-            function addMessage(kind, text, sources) {
+            function addMessage(kind, text, sources, shouldPersist) {
+                if (shouldPersist === undefined) shouldPersist = true;
                 var el = document.createElement("div");
                 el.className = "mykola-msg " + kind;
                 // Only Mykola's own replies get markdown; user/error stay plain.
@@ -247,6 +290,11 @@
                 }
                 messages.appendChild(el);
                 messages.scrollTop = messages.scrollHeight;
+
+                if (shouldPersist && kind.indexOf("typing") === -1) {
+                    uiMessages.push({ kind: kind, text: text, sources: sources || [] });
+                    saveWidgetState();
+                }
                 return el;
             }
             function setMinimized(on) {
@@ -254,6 +302,7 @@
                 minBtn.innerHTML = on ? "&#9633;" : "&#8210;";   // ▢ maximize / – minimize
                 minBtn.setAttribute("aria-label", on ? "Maximize" : "Minimize");
                 minBtn.setAttribute("title", on ? "Maximize" : "Minimize");
+                saveWidgetState();
             }
             var consent = document.getElementById("mykola-consent");
             function maybeShowConsent() {
@@ -295,12 +344,14 @@
                 launcher.hidden = true;
                 input.focus();
                 maybeShowConsent();
-                {% if current_user %}requestRecap();{% endif %}
+                saveWidgetState();
+                {% if current_user %}if (!hasConversation()) requestRecap();{% endif %}
             }
             function closePanel() {
                 panel.hidden = true;
                 setMinimized(false);   // next open starts full-size
                 launcher.hidden = false;
+                saveWidgetState();
             }
             function openVideo() {
                 videoOverlay.hidden = false;
@@ -365,6 +416,50 @@
                 else if (!panel.hidden) closePanel();
             });
 
+            messages.addEventListener("scroll", saveWidgetState);
+
+            // Restore widget state after internal navigation.
+            (function restoreState() {
+                var state = loadWidgetState();
+                if (!state) {
+                    uiMessages = [];
+                    var greeting = messages.querySelector(".mykola-msg.mykola");
+                    if (greeting) {
+                        uiMessages.push({ kind: "mykola", text: greeting.textContent || greeting.innerText || "", sources: [] });
+                    }
+                    saveWidgetState();
+                    return;
+                }
+
+                history = Array.isArray(state.history) ? state.history : [];
+                chatId = state.chatId || null;
+                uiMessages = Array.isArray(state.messages) ? state.messages : [];
+
+                while (messages.firstChild) messages.removeChild(messages.firstChild);
+                if (uiMessages.length) {
+                    uiMessages.forEach(function (msg) {
+                        if (!msg || !msg.kind) return;
+                        addMessage(msg.kind, msg.text || "", msg.sources || [], false);
+                    });
+                } else {
+                    addMessage("mykola", "Good day{% if current_user %}, {{ current_user.name }}{% endif %}! I'm Mykola 🎩 Ask me anything about English or how to use KuantorFlow — it would be my pleasure.", [], false);
+                    uiMessages = [{ kind: "mykola", text: "Good day{% if current_user %}, {{ current_user.name }}{% endif %}! I'm Mykola 🎩 Ask me anything about English or how to use KuantorFlow — it would be my pleasure.", sources: [] }];
+                }
+
+                if (state.panelOpen) {
+                    panel.hidden = false;
+                    launcher.hidden = true;
+                } else {
+                    panel.hidden = true;
+                    launcher.hidden = false;
+                }
+                setMinimized(!!state.minimized && !panel.hidden);
+
+                if (typeof state.scrollTop === "number") {
+                    messages.scrollTop = state.scrollTop;
+                }
+            })();
+
             form.addEventListener("submit", function (e) {
                 e.preventDefault();
                 var question = input.value.trim();
@@ -390,6 +485,7 @@
                         chatId = r.data.chat_id || chatId;
                         addMessage("mykola", r.data.response || "(no answer)", r.data.sources);
                         history = r.data.history || history;
+                        saveWidgetState();
                         if (r.data.saved_cards && r.data.saved_cards.length) {
                             refreshBrowseTopics();
                         }
