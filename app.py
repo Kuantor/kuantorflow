@@ -210,16 +210,23 @@ def _current_user_log_dir() -> Path:
     return user_dir
 
 
-def _read_user_logs(max_chars: int = 12000) -> str:
-    """Most recent chat-log text of the signed-in user, chronological order,
-    capped at max_chars. Empty string for anonymous users or no history."""
+def _user_log_files() -> list[Path]:
+    """Signed-in user's chat logs, newest first ([] for anonymous visitors)."""
     user_dir = _current_user_log_dir()
     if user_dir == LOG_DIR:
-        return ""
-    files = sorted(user_dir.glob("chat_*.txt"), key=lambda p: p.stat().st_mtime,
-                   reverse=True)
+        return []
+    return sorted(user_dir.glob("chat_*.txt"), key=lambda p: p.stat().st_mtime,
+                  reverse=True)
+
+
+def _read_user_logs(max_chars: int = 12000, max_files: int = 3) -> str:
+    """Most recent chat-log text of the signed-in user, chronological order.
+
+    Capped at max_files logs (ai_agent#39: keep the model's context focused —
+    a future settings scheme may widen this) with max_chars as the secondary
+    guard. Empty string for anonymous users or no history."""
     collected, total = [], 0
-    for path in files:  # newest first, stop once the budget is spent
+    for path in _user_log_files()[:max_files]:  # newest first
         try:
             text = path.read_text(encoding="utf-8")
         except OSError:
@@ -229,6 +236,35 @@ def _read_user_logs(max_chars: int = 12000) -> str:
         if total >= max_chars:
             break
     return "\n".join(reversed(collected))[-max_chars:]
+
+
+# Farewell phrases that, in today's last message, mean the learner already
+# said goodbye — Mykola then wishes them a good rest instead of a recap.
+FAREWELL_RE = re.compile(
+    r"\b(good\s*bye|bye|good\s*night|see\s+you|farewell)\b", re.IGNORECASE
+)
+
+
+def _last_user_message(log_text: str) -> str:
+    """The learner's final message in a chat-log file ('' if none found)."""
+    sections = re.findall(r"User:\n(.*?)\n\nMykola:", log_text, re.DOTALL)
+    return sections[-1].strip() if sections else ""
+
+
+def _said_farewell_today() -> bool:
+    """True when the signed-in user's newest log was written today and their
+    last message in it was a farewell (ai_agent#39)."""
+    files = _user_log_files()
+    if not files:
+        return False
+    newest = files[0]
+    try:
+        if datetime.fromtimestamp(newest.stat().st_mtime).date() != datetime.now().date():
+            return False
+        return bool(FAREWELL_RE.search(_last_user_message(
+            newest.read_text(encoding="utf-8"))))
+    except OSError:
+        return False
 
 
 def _append_chat_log(chat_id: str, user_text: str, assistant_text: str) -> None:
@@ -424,6 +460,13 @@ def mykola_recap():
     {"recap": null} so the widget silently keeps its normal greeting."""
     if not MYKOLA_AVAILABLE or not session.get("user"):
         return jsonify({"recap": None})
+    # The learner already said goodbye today: wish them a good rest instead
+    # of restarting the dialogue (ai_agent#39). Deterministic — no model call.
+    if _said_farewell_today():
+        name = _current_first_name() or "Dear friend"
+        return jsonify({
+            "recap": f"{name}, please have a rest, and return tomorrow! Goodnight!"
+        })
     agent = get_mykola()
     if not hasattr(agent, "recap"):  # older ai_agent checkout
         return jsonify({"recap": None})
