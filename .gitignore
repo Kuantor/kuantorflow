@@ -25,7 +25,8 @@ Thumbs.db
 instance/
 uploads/
 *.mht
-mykola_logs/chat_*.txt
+mykola_logs/*
+!mykola_logs/.gitkeep
 
 # Secrets
 *.env
