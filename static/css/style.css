@@ -279,6 +279,9 @@ button:hover { background: var(--blue-dark); }
     display: flex;
     flex-direction: column;
 }
+/* Keep section switching functional: explicit display styles can override
+   the browser's default [hidden] rule, so enforce hiding here. */
+.welcome-step[hidden] { display: none; }
 .welcome-main-image {
     display: block;
     width: 100%;
