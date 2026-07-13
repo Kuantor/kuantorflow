@@ -176,12 +176,19 @@ def _handle_mykola_chat_request():
         return jsonify({"error": "Internal server error. Please try again later."}), 500
 
 
+def _new_chat_id() -> str:
+    """Readable chat id: the date & time the chat started, plus a short
+    suffix so two chats starting the same second get separate logs
+    (ai_agent#25). The widget reuses the id for the whole conversation."""
+    return datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "_" + uuid.uuid4().hex[:4]
+
+
 def _safe_chat_id(raw_chat_id: str | None) -> str:
-    """Allow only safe filename chars and always return a usable chat id."""
+    """Allow only safe filename chars, minting a readable id if absent."""
     if not raw_chat_id:
-        return f"web_{uuid.uuid4().hex}"
+        return _new_chat_id()
     safe = re.sub(r"[^A-Za-z0-9_-]", "_", raw_chat_id.strip())
-    return safe[:64] or f"web_{uuid.uuid4().hex}"
+    return safe[:64] or _new_chat_id()
 
 
 def _safe_email_prefix(email: str | None) -> str | None:

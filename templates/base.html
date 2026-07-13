@@ -216,7 +216,10 @@
             var videoOverlay = document.getElementById("mykola-video-overlay");
             var video = document.getElementById("mykola-video");
             var history = [];
-            var chatId = "web_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10);
+            // The server mints a readable date-time chat id on the first
+            // message (ai_agent#25); we adopt it from the response and keep
+            // it for the whole conversation.
+            var chatId = null;
 
             function esc(s) {
                 var d = document.createElement("div");
