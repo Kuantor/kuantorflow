@@ -22,6 +22,7 @@ from authlib.integrations.flask_client import OAuth
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+import settings_store
 from parsers import parse_google_word, parse_mht_preview
 from utils import (
     delete_flashcard,
@@ -134,6 +135,18 @@ def _current_first_name():
     by (the opening greeting uses the full name; the chat uses the first name)."""
     name = ((session.get("user") or {}).get("name") or "").strip()
     return name.split()[0] if name else None
+
+
+def _current_email():
+    """Email of the signed-in visitor, or None for anonymous visitors."""
+    return (session.get("user") or {}).get("email")
+
+
+def current_settings():
+    """Settings for this request (issue #86): the signed-in user's own config
+    file, or the shared default config for anonymous visitors. Always returns a
+    complete, valid dict — a missing or corrupt file falls back to defaults."""
+    return settings_store.load(_current_email())
 
 
 def _agent_answer(question, history):
@@ -434,6 +447,14 @@ def inject_auth():
         "current_user": session.get("user"),
         "google_auth_enabled": GOOGLE_AUTH_AVAILABLE,
     }
+
+
+@app.context_processor
+def inject_settings():
+    """Expose the active settings to every template (issue #86) — the seam the
+    Settings UI (#13), dictionary choice (#20) and language switches (#46)
+    will read from."""
+    return {"settings": current_settings()}
 
 
 @app.route("/mykola/chat", methods=["POST"])
