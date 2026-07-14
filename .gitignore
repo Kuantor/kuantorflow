@@ -28,6 +28,10 @@ uploads/
 mykola_logs/*
 !mykola_logs/.gitkeep
 
+# User settings (issue #86): written at runtime, one per identity — not source.
+# The defaults live in settings_store.DEFAULTS, so a missing file is fine.
+settings/*.json
+
 # Secrets
 *.env
 config.json

@@ -71,16 +71,69 @@ Implementation details:
 
 ---
 
+## ⚙️ Settings
+
+User preferences live in JSON files under `settings/`, one per identity
+(issue #86):
+
+```
+settings/config-default.json      every anonymous (not signed-in) visitor
+settings/config-<username>.json   one per Google-authorised user
+```
+
+`<username>` is the part of the user's email before the `@`, sanitised to be
+filesystem-safe — so signed-in users never share preferences, and anonymous
+visitors share the default config.
+
+`settings_store.py` is the whole storage layer, and `settings_store.DEFAULTS`
+is the source of truth for which settings exist:
+
+| Setting | Default | Introduced for |
+| --- | --- | --- |
+| `cards_automatically` | `false` | #13 — save looked-up cards without the review popup |
+| `translator` | `google` | #20 — `google` or `bing` |
+| `explanatory_dictionary` | `oxford` | #20 — `oxford` or `merriam-webster` |
+| `show_ukrainian` | `true` | #46 — hide Ukrainian everywhere |
+| `show_russian` | `true` | #46 — hide Russian everywhere |
+
+Behaviour worth knowing:
+
+- **The files are optional.** A missing, unreadable or corrupt config falls
+  back to the defaults rather than breaking the page, so nothing needs to be
+  provisioned on deploy — the directory alone is enough.
+- **Adding a setting** means adding one entry to `DEFAULTS`; existing config
+  files pick up the new default on their next read, with no migration.
+- **Values are validated** on read and write: unknown keys are dropped and
+  out-of-range values fall back to their default.
+- **Writes are atomic**, so a crash mid-write can't corrupt a config.
+- The files are runtime state and are **gitignored**; `SETTINGS_DIR` can
+  override the location.
+
+In Python, `app.current_settings()` returns the active settings for the
+request, and every template gets them as `settings`:
+
+```python
+if current_settings()["cards_automatically"]:
+    ...
+```
+
+The Settings UI itself arrives in #13, #20 and #46 — this is the store they
+read from.
+
+---
+
 ## 📂 Project Structure
 
 ```
 kuantorflow/
 ├── app.py              # Main Flask application (routes, views)
 ├── utils.py            # Database connection + helper functions
+├── settings_store.py   # Per-user settings persisted as JSON (issue #86)
 ├── requirements.txt    # Python dependencies
 ├── README.md           # Project documentation
 ├── .gitignore          # Ignore secrets, venv, cache files
 ├── templates/          # HTML templates (index.html, flashcards.html, quiz.html)
 ├── static/             # CSS, JS, images
+├── settings/           # Per-identity config JSON (gitignored, created at runtime)
 └── uploads/            # Uploaded MHT files (optional)
 ```
