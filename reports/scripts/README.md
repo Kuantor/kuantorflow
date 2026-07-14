@@ -7,7 +7,7 @@ branded table headers).
 ## Usage
 
 ```bash
-pip install python-docx        # the only Python dependency
+pip install -r reports/scripts/requirements.txt   # python-docx, the only dependency
 
 python reports/scripts/md_to_docx.py reports/2026-07-13-weekly-report.md
 python reports/scripts/md_to_pdf.py  reports/2026-07-13-weekly-report.md

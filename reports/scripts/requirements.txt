@@ -1,0 +1,4 @@
+# Dependencies for the report converters (reports/scripts/).
+# Install into whatever environment you run the converters from:
+#   pip install -r reports/scripts/requirements.txt
+python-docx==1.2.0
