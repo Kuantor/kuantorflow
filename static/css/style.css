@@ -514,7 +514,9 @@ body.welcome-active {
     font-size: 0.95rem;
     color: var(--ink);
 }
-.settings-group input[type="radio"] { accent-color: var(--blue); }
+.settings-group input[type="radio"],
+.settings-group input[type="checkbox"] { accent-color: var(--blue); }
+.settings-group input[type="checkbox"] { width: 1rem; height: 1rem; }
 .settings-scope { margin: 0 0 0.5rem; font-size: 0.78rem; color: var(--muted); }
 .settings-error { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--bad-border); }
 
