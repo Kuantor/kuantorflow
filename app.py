@@ -23,7 +23,7 @@ from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import settings_store
-from parsers import parse_google_word, parse_mht_preview
+from parsers import lookup_word, parse_mht_preview
 from utils import (
     delete_flashcard,
     get_db_connection,
@@ -543,17 +543,22 @@ def index():
                 word = (request.form.get("word") or "").strip()
                 if not word:
                     message = "Please enter a word."
-                elif current_settings()["cards_automatically"]:
-                    # 'Add cards automatically' is on (#13): skip the review
-                    # popup and write the cards straight to the database.
-                    entries = parse_google_word(word, topic=topic)
-                    for entry in entries:
-                        save_flashcard(entry)
-                    flash((f"Added {len(entries)} card(s) for '{word}' automatically.", topic))
-                    return redirect(url_for("index"))
                 else:
+                    prefs = current_settings()
+                    entries = lookup_word(
+                        word, topic=topic,
+                        translator=prefs["translator"],
+                        explanatory_dictionary=prefs["explanatory_dictionary"],
+                    )
+                    if prefs["cards_automatically"]:
+                        # 'Add cards automatically' is on (#13): skip the
+                        # review popup, write the cards straight to the DB.
+                        for entry in entries:
+                            save_flashcard(entry)
+                        flash((f"Added {len(entries)} card(s) for '{word}' automatically.", topic))
+                        return redirect(url_for("index"))
                     # Don't save yet: show the cards for review/editing first.
-                    proposed = parse_google_word(word, topic=topic)
+                    proposed = entries
                     proposed_topic = topic
 
             elif action == "upload_mht":

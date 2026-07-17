@@ -8,7 +8,8 @@
     {% endif %}
 
     <div class="panel">
-        <h2>Look up a word (Google Translate)</h2>
+        {# The provider name follows the Settings choice (#20). #}
+        <h2>Look up a word ({{ 'Bing Translator' if settings.translator == 'bing' else 'Google Translate' }})</h2>
         <form method="POST">
             <input type="hidden" name="action" value="parse_word">
             <div class="form-row">

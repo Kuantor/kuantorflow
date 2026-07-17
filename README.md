@@ -98,9 +98,11 @@ is the source of truth for which settings exist:
 
 Behaviour worth knowing:
 
-- **The files are optional.** A missing, unreadable or corrupt config falls
-  back to the defaults rather than breaking the page, so nothing needs to be
-  provisioned on deploy — the directory alone is enough.
+- **The files create themselves.** The first read for an identity writes its
+  config file with the defaults, so nothing needs to be provisioned on
+  deploy — the directory alone is enough. An unreadable or corrupt config
+  falls back to the defaults rather than breaking the page (and is never
+  silently overwritten).
 - **Adding a setting** means adding one entry to `DEFAULTS`; existing config
   files pick up the new default on their next read, with no migration.
 - **Values are validated** on read and write: unknown keys are dropped and
@@ -117,8 +119,35 @@ if current_settings()["cards_automatically"]:
     ...
 ```
 
-The Settings UI itself arrives in #13, #20 and #46 — this is the store they
-read from.
+### The Settings popup (#13, #20)
+
+**Settings** in the header opens a popup where each identity edits its own
+config file (saved via `POST /settings`, which runs through the same
+validation as the store):
+
+- **Add cards automatically** (#13, off by default) — when on, *Look up &
+  save* writes the parsed cards straight to the database and shows the usual
+  green confirmation banner; when off, the review-before-save popup opens as
+  before. `.mht` uploads always go through review, since editing the parsed
+  lines is the point of that popup.
+- **Translation (ENG → UKR/RUS)** (#20) — *Google Translate* or *Bing
+  Translator*.
+- **Explanatory dictionary (ENG → ENG)** (#20) — *Oxford Learner's
+  Dictionaries* (default) or *Merriam-Webster*.
+
+### Provider stubs (#20)
+
+Word lookups go through `parsers.lookup_word(word, topic, translator,
+explanatory_dictionary)`, which dispatches to one fetcher per provider
+(`TRANSLATOR_BACKENDS` / `DICTIONARY_BACKENDS`). The Bing, Oxford and
+Merriam-Webster fetchers are **stubs for now** — their real implementations
+are tracked in #21. The dispatch degrades gracefully: a translator backend
+that fails or returns nothing falls back to Google Translate, and a
+dictionary backend that fails or returns nothing falls back to Reverso's
+dictionary — so picking Bing or Merriam-Webster today still yields the same
+cards as before, just labelled with the chosen provider.
+
+The language-visibility switches (#46) are stored but don't have UI yet.
 
 ---
 
