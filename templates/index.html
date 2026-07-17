@@ -145,9 +145,18 @@
                     return fetch(form.dataset.addUrl, { method: "POST", body: new FormData(form) })
                         .then(function (resp) {
                             if (!resp.ok) throw new Error("save failed");
-                            addedCount++;
+                            return resp.json();
+                        })
+                        .then(function (data) {
                             form.classList.add("added");
-                            btn.textContent = "Added ✓";
+                            if (data.duplicate) {
+                                // Already in the database (issue #101):
+                                // nothing was written, so no refresh needed.
+                                btn.textContent = "Already in DB";
+                            } else {
+                                addedCount++;
+                                btn.textContent = "Added ✓";
+                            }
                             form.querySelectorAll("input, textarea").forEach(function (el) {
                                 el.disabled = true;
                             });
