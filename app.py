@@ -23,7 +23,7 @@ from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import settings_store
-from parsers import parse_google_word, parse_mht_preview
+from parsers import lookup_word, parse_mht_preview
 from utils import (
     delete_flashcard,
     get_db_connection,
@@ -457,6 +457,17 @@ def inject_settings():
     return {"settings": current_settings()}
 
 
+@app.route("/settings", methods=["POST"])
+def save_settings():
+    """Persist choices from the Settings popup (issues #13/#20) for the
+    current identity: the signed-in user's own config file, or the shared
+    default file for anonymous visitors. The store drops unknown keys and
+    invalid values, so this endpoint cannot corrupt a config file."""
+    changes = request.get_json(silent=True) or {}
+    stored = settings_store.update(changes, _current_email())
+    return jsonify({"ok": True, "settings": stored})
+
+
 @app.route("/mykola/chat", methods=["POST"])
 def mykola_chat():
     """
@@ -533,8 +544,21 @@ def index():
                 if not word:
                     message = "Please enter a word."
                 else:
+                    prefs = current_settings()
+                    entries = lookup_word(
+                        word, topic=topic,
+                        translator=prefs["translator"],
+                        explanatory_dictionary=prefs["explanatory_dictionary"],
+                    )
+                    if prefs["cards_automatically"]:
+                        # 'Add cards automatically' is on (#13): skip the
+                        # review popup, write the cards straight to the DB.
+                        for entry in entries:
+                            save_flashcard(entry)
+                        flash((f"Added {len(entries)} card(s) for '{word}' automatically.", topic))
+                        return redirect(url_for("index"))
                     # Don't save yet: show the cards for review/editing first.
-                    proposed = parse_google_word(word, topic=topic)
+                    proposed = entries
                     proposed_topic = topic
 
             elif action == "upload_mht":

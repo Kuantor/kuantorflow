@@ -103,14 +103,24 @@ def sanitize(values: dict | None) -> dict:
 def load(email: str | None = None) -> dict:
     """Settings for this identity, always complete and valid.
 
-    Never raises: a missing file, unreadable file or invalid JSON all yield the
-    defaults, so settings can't break the page.
+    A missing file is created with the defaults on first read, so every
+    identity that has visited the site has a real config file on disk
+    (issue #86). Never raises: an unreadable file, invalid JSON, or a failed
+    first write all yield the defaults, so settings can't break the page.
     """
     path = config_path(email)
     try:
         with open(path, encoding="utf-8") as fh:
             raw = json.load(fh)
-    except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeDecodeError):
+    except FileNotFoundError:
+        # First visit for this identity — materialise the file. A corrupt
+        # file deliberately does NOT take this path: it may hold hand-edited
+        # values worth fixing, so it is never silently overwritten.
+        try:
+            return save(DEFAULTS, email)
+        except OSError:
+            return dict(DEFAULTS)  # read-only disk etc. — defaults still work
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return dict(DEFAULTS)
     return sanitize(raw)
 

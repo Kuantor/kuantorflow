@@ -16,6 +16,7 @@
         <a class="brand" href="{{ url_for('index') }}">Kuantor<span>Flow</span></a>
         <nav>
             <a href="{{ url_for('index') }}">Home</a>
+            <a href="#" id="settings-link">Settings</a>
             <a href="#" id="about-link">About</a>
         </nav>
     </header>
@@ -24,6 +25,61 @@
         <div class="modal">
             <button type="button" class="modal-close" aria-label="Close">&times;</button>
             <img src="{{ url_for('static', filename='img/main_image.jpg') }}" alt="About KuantorFlow">
+        </div>
+    </div>
+
+    {# Settings popup (issues #13 / #20) — pre-filled server-side from the
+       per-identity config file (issue #86) and saved via POST /settings. #}
+    <div class="modal-overlay" id="settings-modal" hidden>
+        <div class="modal modal-dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+            <button type="button" class="modal-close" aria-label="Close">&times;</button>
+            <h2 id="settings-title">Settings</h2>
+            <form id="settings-form">
+                <label class="settings-check">
+                    <input type="checkbox" name="cards_automatically"
+                           {% if settings.cards_automatically %}checked{% endif %}>
+                    Add cards automatically
+                </label>
+                <p class="settings-hint">When on, &ldquo;Look up &amp; save&rdquo; writes the cards straight
+                   to the database instead of opening the review popup first.</p>
+
+                <fieldset class="settings-group">
+                    <legend>Translation (ENG &rarr; UKR/RUS)</legend>
+                    <label>
+                        <input type="radio" name="translator" value="google"
+                               {% if settings.translator == 'google' %}checked{% endif %}>
+                        Google Translate
+                    </label>
+                    <label>
+                        <input type="radio" name="translator" value="bing"
+                               {% if settings.translator == 'bing' %}checked{% endif %}>
+                        Bing Translator
+                    </label>
+                </fieldset>
+
+                <fieldset class="settings-group">
+                    <legend>Explanatory dictionary (ENG &rarr; ENG)</legend>
+                    <label>
+                        <input type="radio" name="explanatory_dictionary" value="oxford"
+                               {% if settings.explanatory_dictionary == 'oxford' %}checked{% endif %}>
+                        Oxford Learner's Dictionaries
+                    </label>
+                    <label>
+                        <input type="radio" name="explanatory_dictionary" value="merriam-webster"
+                               {% if settings.explanatory_dictionary == 'merriam-webster' %}checked{% endif %}>
+                        Merriam-Webster
+                    </label>
+                </fieldset>
+
+                <p class="settings-scope">
+                    {% if current_user %}Saved for {{ current_user.email }}.{% else %}Saved for all anonymous visitors &mdash; sign in with Google to get your own settings.{% endif %}
+                </p>
+                <p id="settings-error" class="settings-error" hidden>Saving failed &mdash; please try again.</p>
+                <div class="modal-actions">
+                    <button type="button" class="secondary" id="settings-cancel">Cancel</button>
+                    <button type="submit" id="settings-save">Save</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -103,7 +159,62 @@
                 if (e.target === overlay) close();  // click outside the image
             });
             document.addEventListener("keydown", function (e) {
-                if (e.key === "Escape") close();
+                if (e.key === "Escape") { close(); closeSettings(); }
+            });
+
+            // --- Settings popup (issues #13 / #20) ---------------------------
+            var settingsOverlay = document.getElementById("settings-modal");
+            var settingsForm = document.getElementById("settings-form");
+            var settingsError = document.getElementById("settings-error");
+            var settingsSave = document.getElementById("settings-save");
+
+            function openSettings() {
+                settingsForm.reset();      // discard unsaved edits from last open
+                settingsError.hidden = true;
+                settingsOverlay.hidden = false;
+            }
+            function closeSettings() { settingsOverlay.hidden = true; }
+
+            document.getElementById("settings-link").addEventListener("click", function (e) {
+                e.preventDefault();
+                openSettings();
+            });
+            settingsOverlay.querySelector(".modal-close").addEventListener("click", closeSettings);
+            document.getElementById("settings-cancel").addEventListener("click", closeSettings);
+            settingsOverlay.addEventListener("click", function (e) {
+                if (e.target === settingsOverlay) closeSettings();
+            });
+
+            settingsForm.addEventListener("submit", function (e) {
+                e.preventDefault();
+                settingsError.hidden = true;
+                settingsSave.disabled = true;
+                settingsSave.textContent = "Saving…";
+                fetch("{{ url_for('save_settings') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        cards_automatically: settingsForm.cards_automatically.checked,
+                        translator: settingsForm.translator.value,
+                        explanatory_dictionary: settingsForm.explanatory_dictionary.value,
+                    }),
+                }).then(function (resp) {
+                    if (!resp.ok) throw new Error("save failed");
+                    return resp.json();
+                }).then(function () {
+                    // form.reset() (used on open) restores the *default* states,
+                    // which reflect the server-rendered values from page load.
+                    // Move the defaults to what was just saved, so reopening the
+                    // popup shows the stored settings without a page reload.
+                    settingsForm.querySelectorAll("input[type=checkbox], input[type=radio]")
+                        .forEach(function (el) { el.defaultChecked = el.checked; });
+                    closeSettings();
+                }).catch(function () {
+                    settingsError.hidden = false;
+                }).then(function () {
+                    settingsSave.disabled = false;
+                    settingsSave.textContent = "Save";
+                });
             });
 
             var welcomeOverlay = document.getElementById("welcome-overlay");

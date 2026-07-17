@@ -152,6 +152,7 @@ def _google_translate(text, source, target):
     return "".join(seg[0] for seg in data[0] if seg and seg[0]).strip()
 
 
+# Card-field suffix -> ISO 639-1 code. Google and Bing use the same codes.
 GOOGLE_LANGS = {"ukr": "uk", "rus": "ru"}
 
 
@@ -187,20 +188,79 @@ def _google_dictionary(word, target):
     return pos_translations
 
 
-def parse_google_word(word, topic=None):
+# --- Provider selection (issue #20) ------------------------------------------
+# The Settings popup lets the user pick a translator (Google / Bing) and an
+# explanatory dictionary (Oxford / Merriam-Webster). Each option maps to one
+# fetcher below; the Bing / Oxford / Merriam-Webster ones are STUBS for now —
+# the real implementations are tracked in issue #21. A stub returns {} so
+# lookup_word() falls back gracefully (Google for translations, Reverso for
+# definitions) and the lookup still produces cards.
+
+
+def _bing_dictionary(word, target):
+    """Bing Translator dictionary lookup, grouped by part of speech.
+
+    Stub (issue #20) — the real bing.com client arrives with issue #21.
+    Same contract as _google_dictionary(): {'noun': ['дім', ...], ...}.
     """
-    Build flashcard entries from Google Translate's dictionary data
-    (English→Ukrainian and English→Russian) — one card per part of speech,
-    same shape as parse_reverso_word() produces. English definitions from
-    Reverso's dictionary are attached when that site is reachable.
+    return {}
+
+
+def _fetch_oxford_definitions(word):
+    """English definitions from Oxford Learner's Dictionaries, by part of speech.
+
+    Stub (issue #20) — the real fetcher arrives with issue #21.
+    Same contract as _fetch_definitions(): {'verb': ['make simpler...'], ...}.
     """
+    return {}
+
+
+def _fetch_merriam_webster_definitions(word):
+    """English definitions from Merriam-Webster, grouped by part of speech.
+
+    Stub (issue #20) — the real fetcher arrives with issue #21.
+    Same contract as _fetch_definitions(): {'verb': ['make simpler...'], ...}.
+    """
+    return {}
+
+
+# Option value (as stored in the settings file, #86) -> fetcher.
+TRANSLATOR_BACKENDS = {
+    "google": _google_dictionary,
+    "bing": _bing_dictionary,
+}
+DICTIONARY_BACKENDS = {
+    "oxford": _fetch_oxford_definitions,
+    "merriam-webster": _fetch_merriam_webster_definitions,
+}
+
+
+def lookup_word(word, topic=None, translator="google", explanatory_dictionary="oxford"):
+    """
+    Build flashcard entries (English→Ukrainian and English→Russian) with the
+    selected providers (issue #20) — one card per part of speech, same shape
+    as parse_reverso_word() produces.
+
+    Translations come from the chosen translator backend, falling back to
+    Google Translate when that backend fails or returns nothing (e.g. the
+    provider is unreachable, or its fetcher is still a stub). English
+    definitions come from the chosen explanatory dictionary, with Reverso's
+    dictionary as the fallback; a lookup without definitions is still useful,
+    so definition failures never break the lookup.
+    """
+    fetch_translations = TRANSLATOR_BACKENDS.get(translator, _google_dictionary)
     cards = {}  # pos -> entry dict
 
     for key, code in GOOGLE_LANGS.items():
         try:
-            pos_translations = _google_dictionary(word, code)
+            pos_translations = fetch_translations(word, code)
         except (requests.RequestException, ValueError):
-            continue  # keep the other language even if one lookup fails
+            pos_translations = {}
+        if not pos_translations and fetch_translations is not _google_dictionary:
+            try:
+                pos_translations = _google_dictionary(word, code)
+            except (requests.RequestException, ValueError):
+                pass
         for pos, terms in pos_translations.items():
             entry = cards.setdefault(pos, {"word": word, "pos": pos, "topic": topic})
             entry[f"translation_{key}"] = ", ".join(terms)
@@ -213,15 +273,32 @@ def parse_google_word(word, topic=None):
     if not cards:
         raise ValueError(f"No translations found for '{word}'")
 
+    fetch_defs = DICTIONARY_BACKENDS.get(
+        explanatory_dictionary, _fetch_oxford_definitions
+    )
     try:
-        definitions = _fetch_definitions(word)
-    except requests.RequestException:
-        definitions = {}  # e.g. Reverso blocks datacenter IPs — skip quietly
+        definitions = fetch_defs(word)
+    except (requests.RequestException, ValueError):
+        definitions = {}
+    if not definitions:
+        try:
+            definitions = _fetch_definitions(word)
+        except requests.RequestException:
+            definitions = {}  # e.g. Reverso blocks datacenter IPs — skip quietly
     for pos, defs in definitions.items():
         if pos in cards:
             cards[pos]["explanation_en"] = "; ".join(defs)
 
     return list(cards.values())
+
+
+def parse_google_word(word, topic=None):
+    """
+    Build flashcard entries from Google Translate's dictionary data — kept as
+    a thin wrapper around lookup_word() with the default providers, for code
+    (and tests) written before provider selection existed.
+    """
+    return lookup_word(word, topic=topic)
 
 
 def _fill_missing_translation(entry):
