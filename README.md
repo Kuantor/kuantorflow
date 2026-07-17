@@ -138,6 +138,15 @@ validation as the store):
   Translator*.
 - **Explanatory dictionary (ENG → ENG)** (#20) — *Oxford Learner's
   Dictionaries* (default) or *Merriam-Webster*.
+- **Visible translations** (#46/#79/#111) — *Show Ukrainian translation* and
+  *Show Russian translation* checkboxes (both on by default). Unchecking one
+  hides that language everywhere it appears: flashcards (translations and
+  examples), the lookup review popup, the quiz (a hidden language can't be
+  quizzed on; with both hidden the quiz explains itself), and Mykola's
+  answers (he stops offering translations in it — though an explicit request
+  in chat still wins). **Hiding is visual only**: lookups keep fetching and
+  cards keep storing both languages, so re-enabling a language brings its
+  translations back untouched.
 
 ### The providers (#20, #21)
 
@@ -162,8 +171,6 @@ The dispatch degrades gracefully: a translator backend that fails or returns
 nothing falls back to Google Translate, and a dictionary backend that fails
 or returns nothing falls back to Reverso's dictionary — a lookup without
 definitions is still useful, so definition failures never break a lookup.
-
-The language-visibility switches (#46) are stored but don't have UI yet.
 
 ---
 

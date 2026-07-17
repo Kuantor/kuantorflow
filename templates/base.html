@@ -71,6 +71,22 @@
                     </label>
                 </fieldset>
 
+                {# Language visibility (#46/#79/#111): hides translations from
+                   view everywhere — cards keep storing both languages. #}
+                <fieldset class="settings-group">
+                    <legend>Visible translations</legend>
+                    <label>
+                        <input type="checkbox" name="show_ukrainian"
+                               {% if settings.show_ukrainian %}checked{% endif %}>
+                        Show Ukrainian translation
+                    </label>
+                    <label>
+                        <input type="checkbox" name="show_russian"
+                               {% if settings.show_russian %}checked{% endif %}>
+                        Show Russian translation
+                    </label>
+                </fieldset>
+
                 <p class="settings-scope">
                     {% if current_user %}Saved for {{ current_user.email }}.{% else %}Saved for all anonymous visitors &mdash; sign in with Google to get your own settings.{% endif %}
                 </p>
@@ -197,6 +213,8 @@
                         cards_automatically: settingsForm.cards_automatically.checked,
                         translator: settingsForm.translator.value,
                         explanatory_dictionary: settingsForm.explanatory_dictionary.value,
+                        show_ukrainian: settingsForm.show_ukrainian.checked,
+                        show_russian: settingsForm.show_russian.checked,
                     }),
                 }).then(function (resp) {
                     if (!resp.ok) throw new Error("save failed");

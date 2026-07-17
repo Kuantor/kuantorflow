@@ -4,8 +4,11 @@
 
 {% block content %}
     <p class="crumbs">
-        <a href="{{ url_for('index') }}">&larr; Home</a> |
-        <a href="{{ url_for('quiz', topic=topic) }}">Take quiz</a>
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        {# A quiz needs at least one visible translation language (#46/#79). #}
+        {% if settings.show_ukrainian or settings.show_russian %}
+        | <a href="{{ url_for('quiz', topic=topic) }}">Take quiz</a>
+        {% endif %}
     </p>
     <h1 class="page-title">Flashcards: {{ topic }}</h1>
 
@@ -32,20 +35,26 @@
                 <ul>{% for ex in card.examples_en %}<li>{{ ex }}</li>{% endfor %}</ul>
             {% endif %}
 
-            {% if card.translation_ukr %}
-                <div class="lang">Ukrainian</div>
-                <p>{{ card.translation_ukr }}</p>
-            {% endif %}
-            {% if card.examples_ukr %}
-                <ul>{% for ex in card.examples_ukr %}<li>{{ ex }}</li>{% endfor %}</ul>
+            {# Hidden languages (#46/#79/#111) stay stored on the card — they
+               are only not rendered, so re-enabling brings them back. #}
+            {% if settings.show_ukrainian %}
+                {% if card.translation_ukr %}
+                    <div class="lang">Ukrainian</div>
+                    <p>{{ card.translation_ukr }}</p>
+                {% endif %}
+                {% if card.examples_ukr %}
+                    <ul>{% for ex in card.examples_ukr %}<li>{{ ex }}</li>{% endfor %}</ul>
+                {% endif %}
             {% endif %}
 
-            {% if card.translation_rus %}
-                <div class="lang">Russian</div>
-                <p>{{ card.translation_rus }}</p>
-            {% endif %}
-            {% if card.examples_rus %}
-                <ul>{% for ex in card.examples_rus %}<li>{{ ex }}</li>{% endfor %}</ul>
+            {% if settings.show_russian %}
+                {% if card.translation_rus %}
+                    <div class="lang">Russian</div>
+                    <p>{{ card.translation_rus }}</p>
+                {% endif %}
+                {% if card.examples_rus %}
+                    <ul>{% for ex in card.examples_rus %}<li>{{ ex }}</li>{% endfor %}</ul>
+                {% endif %}
             {% endif %}
         </div>
     {% endfor %}

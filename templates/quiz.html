@@ -9,6 +9,14 @@
     </p>
     <h1 class="page-title">Quiz: {{ topic }}</h1>
 
+    {% if not langs %}
+        {# Both translation languages hidden in Settings (#46/#79/#111). #}
+        <div class="panel">
+            <p>All translation languages are hidden in Settings —
+               enable at least one to take a quiz.</p>
+        </div>
+    {% else %}
+
     <p class="lang-switch">
         {% for code, name in langs.items() %}
             {% if code == lang %}
@@ -51,4 +59,6 @@
         {% endfor %}
         <p class="crumbs"><a href="{{ url_for('quiz', topic=topic, lang=lang) }}">Try again</a></p>
     {% endif %}
+
+    {% endif %}{# langs #}
 {% endblock %}
