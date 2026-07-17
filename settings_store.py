@@ -47,12 +47,16 @@ DEFAULTS = {
     # issue #46 — hide a language everywhere (flashcards and Mykola's answers).
     "show_ukrainian": True,
     "show_russian": True,
+    # issue #113 — the language the quiz opens in (the in-page switch still
+    # lets the user take it in any visible language).
+    "quiz_lang": "ukrainian",
 }
 
-# Allowed values for the non-boolean settings (issue #20).
+# Allowed values for the non-boolean settings (issues #20, #113).
 CHOICES = {
     "translator": ("google", "bing"),
     "explanatory_dictionary": ("oxford", "merriam-webster"),
+    "quiz_lang": ("ukrainian", "russian"),
 }
 
 BOOLEAN_KEYS = tuple(k for k, v in DEFAULTS.items() if isinstance(v, bool))

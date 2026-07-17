@@ -694,10 +694,12 @@ QUIZ_LANGS = {"rus": "Russian", "ukr": "Ukrainian"}
 # (#46/#79/#111). A hidden language can't be quizzed on.
 QUIZ_LANG_SETTINGS = {"rus": "show_russian", "ukr": "show_ukrainian"}
 
+# quiz_lang setting value (#113) -> quiz language code.
+QUIZ_LANG_CODES = {"ukrainian": "ukr", "russian": "rus"}
 
-def _visible_quiz_langs():
+
+def _visible_quiz_langs(prefs):
     """The QUIZ_LANGS subset this identity hasn't hidden in Settings."""
-    prefs = current_settings()
     return {
         code: name for code, name in QUIZ_LANGS.items()
         if prefs[QUIZ_LANG_SETTINGS[code]]
@@ -712,16 +714,21 @@ def quiz(topic):
     by default). Cards without that translation are skipped.
     On POST, grade the answers and show the results.
     """
-    langs = _visible_quiz_langs()
+    prefs = current_settings()
+    langs = _visible_quiz_langs(prefs)
     if not langs:
         # Both languages hidden in Settings (#46/#79) — nothing to quiz on.
         return render_template(
             "quiz.html", topic=topic, cards=[],
             lang=None, lang_name=None, langs={}, results=None,
         )
-    lang = request.args.get("lang", "rus")
+    # Without an explicit ?lang=, open in the identity's preferred quiz
+    # language (#113); the in-page switch links still override it. A
+    # preference for a hidden language falls back to a visible one.
+    default_lang = QUIZ_LANG_CODES.get(prefs["quiz_lang"], "ukr")
+    lang = request.args.get("lang") or default_lang
     if lang not in langs:
-        lang = next(iter(langs))
+        lang = default_lang if default_lang in langs else next(iter(langs))
     field = f"translation_{lang}"
 
     cards = [c for c in get_flashcards_by_topic(topic) if c.get(field)]
