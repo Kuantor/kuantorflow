@@ -13,6 +13,10 @@ It transforms notes, dictionary lookups, and study materials into interactive ac
 - Organize flashcards by topic for easy browsing.
 - Practice with quizzes generated from your saved entries.
 - Chat with **Mykola**, an AI study assistant, from a widget in the corner.
+- **No duplicates** (#101): a card whose word + part of speech already exists
+  anywhere in the database is never saved again — every save path (review
+  popup, *Add All*, automatic add, Mykola chat) skips it and tells you the
+  word is already present.
 
 ---
 

@@ -347,7 +347,9 @@ def mykola_chat_page():
 def _save_card_from_chat(entry):
     """Card saver injected into the agent: persists a flashcard Mykola was
     asked to add in chat, through the same save_flashcard mechanism as the
-    Look up & save flow (issue: ai_agent#20)."""
+    Look up & save flow (issue: ai_agent#20). A duplicate word+pos is
+    skipped by save_flashcard (issue #101); Mykola still reports the card,
+    which is accurate either way — it is in the database."""
     save_flashcard(entry)
     return entry
 
@@ -553,9 +555,22 @@ def index():
                     if prefs["cards_automatically"]:
                         # 'Add cards automatically' is on (#13): skip the
                         # review popup, write the cards straight to the DB.
-                        for entry in entries:
-                            save_flashcard(entry)
-                        flash((f"Added {len(entries)} card(s) for '{word}' automatically.", topic))
+                        # Duplicates are skipped and reported (issue #101).
+                        added = sum(
+                            1 for entry in entries
+                            if save_flashcard(entry) is not None
+                        )
+                        skipped = len(entries) - added
+                        if not added:
+                            flash((f"All {skipped} card(s) for '{word}' are "
+                                   "already in the database — nothing added.",
+                                   None))
+                        elif skipped:
+                            flash((f"Added {added} card(s) for '{word}' "
+                                   f"automatically, skipped {skipped} already "
+                                   "in the database.", topic))
+                        else:
+                            flash((f"Added {added} card(s) for '{word}' automatically.", topic))
                         return redirect(url_for("index"))
                     # Don't save yet: show the cards for review/editing first.
                     proposed = entries
@@ -615,8 +630,9 @@ def add_card():
         "translation_ukr": cleaned("translation_ukr"),
         "translation_rus": cleaned("translation_rus"),
     }
-    save_flashcard(entry)
-    return {"ok": True}
+    if save_flashcard(entry) is None:  # duplicate word+pos (issue #101)
+        return {"ok": True, "saved": False, "duplicate": True}
+    return {"ok": True, "saved": True}
 
 
 @app.route("/flashcards/<topic>")
