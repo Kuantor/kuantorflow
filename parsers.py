@@ -5,6 +5,7 @@ exports) into flashcard entry dictionaries ready for utils.save_flashcard().
 
 import email
 import re
+import time
 from email import policy
 from urllib.parse import quote
 
@@ -188,51 +189,196 @@ def _google_dictionary(word, target):
     return pos_translations
 
 
-# --- Provider selection (issue #20) ------------------------------------------
+# --- Provider selection (issues #20 / #21) -----------------------------------
 # The Settings popup lets the user pick a translator (Google / Bing) and an
 # explanatory dictionary (Oxford / Merriam-Webster). Each option maps to one
-# fetcher below; the Bing / Oxford / Merriam-Webster ones are STUBS for now —
-# the real implementations are tracked in issue #21. A stub returns {} so
-# lookup_word() falls back gracefully (Google for translations, Reverso for
-# definitions) and the lookup still produces cards.
+# fetcher below, all sharing the contracts of the original Google and Reverso
+# fetchers, so lookup_word() can treat every provider the same way.
+
+# Bing's own web endpoints (bing.com/ttranslatev3, tlookupv3) reject
+# non-browser TLS clients, so the Bing fetcher talks to the same Microsoft
+# Translator engine the way the Edge browser's built-in translate feature
+# does: a short-lived anonymous JWT from edge.microsoft.com, then the
+# official dictionary/translate API. Verified to return exactly the same
+# results as the bing.com translator page.
+EDGE_AUTH_URL = "https://edge.microsoft.com/translate/auth"
+BING_API_BASE = "https://api.cognitive.microsofttranslator.com"
+
+# Microsoft's coarse POS tags -> the names used across the app's cards.
+BING_POS = {"NOUN": "noun", "VERB": "verb", "ADJ": "adjective", "ADV": "adverb"}
+
+# Auth tokens last ~10 minutes; cache one per process and renew early.
+_bing_token = {"jwt": None, "expires": 0.0}
+
+
+def _bing_auth_token():
+    """Anonymous Microsoft Translator JWT (the Edge-translate auth flow)."""
+    now = time.time()
+    if _bing_token["jwt"] and now < _bing_token["expires"]:
+        return _bing_token["jwt"]
+    resp = requests.get(EDGE_AUTH_URL, headers=HEADERS, timeout=10)
+    resp.raise_for_status()
+    jwt = resp.text.strip()
+    if not jwt:
+        raise ValueError("Empty Microsoft Translator auth token")
+    _bing_token.update(jwt=jwt, expires=now + 8 * 60)
+    return jwt
+
+
+def _bing_api(path, word, target):
+    """One Microsoft Translator API call, retried once on a stale token."""
+    for attempt in (1, 2):
+        resp = requests.post(
+            f"{BING_API_BASE}/{path}",
+            params={"api-version": "3.0", "from": "en", "to": target},
+            headers={**HEADERS, "Authorization": "Bearer " + _bing_auth_token()},
+            json=[{"Text": word}],
+            timeout=10,
+        )
+        if resp.status_code == 401 and attempt == 1:
+            _bing_token["expires"] = 0.0  # token died early — mint a new one
+            continue
+        resp.raise_for_status()
+        return resp.json()
 
 
 def _bing_dictionary(word, target):
-    """Bing Translator dictionary lookup, grouped by part of speech.
-
-    Stub (issue #20) — the real bing.com client arrives with issue #21.
-    Same contract as _google_dictionary(): {'noun': ['дім', ...], ...}.
     """
-    return {}
+    Bing Translator dictionary lookup (issue #21), grouped by part of speech —
+    same contract as _google_dictionary(): {'noun': ['дім', ...], ...}.
+    Words without a dictionary entry fall back to a plain translation under
+    'other', mirroring the Google fetcher.
+    """
+    data = _bing_api("dictionary/lookup", word, target)
+
+    pos_translations = {}
+    for translation in data[0].get("translations", []):  # confidence-ordered
+        pos = BING_POS.get((translation.get("posTag") or "").upper(), "other")
+        term = translation.get("displayTarget")
+        if not term:
+            continue
+        terms = pos_translations.setdefault(pos, [])
+        if term not in terms and len(terms) < MAX_TRANSLATIONS:
+            terms.append(term)
+
+    if not pos_translations:
+        data = _bing_api("translate", word, target)
+        plain = (data[0]["translations"][0].get("text") or "").strip()
+        if plain and plain.lower() != word.lower():
+            pos_translations["other"] = [plain]
+    return pos_translations
+
+
+OXFORD_URL = "https://www.oxfordlearnersdictionaries.com/definition/english/{slug}"
+# One Oxford entry page covers one part of speech (run -> run_1 is the verb,
+# run_2 the noun), so a lookup may fetch a couple of sibling entry pages.
+OXFORD_MAX_PAGES = 3
+
+
+def _oxford_page_definitions(soup):
+    """(pos, definitions) of one Oxford Learner's entry page."""
+    pos_el = soup.select_one(".webtop .pos")
+    pos = pos_el.get_text(strip=True).lower() if pos_el else "other"
+    defs = []
+    for el in soup.select(".sense > .def"):
+        text = el.get_text(" ", strip=True)
+        if text and text not in defs:
+            defs.append(text)
+        if len(defs) >= MAX_DEFINITIONS:
+            break
+    return pos, defs
 
 
 def _fetch_oxford_definitions(word):
-    """English definitions from Oxford Learner's Dictionaries, by part of speech.
-
-    Stub (issue #20) — the real fetcher arrives with issue #21.
-    Same contract as _fetch_definitions(): {'verb': ['make simpler...'], ...}.
     """
-    return {}
+    English definitions from Oxford Learner's Dictionaries (issue #21), by
+    part of speech — same contract as the Reverso _fetch_definitions().
+
+    The base URL redirects to the word's first entry; entries for its other
+    parts of speech are sibling pages (run_2, ...) linked from the page's
+    'Other results' box, so up to OXFORD_MAX_PAGES pages are fetched.
+    """
+    slug = quote(word.strip().lower().replace(" ", "-"))
+    resp = requests.get(OXFORD_URL.format(slug=slug), headers=HEADERS, timeout=10)
+    if resp.status_code == 404:
+        return {}  # word not in this dictionary
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    definitions = {}
+    pos, defs = _oxford_page_definitions(soup)
+    if defs:
+        definitions[pos] = defs
+
+    entry_href = re.compile(rf"/definition/english/{re.escape(slug)}_\d+$")
+    fetched = {resp.url.split("?")[0]}
+    for link in soup.select("#relatedentries a"):
+        href = (link.get("href") or "").split("?")[0]
+        if not entry_href.search(href) or href in fetched:
+            continue
+        if len(fetched) >= OXFORD_MAX_PAGES:
+            break
+        fetched.add(href)
+        try:
+            sibling = requests.get(href, headers=HEADERS, timeout=10)
+            sibling.raise_for_status()
+        except requests.RequestException:
+            continue  # the entries already collected are still useful
+        pos, defs = _oxford_page_definitions(BeautifulSoup(sibling.text, "lxml"))
+        if defs:
+            definitions.setdefault(pos, defs)
+    return definitions
+
+
+MERRIAM_WEBSTER_URL = "https://www.merriam-webster.com/dictionary/{word}"
 
 
 def _fetch_merriam_webster_definitions(word):
-    """English definitions from Merriam-Webster, grouped by part of speech.
-
-    Stub (issue #20) — the real fetcher arrives with issue #21.
-    Same contract as _fetch_definitions(): {'verb': ['make simpler...'], ...}.
     """
-    return {}
+    English definitions from Merriam-Webster (issue #21), grouped by part of
+    speech — same contract as the Reverso _fetch_definitions(). Unlike
+    Oxford, one page carries every entry (run: verb, noun, adjective).
+    """
+    url = MERRIAM_WEBSTER_URL.format(word=quote(word.strip().lower()))
+    resp = requests.get(url, headers=HEADERS, timeout=10)
+    if resp.status_code == 404:
+        return {}  # M-W answers unknown words with a 404 suggestions page
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    definitions = {}
+    for entry in soup.select("div[id^=dictionary-entry]"):
+        pos_el = (entry.select_one(".parts-of-speech a")
+                  or entry.select_one(".parts-of-speech"))
+        if pos_el is None:
+            continue
+        # 'verb (2 of 3)' -> 'verb'
+        pos = pos_el.get_text(" ", strip=True).split()[0].lower()
+        defs = definitions.setdefault(pos, [])
+        for sense in entry.select(".dtText"):
+            text = sense.get_text(" ", strip=True).lstrip(":").strip()
+            if text and text not in defs:
+                defs.append(text)
+            if len(defs) >= MAX_DEFINITIONS:
+                break
+    return {pos: defs for pos, defs in definitions.items() if defs}
 
 
-# Option value (as stored in the settings file, #86) -> fetcher.
-TRANSLATOR_BACKENDS = {
-    "google": _google_dictionary,
-    "bing": _bing_dictionary,
-}
-DICTIONARY_BACKENDS = {
-    "oxford": _fetch_oxford_definitions,
-    "merriam-webster": _fetch_merriam_webster_definitions,
-}
+# Option value (as stored in the settings file, #86) -> fetcher. Resolved at
+# call time (not captured in a module-level dict) so tests can monkeypatch a
+# single fetcher and the dispatch picks the replacement up.
+def _translator_backend(translator):
+    return {
+        "google": _google_dictionary,
+        "bing": _bing_dictionary,
+    }.get(translator, _google_dictionary)
+
+
+def _dictionary_backend(explanatory_dictionary):
+    return {
+        "oxford": _fetch_oxford_definitions,
+        "merriam-webster": _fetch_merriam_webster_definitions,
+    }.get(explanatory_dictionary, _fetch_oxford_definitions)
 
 
 def lookup_word(word, topic=None, translator="google", explanatory_dictionary="oxford"):
@@ -243,12 +389,12 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
 
     Translations come from the chosen translator backend, falling back to
     Google Translate when that backend fails or returns nothing (e.g. the
-    provider is unreachable, or its fetcher is still a stub). English
-    definitions come from the chosen explanatory dictionary, with Reverso's
-    dictionary as the fallback; a lookup without definitions is still useful,
-    so definition failures never break the lookup.
+    provider is unreachable from the server). English definitions come from
+    the chosen explanatory dictionary, with Reverso's dictionary as the
+    fallback; a lookup without definitions is still useful, so definition
+    failures never break the lookup.
     """
-    fetch_translations = TRANSLATOR_BACKENDS.get(translator, _google_dictionary)
+    fetch_translations = _translator_backend(translator)
     cards = {}  # pos -> entry dict
 
     for key, code in GOOGLE_LANGS.items():
@@ -273,9 +419,7 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     if not cards:
         raise ValueError(f"No translations found for '{word}'")
 
-    fetch_defs = DICTIONARY_BACKENDS.get(
-        explanatory_dictionary, _fetch_oxford_definitions
-    )
+    fetch_defs = _dictionary_backend(explanatory_dictionary)
     try:
         definitions = fetch_defs(word)
     except (requests.RequestException, ValueError):

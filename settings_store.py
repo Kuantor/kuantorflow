@@ -41,8 +41,7 @@ DEFAULTS = {
     # issue #13 — add looked-up cards straight to the database, skipping the
     # review-before-save popup. Off by default: review stays the safe default.
     "cards_automatically": False,
-    # issue #20 — provider choices. Stubs for now; the parsers still use
-    # Google Translate until those tickets land.
+    # issues #20/#21 — provider choices, dispatched in parsers.lookup_word().
     "translator": "google",
     "explanatory_dictionary": "oxford",
     # issue #46 — hide a language everywhere (flashcards and Mykola's answers).

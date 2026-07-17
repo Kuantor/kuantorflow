@@ -135,17 +135,29 @@ validation as the store):
 - **Explanatory dictionary (ENG → ENG)** (#20) — *Oxford Learner's
   Dictionaries* (default) or *Merriam-Webster*.
 
-### Provider stubs (#20)
+### The providers (#20, #21)
 
 Word lookups go through `parsers.lookup_word(word, topic, translator,
 explanatory_dictionary)`, which dispatches to one fetcher per provider
-(`TRANSLATOR_BACKENDS` / `DICTIONARY_BACKENDS`). The Bing, Oxford and
-Merriam-Webster fetchers are **stubs for now** — their real implementations
-are tracked in #21. The dispatch degrades gracefully: a translator backend
-that fails or returns nothing falls back to Google Translate, and a
-dictionary backend that fails or returns nothing falls back to Reverso's
-dictionary — so picking Bing or Merriam-Webster today still yields the same
-cards as before, just labelled with the chosen provider.
+(`_translator_backend()` / `_dictionary_backend()`):
+
+- **Google Translate** — the public `translate.googleapis.com` JSON endpoint
+  (`dt=bd` returns dictionary entries grouped by part of speech).
+- **Bing Translator** — the same Microsoft Translator engine that powers
+  bing.com/translator, reached the way the Edge browser's built-in translate
+  feature does: a short-lived anonymous token from `edge.microsoft.com`,
+  then the official `dictionary/lookup` API. (bing.com's own web endpoints
+  reject non-browser TLS clients, so they can't be used from a server.)
+- **Oxford Learner's Dictionaries** — scraped entry pages; one page covers
+  one part of speech, so sibling entries (`run_1`, `run_2`, …) linked from
+  the page's *Other results* box are fetched too (up to 3 pages).
+- **Merriam-Webster** — scraped dictionary page; a single page carries every
+  part-of-speech entry.
+
+The dispatch degrades gracefully: a translator backend that fails or returns
+nothing falls back to Google Translate, and a dictionary backend that fails
+or returns nothing falls back to Reverso's dictionary — a lookup without
+definitions is still useful, so definition failures never break a lookup.
 
 The language-visibility switches (#46) are stored but don't have UI yet.
 
