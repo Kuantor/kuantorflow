@@ -543,6 +543,14 @@ def index():
                 word = (request.form.get("word") or "").strip()
                 if not word:
                     message = "Please enter a word."
+                elif current_settings()["cards_automatically"]:
+                    # 'Add cards automatically' is on (#13): skip the review
+                    # popup and write the cards straight to the database.
+                    entries = parse_google_word(word, topic=topic)
+                    for entry in entries:
+                        save_flashcard(entry)
+                    flash((f"Added {len(entries)} card(s) for '{word}' automatically.", topic))
+                    return redirect(url_for("index"))
                 else:
                     # Don't save yet: show the cards for review/editing first.
                     proposed = parse_google_word(word, topic=topic)
