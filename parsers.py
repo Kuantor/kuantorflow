@@ -364,15 +364,21 @@ def _fetch_merriam_webster_definitions(word):
     return {pos: defs for pos, defs in definitions.items() if defs}
 
 
-# Option value (as stored in the settings file, #86) -> fetcher.
-TRANSLATOR_BACKENDS = {
-    "google": _google_dictionary,
-    "bing": _bing_dictionary,
-}
-DICTIONARY_BACKENDS = {
-    "oxford": _fetch_oxford_definitions,
-    "merriam-webster": _fetch_merriam_webster_definitions,
-}
+# Option value (as stored in the settings file, #86) -> fetcher. Resolved at
+# call time (not captured in a module-level dict) so tests can monkeypatch a
+# single fetcher and the dispatch picks the replacement up.
+def _translator_backend(translator):
+    return {
+        "google": _google_dictionary,
+        "bing": _bing_dictionary,
+    }.get(translator, _google_dictionary)
+
+
+def _dictionary_backend(explanatory_dictionary):
+    return {
+        "oxford": _fetch_oxford_definitions,
+        "merriam-webster": _fetch_merriam_webster_definitions,
+    }.get(explanatory_dictionary, _fetch_oxford_definitions)
 
 
 def lookup_word(word, topic=None, translator="google", explanatory_dictionary="oxford"):
@@ -388,7 +394,7 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     fallback; a lookup without definitions is still useful, so definition
     failures never break the lookup.
     """
-    fetch_translations = TRANSLATOR_BACKENDS.get(translator, _google_dictionary)
+    fetch_translations = _translator_backend(translator)
     cards = {}  # pos -> entry dict
 
     for key, code in GOOGLE_LANGS.items():
@@ -413,9 +419,7 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     if not cards:
         raise ValueError(f"No translations found for '{word}'")
 
-    fetch_defs = DICTIONARY_BACKENDS.get(
-        explanatory_dictionary, _fetch_oxford_definitions
-    )
+    fetch_defs = _dictionary_backend(explanatory_dictionary)
     try:
         definitions = fetch_defs(word)
     except (requests.RequestException, ValueError):

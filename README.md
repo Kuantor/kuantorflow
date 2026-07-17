@@ -139,7 +139,7 @@ validation as the store):
 
 Word lookups go through `parsers.lookup_word(word, topic, translator,
 explanatory_dictionary)`, which dispatches to one fetcher per provider
-(`TRANSLATOR_BACKENDS` / `DICTIONARY_BACKENDS`):
+(`_translator_backend()` / `_dictionary_backend()`):
 
 - **Google Translate** — the public `translate.googleapis.com` JSON endpoint
   (`dt=bd` returns dictionary entries grouped by part of speech).
