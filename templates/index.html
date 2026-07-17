@@ -103,10 +103,21 @@
                                 <input type="hidden" name="topic" value="{{ proposed_topic }}">
                                 <label>English explanation</label>
                                 <textarea name="explanation_en" rows="2">{{ card.explanation_en or '' }}</textarea>
+                                {# A hidden language's translation still travels as a hidden
+                                   input (#46/#79/#111): the card is saved complete, the
+                                   field is just not shown for editing. #}
+                                {% if settings.show_ukrainian %}
                                 <label>Ukrainian translation</label>
                                 <input type="text" name="translation_ukr" value="{{ card.translation_ukr or '' }}">
+                                {% else %}
+                                <input type="hidden" name="translation_ukr" value="{{ card.translation_ukr or '' }}">
+                                {% endif %}
+                                {% if settings.show_russian %}
                                 <label>Russian translation</label>
                                 <input type="text" name="translation_rus" value="{{ card.translation_rus or '' }}">
+                                {% else %}
+                                <input type="hidden" name="translation_rus" value="{{ card.translation_rus or '' }}">
+                                {% endif %}
                                 <button type="submit" class="add-btn">Add</button>
                             </form>
                         {% endfor %}

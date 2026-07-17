@@ -149,15 +149,38 @@ def current_settings():
     return settings_store.load(_current_email())
 
 
-def _agent_answer(question, history):
-    """Call the agent, passing the signed-in first name when the installed
-    ai_agent version supports it. Feature-detected so the chat keeps working
-    even if the ai_agent side hasn't been updated yet."""
-    agent = get_mykola()
+def _hidden_languages():
+    """Language names this identity has hidden in Settings (#46/#79/#111),
+    in the form the agent's whitelist expects — e.g. ["Russian"]."""
+    prefs = current_settings()
+    hidden = []
+    if not prefs["show_ukrainian"]:
+        hidden.append("Ukrainian")
+    if not prefs["show_russian"]:
+        hidden.append("Russian")
+    return hidden
+
+
+def _agent_kwargs(method):
+    """kwargs for an agent call, holding only what the installed ai_agent
+    version supports. Feature-detected so the chat keeps working even if the
+    ai_agent side hasn't been updated yet."""
+    params = inspect.signature(method).parameters
+    kwargs = {}
     first_name = _current_first_name()
-    if first_name and "user_name" in inspect.signature(agent.answer).parameters:
-        return agent.answer(question, history, user_name=first_name)
-    return agent.answer(question, history)
+    if first_name and "user_name" in params:
+        kwargs["user_name"] = first_name
+    hidden = _hidden_languages()
+    if hidden and "hidden_languages" in params:
+        kwargs["hidden_languages"] = hidden
+    return kwargs
+
+
+def _agent_answer(question, history):
+    """Call the agent with the signed-in first name and the hidden-language
+    preferences, where the installed ai_agent version supports them."""
+    agent = get_mykola()
+    return agent.answer(question, history, **_agent_kwargs(agent.answer))
 
 
 def _handle_mykola_chat_request():
@@ -508,7 +531,7 @@ def mykola_recap():
     if not logs:
         return jsonify({"recap": None})
     try:
-        text = agent.recap(logs, user_name=_current_first_name())
+        text = agent.recap(logs, **_agent_kwargs(agent.recap))
         return jsonify({"recap": text or None})
     except Exception:
         app.logger.exception("Mykola recap failed")
@@ -667,6 +690,19 @@ def _answer_variants(translation):
 
 QUIZ_LANGS = {"rus": "Russian", "ukr": "Ukrainian"}
 
+# Quiz language code -> the settings key that controls its visibility
+# (#46/#79/#111). A hidden language can't be quizzed on.
+QUIZ_LANG_SETTINGS = {"rus": "show_russian", "ukr": "show_ukrainian"}
+
+
+def _visible_quiz_langs():
+    """The QUIZ_LANGS subset this identity hasn't hidden in Settings."""
+    prefs = current_settings()
+    return {
+        code: name for code, name in QUIZ_LANGS.items()
+        if prefs[QUIZ_LANG_SETTINGS[code]]
+    }
+
 
 @app.route("/quiz/<topic>", methods=["GET", "POST"])
 def quiz(topic):
@@ -676,9 +712,16 @@ def quiz(topic):
     by default). Cards without that translation are skipped.
     On POST, grade the answers and show the results.
     """
+    langs = _visible_quiz_langs()
+    if not langs:
+        # Both languages hidden in Settings (#46/#79) — nothing to quiz on.
+        return render_template(
+            "quiz.html", topic=topic, cards=[],
+            lang=None, lang_name=None, langs={}, results=None,
+        )
     lang = request.args.get("lang", "rus")
-    if lang not in QUIZ_LANGS:
-        lang = "rus"
+    if lang not in langs:
+        lang = next(iter(langs))
     field = f"translation_{lang}"
 
     cards = [c for c in get_flashcards_by_topic(topic) if c.get(field)]
@@ -699,13 +742,13 @@ def quiz(topic):
         score = sum(1 for r in results if r["correct"])
         return render_template(
             "quiz.html", topic=topic, cards=cards,
-            lang=lang, lang_name=QUIZ_LANGS[lang], langs=QUIZ_LANGS,
+            lang=lang, lang_name=QUIZ_LANGS[lang], langs=langs,
             results=results, score=score,
         )
 
     return render_template(
         "quiz.html", topic=topic, cards=cards,
-        lang=lang, lang_name=QUIZ_LANGS[lang], langs=QUIZ_LANGS,
+        lang=lang, lang_name=QUIZ_LANGS[lang], langs=langs,
         results=None,
     )
 
