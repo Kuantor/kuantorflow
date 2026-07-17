@@ -99,6 +99,7 @@ is the source of truth for which settings exist:
 | `explanatory_dictionary` | `oxford` | #20 — `oxford` or `merriam-webster` |
 | `show_ukrainian` | `true` | #46 — hide Ukrainian everywhere |
 | `show_russian` | `true` | #46 — hide Russian everywhere |
+| `quiz_lang` | `ukrainian` | #113 — the language the quiz opens in (`ukrainian` or `russian`) |
 
 Behaviour worth knowing:
 
@@ -147,6 +148,11 @@ validation as the store):
   in chat still wins). **Hiding is visual only**: lookups keep fetching and
   cards keep storing both languages, so re-enabling a language brings its
   translations back untouched.
+- **Quiz language** (#113) — *Ukrainian* (default) or *Russian*: the language
+  the quiz opens in. The in-page language switch still lets you take a quiz
+  in any visible language — this only sets the default. The toggle is greyed
+  out while only one language is visible (the quiz then uses that language
+  automatically), and it re-enables live as the checkboxes above change.
 
 ### The providers (#20, #21)
 

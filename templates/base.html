@@ -87,6 +87,30 @@
                     </label>
                 </fieldset>
 
+                {# Quiz language (#113): the language the quiz opens in. With
+                   only one visible language there is nothing to choose — the
+                   toggle is disabled (kept in sync with the checkboxes above
+                   by updateQuizLangState in the script below). #}
+                {% set both_visible = settings.show_ukrainian and settings.show_russian %}
+                <fieldset class="settings-group">
+                    <legend>Quiz language</legend>
+                    <label>
+                        <input type="radio" name="quiz_lang" value="ukrainian"
+                               {% if settings.quiz_lang == 'ukrainian' %}checked{% endif %}
+                               {% if not both_visible %}disabled{% endif %}>
+                        Ukrainian
+                    </label>
+                    <label>
+                        <input type="radio" name="quiz_lang" value="russian"
+                               {% if settings.quiz_lang == 'russian' %}checked{% endif %}
+                               {% if not both_visible %}disabled{% endif %}>
+                        Russian
+                    </label>
+                    <p class="settings-hint settings-group-hint" id="quiz-lang-hint"
+                       {% if both_visible %}hidden{% endif %}>Only one language is
+                       visible — the quiz uses it automatically.</p>
+                </fieldset>
+
                 <p class="settings-scope">
                     {% if current_user %}Saved for {{ current_user.email }}.{% else %}Saved for all anonymous visitors &mdash; sign in with Google to get your own settings.{% endif %}
                 </p>
@@ -184,8 +208,23 @@
             var settingsError = document.getElementById("settings-error");
             var settingsSave = document.getElementById("settings-save");
 
+            // With only one visible language the quiz-language toggle has
+            // nothing to choose (#113): keep its disabled state and hint in
+            // sync with the visibility checkboxes, live, inside the popup.
+            var quizLangHint = document.getElementById("quiz-lang-hint");
+            function updateQuizLangState() {
+                var bothVisible = settingsForm.show_ukrainian.checked &&
+                                  settingsForm.show_russian.checked;
+                settingsForm.querySelectorAll("input[name=quiz_lang]")
+                    .forEach(function (el) { el.disabled = !bothVisible; });
+                quizLangHint.hidden = bothVisible;
+            }
+            settingsForm.show_ukrainian.addEventListener("change", updateQuizLangState);
+            settingsForm.show_russian.addEventListener("change", updateQuizLangState);
+
             function openSettings() {
                 settingsForm.reset();      // discard unsaved edits from last open
+                updateQuizLangState();     // reset() restores values, not disabled
                 settingsError.hidden = true;
                 settingsOverlay.hidden = false;
             }
@@ -215,6 +254,7 @@
                         explanatory_dictionary: settingsForm.explanatory_dictionary.value,
                         show_ukrainian: settingsForm.show_ukrainian.checked,
                         show_russian: settingsForm.show_russian.checked,
+                        quiz_lang: settingsForm.quiz_lang.value,
                     }),
                 }).then(function (resp) {
                     if (!resp.ok) throw new Error("save failed");
