@@ -29,7 +29,10 @@
     </div>
 
     {# Settings popup (issues #13 / #20) — pre-filled server-side from the
-       per-identity config file (issue #86) and saved via POST /settings. #}
+       per-identity config file (issue #86) and saved via POST /settings.
+       Anonymous visitors share config-default.json, so for them the popup
+       is read-only (#102) — the server refuses their saves too. #}
+    {% set settings_read_only = not current_user %}
     <div class="modal-overlay" id="settings-modal" hidden>
         <div class="modal modal-dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
             <button type="button" class="modal-close" aria-label="Close">&times;</button>
@@ -37,7 +40,8 @@
             <form id="settings-form">
                 <label class="settings-check">
                     <input type="checkbox" name="cards_automatically"
-                           {% if settings.cards_automatically %}checked{% endif %}>
+                           {% if settings.cards_automatically %}checked{% endif %}
+                           {% if settings_read_only %}disabled{% endif %}>
                     Add cards automatically
                 </label>
                 <p class="settings-hint">When on, &ldquo;Look up &amp; save&rdquo; writes the cards straight
@@ -47,12 +51,14 @@
                     <legend>Translation (ENG &rarr; UKR/RUS)</legend>
                     <label>
                         <input type="radio" name="translator" value="google"
-                               {% if settings.translator == 'google' %}checked{% endif %}>
+                               {% if settings.translator == 'google' %}checked{% endif %}
+                               {% if settings_read_only %}disabled{% endif %}>
                         Google Translate
                     </label>
                     <label>
                         <input type="radio" name="translator" value="bing"
-                               {% if settings.translator == 'bing' %}checked{% endif %}>
+                               {% if settings.translator == 'bing' %}checked{% endif %}
+                               {% if settings_read_only %}disabled{% endif %}>
                         Bing Translator
                     </label>
                 </fieldset>
@@ -61,12 +67,14 @@
                     <legend>Explanatory dictionary (ENG &rarr; ENG)</legend>
                     <label>
                         <input type="radio" name="explanatory_dictionary" value="oxford"
-                               {% if settings.explanatory_dictionary == 'oxford' %}checked{% endif %}>
+                               {% if settings.explanatory_dictionary == 'oxford' %}checked{% endif %}
+                               {% if settings_read_only %}disabled{% endif %}>
                         Oxford Learner's Dictionaries
                     </label>
                     <label>
                         <input type="radio" name="explanatory_dictionary" value="merriam-webster"
-                               {% if settings.explanatory_dictionary == 'merriam-webster' %}checked{% endif %}>
+                               {% if settings.explanatory_dictionary == 'merriam-webster' %}checked{% endif %}
+                               {% if settings_read_only %}disabled{% endif %}>
                         Merriam-Webster
                     </label>
                 </fieldset>
@@ -77,12 +85,14 @@
                     <legend>Visible translations</legend>
                     <label>
                         <input type="checkbox" name="show_ukrainian"
-                               {% if settings.show_ukrainian %}checked{% endif %}>
+                               {% if settings.show_ukrainian %}checked{% endif %}
+                               {% if settings_read_only %}disabled{% endif %}>
                         Show Ukrainian translation
                     </label>
                     <label>
                         <input type="checkbox" name="show_russian"
-                               {% if settings.show_russian %}checked{% endif %}>
+                               {% if settings.show_russian %}checked{% endif %}
+                               {% if settings_read_only %}disabled{% endif %}>
                         Show Russian translation
                     </label>
                 </fieldset>
@@ -97,13 +107,13 @@
                     <label>
                         <input type="radio" name="quiz_lang" value="ukrainian"
                                {% if settings.quiz_lang == 'ukrainian' %}checked{% endif %}
-                               {% if not both_visible %}disabled{% endif %}>
+                               {% if not both_visible or settings_read_only %}disabled{% endif %}>
                         Ukrainian
                     </label>
                     <label>
                         <input type="radio" name="quiz_lang" value="russian"
                                {% if settings.quiz_lang == 'russian' %}checked{% endif %}
-                               {% if not both_visible %}disabled{% endif %}>
+                               {% if not both_visible or settings_read_only %}disabled{% endif %}>
                         Russian
                     </label>
                     <p class="settings-hint settings-group-hint" id="quiz-lang-hint"
@@ -112,12 +122,16 @@
                 </fieldset>
 
                 <p class="settings-scope">
-                    {% if current_user %}Saved for {{ current_user.email }}.{% else %}Saved for all anonymous visitors &mdash; sign in with Google to get your own settings.{% endif %}
+                    {% if current_user %}Saved for {{ current_user.email }}.
+                    {% elif google_auth_enabled %}Settings are read-only for anonymous visitors &mdash;
+                        <a class="settings-signin" href="{{ url_for('login_google') }}">sign in with Google</a> to customise them.
+                    {% else %}Settings are read-only for anonymous visitors.{% endif %}
                 </p>
                 <p id="settings-error" class="settings-error" hidden>Saving failed &mdash; please try again.</p>
                 <div class="modal-actions">
-                    <button type="button" class="secondary" id="settings-cancel">Cancel</button>
-                    <button type="submit" id="settings-save">Save</button>
+                    <button type="button" class="secondary" id="settings-cancel">{% if settings_read_only %}Close{% else %}Cancel{% endif %}</button>
+                    <button type="submit" id="settings-save"
+                            {% if settings_read_only %}disabled title="Sign in with Google to change settings"{% endif %}>Save</button>
                 </div>
             </form>
         </div>
@@ -208,11 +222,17 @@
             var settingsError = document.getElementById("settings-error");
             var settingsSave = document.getElementById("settings-save");
 
+            // Anonymous visitors share config-default.json, so the whole
+            // popup is read-only for them (#102) — the server refuses their
+            // saves too; this flag guards the client-side interactions.
+            var settingsReadOnly = {{ 'true' if settings_read_only else 'false' }};
+
             // With only one visible language the quiz-language toggle has
             // nothing to choose (#113): keep its disabled state and hint in
             // sync with the visibility checkboxes, live, inside the popup.
             var quizLangHint = document.getElementById("quiz-lang-hint");
             function updateQuizLangState() {
+                if (settingsReadOnly) return;   // everything stays disabled
                 var bothVisible = settingsForm.show_ukrainian.checked &&
                                   settingsForm.show_russian.checked;
                 settingsForm.querySelectorAll("input[name=quiz_lang]")
@@ -242,6 +262,7 @@
 
             settingsForm.addEventListener("submit", function (e) {
                 e.preventDefault();
+                if (settingsReadOnly) return;   // #102 — server would 403 anyway
                 settingsError.hidden = true;
                 settingsSave.disabled = true;
                 settingsSave.textContent = "Saving…";

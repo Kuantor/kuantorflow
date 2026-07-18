@@ -86,8 +86,12 @@ settings/config-<username>.json   one per Google-authorised user
 ```
 
 `<username>` is the part of the user's email before the `@`, sanitised to be
-filesystem-safe — so signed-in users never share preferences, and anonymous
-visitors share the default config.
+filesystem-safe — so signed-in users never share preferences. Anonymous
+visitors share the default config, which is why it is **read-only for them**
+(#102): one incognito visitor must not be able to change settings for every
+other anonymous visitor. `POST /settings` requires a signed-in user (403
+otherwise), and the popup renders with every control disabled plus a
+sign-in hint.
 
 `settings_store.py` is the whole storage layer, and `settings_store.DEFAULTS`
 is the source of truth for which settings exist:
@@ -126,9 +130,10 @@ if current_settings()["cards_automatically"]:
 
 ### The Settings popup (#13, #20)
 
-**Settings** in the header opens a popup where each identity edits its own
-config file (saved via `POST /settings`, which runs through the same
-validation as the store):
+**Settings** in the header opens a popup where each signed-in user edits
+their own config file (saved via `POST /settings`, which runs through the
+same validation as the store); anonymous visitors see the current defaults
+read-only (#102):
 
 - **Add cards automatically** (#13, off by default) — when on, *Look up &
   save* writes the parsed cards straight to the database and shows the usual
