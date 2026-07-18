@@ -496,6 +496,10 @@ body.welcome-active {
 }
 @media (max-width: 640px) {
     .settings-grid { grid-template-columns: 1fr; }
+    /* The fixed Mykola widget overlaps the popup on phones — hide it while
+       the Settings popup is open (#121). Desktop has room for both. */
+    body.settings-open #mykola-launcher,
+    body.settings-open #mykola-panel { display: none; }
 }
 /* The settings dialog scrolls (overflow-y: auto, #118), which would clip the
    close button where it normally overhangs the corner. Tuck it inside, clear

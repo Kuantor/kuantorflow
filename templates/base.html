@@ -292,8 +292,14 @@
                 updateQuizLangState();     // reset() restores values, not disabled
                 settingsError.hidden = true;
                 settingsOverlay.hidden = false;
+                // On phones the Mykola widget overlaps the popup — the CSS
+                // hides it while this class is set (#121).
+                document.body.classList.add("settings-open");
             }
-            function closeSettings() { settingsOverlay.hidden = true; }
+            function closeSettings() {
+                settingsOverlay.hidden = true;
+                document.body.classList.remove("settings-open");
+            }
 
             document.getElementById("settings-link").addEventListener("click", function (e) {
                 e.preventDefault();
