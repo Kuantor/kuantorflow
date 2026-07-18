@@ -1,7 +1,7 @@
 # kuantorflow
 Interactive language learning with notes and dictionaries
 
-🌐 **The website is up and running on PythonAnywhere: <https://kuantorflow.pythonanywhere.com/>**
+🌐 **The website is up and running on PythonAnywhere: <https://kuantorflow.pythonanywhere.com/>** (type excapital at the entrance)
 
 KuantorFlow is a flexible language‑learning platform built with Flask.  
 It transforms notes, dictionary lookups, and study materials into interactive activities such as explanations, translations, flashcards, and quizzes.
