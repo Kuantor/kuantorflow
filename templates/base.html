@@ -47,6 +47,9 @@
                 <p class="settings-hint">When on, &ldquo;Look up &amp; save&rdquo; writes the cards straight
                    to the database instead of opening the review popup first.</p>
 
+                {# Two-column grid (#118): providers on the first row,
+                   language controls side by side on the second. #}
+                <div class="settings-grid">
                 <fieldset class="settings-group">
                     <legend>Translation (ENG &rarr; UKR/RUS)</legend>
                     <label>
@@ -120,6 +123,7 @@
                        {% if both_visible %}hidden{% endif %}>Only one language is
                        visible — the quiz uses it automatically.</p>
                 </fieldset>
+                </div>{# /settings-grid #}
 
                 <p class="settings-scope">
                     {% if current_user %}Saved for {{ current_user.email }}.
@@ -129,18 +133,17 @@
                 </p>
                 <p id="settings-error" class="settings-error" hidden>Saving failed &mdash; please try again.</p>
                 <div class="modal-actions">
+                    {# Reset Auth (#98): an ACTION, not a setting — type=button
+                       (never submits) and never disabled by the read-only
+                       freeze (#102), because anonymous gated visitors reset
+                       too. Left-aligned in the shared action row (#118). #}
+                    <button type="button" id="reset-auth-btn" class="settings-reset"
+                            title="Sign out and forget the keyword on this device">Reset Auth</button>
                     <button type="button" class="secondary" id="settings-cancel">{% if settings_read_only %}Close{% else %}Cancel{% endif %}</button>
                     <button type="submit" id="settings-save"
                             {% if settings_read_only %}disabled title="Sign in with Google to change settings"{% endif %}>Save</button>
                 </div>
             </form>
-            {# Reset Auth (#98): an ACTION, not a setting — deliberately
-               outside the form and never disabled by the read-only freeze
-               (#102), because anonymous gated visitors reset too. #}
-            <div class="settings-reset-row">
-                <button type="button" id="reset-auth-btn" class="settings-reset">Reset Auth</button>
-                <span class="settings-reset-hint">Sign out and forget the keyword on this device</span>
-            </div>
         </div>
     </div>
 
