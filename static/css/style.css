@@ -481,8 +481,29 @@ body.welcome-active {
 .modal-actions .secondary { background: #e4e9ee; color: var(--ink); }
 .modal-actions .secondary:hover { background: #d3dae1; }
 
-/* Settings popup (issues #13 / #20) */
-.settings-dialog { width: min(92vw, 460px); max-width: none; }
+/* Settings popup (issues #13 / #20; two-column layout #118) */
+.settings-dialog {
+    width: min(92vw, 700px);
+    max-width: none;
+    max-height: 90vh;      /* nothing may ever fall below the popup (#118) */
+    overflow-y: auto;
+}
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 0.9rem;
+    align-items: start;
+}
+@media (max-width: 640px) {
+    .settings-grid { grid-template-columns: 1fr; }
+}
+/* The settings dialog scrolls (overflow-y: auto, #118), which would clip the
+   close button where it normally overhangs the corner. Tuck it inside, clear
+   of the 12px rounded corner, so the whole button stays visible. */
+.settings-dialog .modal-close {
+    top: 0.55rem;
+    right: 0.55rem;
+}
 .settings-dialog h2 { margin: 0 0 1rem; font-size: 1.25rem; color: var(--blue-dark); }
 .settings-check {
     display: flex;
@@ -525,17 +546,9 @@ body.welcome-active {
 button:disabled { background: #9db4c7; cursor: default; }
 button:disabled:hover { background: #9db4c7; }
 .settings-scope { margin: 0 0 0.5rem; font-size: 0.78rem; color: var(--muted); }
-/* Reset Auth (#98): an action row under the settings form. */
-.settings-reset-row {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    margin-top: 1rem;
-    padding-top: 0.9rem;
-    border-top: 1px solid #e5e7eb;
-}
+/* Reset Auth (#98): left-aligned in the shared action row (#118). */
 .settings-reset {
-    margin: 0;
+    margin: 0 auto 0 0;    /* pushes Cancel/Save to the right */
     padding: 0.45rem 1.1rem;
     background: #fff;
     color: var(--bad-border);
@@ -544,7 +557,6 @@ button:disabled:hover { background: #9db4c7; }
     font-size: 0.9rem;
 }
 .settings-reset:hover { background: var(--bad-bg); }
-.settings-reset-hint { font-size: 0.78rem; color: var(--muted); }
 .settings-error { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--bad-border); }
 
 /* Keyword gate (access screen) */
