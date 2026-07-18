@@ -497,6 +497,13 @@ body.welcome-active {
 @media (max-width: 640px) {
     .settings-grid { grid-template-columns: 1fr; }
 }
+/* The settings dialog scrolls (overflow-y: auto, #118), which would clip the
+   close button where it normally overhangs the corner. Tuck it inside, clear
+   of the 12px rounded corner, so the whole button stays visible. */
+.settings-dialog .modal-close {
+    top: 0.55rem;
+    right: 0.55rem;
+}
 .settings-dialog h2 { margin: 0 0 1rem; font-size: 1.25rem; color: var(--blue-dark); }
 .settings-check {
     display: flex;
