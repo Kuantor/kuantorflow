@@ -465,6 +465,19 @@ def logout():
     return redirect(url_for("index"))
 
 
+@app.route("/auth/reset", methods=["POST"])
+def auth_reset():
+    """Reset Auth (#98): drop the WHOLE session — the gate pass and the
+    Google identity — returning this browser to the initial unauthenticated
+    state, landing on the gate. Settings files are deliberately untouched:
+    signing back in restores the user's preferences. The app's browser-side
+    storage (widget state etc.) is cleared by the popup's JS before this
+    POST. Reachable only from inside the gate, which is fine — outside it
+    there is nothing to reset."""
+    session.clear()
+    return redirect(url_for("gate"))
+
+
 @app.context_processor
 def inject_auth():
     """Expose the signed-in user (if any) and whether Google sign-in is on."""

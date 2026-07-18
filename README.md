@@ -158,6 +158,13 @@ read-only (#102):
   in any visible language — this only sets the default. The toggle is greyed
   out while only one language is visible (the quiz then uses that language
   automatically), and it re-enables live as the checkboxes above change.
+- **Reset Auth** (#98) — an action button under the settings (an *action*,
+  not a setting: it stays enabled for anonymous visitors despite the #102
+  read-only freeze). After a confirmation dialog it clears the whole
+  session — the gate pass and the Google sign-in — plus the app's own
+  browser storage (chat-widget state, consent and welcome flags), landing
+  back on the gate. Settings files are untouched: signing back in restores
+  your preferences.
 
 ### The providers (#20, #21)
 
