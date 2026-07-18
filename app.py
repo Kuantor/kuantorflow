@@ -485,9 +485,17 @@ def inject_settings():
 @app.route("/settings", methods=["POST"])
 def save_settings():
     """Persist choices from the Settings popup (issues #13/#20) for the
-    current identity: the signed-in user's own config file, or the shared
-    default file for anonymous visitors. The store drops unknown keys and
-    invalid values, so this endpoint cannot corrupt a config file."""
+    signed-in user's own config file. Anonymous visitors all share
+    config-default.json, so letting one of them write would change the
+    settings for every anonymous visitor — the endpoint therefore requires
+    a signed-in user (#102); the popup renders read-only for the rest.
+    The store drops unknown keys and invalid values, so this endpoint
+    cannot corrupt a config file."""
+    if not session.get("user"):
+        return jsonify({
+            "ok": False,
+            "error": "Sign in with Google to change settings.",
+        }), 403
     changes = request.get_json(silent=True) or {}
     stored = settings_store.update(changes, _current_email())
     return jsonify({"ok": True, "settings": stored})
