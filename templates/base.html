@@ -134,6 +134,26 @@
                             {% if settings_read_only %}disabled title="Sign in with Google to change settings"{% endif %}>Save</button>
                 </div>
             </form>
+            {# Reset Auth (#98): an ACTION, not a setting — deliberately
+               outside the form and never disabled by the read-only freeze
+               (#102), because anonymous gated visitors reset too. #}
+            <div class="settings-reset-row">
+                <button type="button" id="reset-auth-btn" class="settings-reset">Reset Auth</button>
+                <span class="settings-reset-hint">Sign out and forget the keyword on this device</span>
+            </div>
+        </div>
+    </div>
+
+    {# Reset Auth confirmation (#98) — same pattern as card deletion. #}
+    <div class="modal-overlay" id="reset-auth-modal" hidden>
+        <div class="modal modal-dialog">
+            <p>Are you sure you want to reset authentication? You will be
+               signed out, and the site will ask for the keyword again.</p>
+            <form method="POST" action="{{ url_for('auth_reset') }}"
+                  id="reset-auth-form" class="modal-actions">
+                <button type="submit" class="danger">Yes, reset</button>
+                <button type="button" class="secondary" id="reset-auth-no">No</button>
+            </form>
         </div>
     </div>
 
@@ -213,7 +233,29 @@
                 if (e.target === overlay) close();  // click outside the image
             });
             document.addEventListener("keydown", function (e) {
-                if (e.key === "Escape") { close(); closeSettings(); }
+                if (e.key === "Escape") { close(); closeSettings(); closeResetAuth(); }
+            });
+
+            // --- Reset Auth (#98) --------------------------------------------
+            var resetOverlay = document.getElementById("reset-auth-modal");
+            function closeResetAuth() { resetOverlay.hidden = true; }
+            document.getElementById("reset-auth-btn").addEventListener("click", function () {
+                closeSettings();
+                resetOverlay.hidden = false;
+            });
+            document.getElementById("reset-auth-no").addEventListener("click", closeResetAuth);
+            resetOverlay.addEventListener("click", function (e) {
+                if (e.target === resetOverlay) closeResetAuth();
+            });
+            document.getElementById("reset-auth-form").addEventListener("submit", function () {
+                // Clear the app's own browser-side state — known keys only,
+                // nothing unrelated (#98). The native POST then follows the
+                // server's redirect to the gate.
+                try {
+                    localStorage.removeItem("kf_mykola_widget_state_v1");
+                    localStorage.removeItem("kf_mykola_auth_dismissed");
+                } catch (e) {}
+                try { sessionStorage.removeItem("kf_welcome_seen_{{ app_boot_id }}"); } catch (e) {}
             });
 
             // --- Settings popup (issues #13 / #20) ---------------------------

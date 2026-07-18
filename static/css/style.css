@@ -525,6 +525,26 @@ body.welcome-active {
 button:disabled { background: #9db4c7; cursor: default; }
 button:disabled:hover { background: #9db4c7; }
 .settings-scope { margin: 0 0 0.5rem; font-size: 0.78rem; color: var(--muted); }
+/* Reset Auth (#98): an action row under the settings form. */
+.settings-reset-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-top: 1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid #e5e7eb;
+}
+.settings-reset {
+    margin: 0;
+    padding: 0.45rem 1.1rem;
+    background: #fff;
+    color: var(--bad-border);
+    border: 1px solid var(--bad-border);
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+.settings-reset:hover { background: var(--bad-bg); }
+.settings-reset-hint { font-size: 0.78rem; color: var(--muted); }
 .settings-error { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--bad-border); }
 
 /* Keyword gate (access screen) */
