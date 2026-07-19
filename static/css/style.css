@@ -858,6 +858,22 @@ button:disabled:hover { background: #9db4c7; }
 /* Also hide in minimized mode to avoid duplicate maximize controls. */
 #mykola-panel.minimized .mykola-max { display: none; }
 
+/* New-chat button (ai_agent#55) — small, unobtrusive, mirrors the others. */
+.mykola-new {
+    margin: 0 0.25rem 0 0;
+    padding: 0;
+    width: 1.8rem;
+    height: 1.8rem;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.mykola-new:hover { background: rgba(255, 255, 255, 0.35); }
+
 /* Minimize / maximize toggle — mirrors .mykola-close, sits to its left. */
 .mykola-min {
     margin: 0 0.25rem 0 0;

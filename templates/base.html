@@ -401,6 +401,7 @@
                 <a href="{{ url_for('mykola_about') }}" class="mykola-name" title="About Mykola">Mykola</a>
                 <small>your distinguished English companion</small>
             </div>
+            <button type="button" class="mykola-new" aria-label="New chat" title="New chat — start over">&#65291;</button>
             <button type="button" class="mykola-max" aria-label="Open full chat" title="Open full chat page">&#9633;</button>
             <button type="button" class="mykola-min" aria-label="Minimize" title="Minimize">&#8210;</button>
             <button type="button" class="mykola-close" aria-label="Close" title="Close">&times;</button>
@@ -450,9 +451,14 @@
             var form = document.getElementById("mykola-form");
             var input = document.getElementById("mykola-input");
             var send = document.getElementById("mykola-send");
+            var newBtn = panel.querySelector(".mykola-new");
             var maxBtn = panel.querySelector(".mykola-max");
             var minBtn = panel.querySelector(".mykola-min");
             var closeBtn = panel.querySelector(".mykola-close");
+            // The opening greeting, built once (tojson keeps a name with an
+            // apostrophe from breaking the string) and reused on New Chat.
+            {% set greeting = "Good day" ~ (", " ~ current_user.name if current_user else "") ~ "! I'm Mykola 🎩 Ask me anything about English or how to use KuantorFlow — it would be my pleasure." %}
+            var GREETING = {{ greeting | tojson }};
             var avatar = document.getElementById("mykola-avatar");
             var videoOverlay = document.getElementById("mykola-video-overlay");
             var video = document.getElementById("mykola-video");
@@ -594,6 +600,23 @@
                 launcher.hidden = false;
                 saveWidgetState();
             }
+            function newChat() {
+                // Start a fresh conversation (ai_agent#55): wipe the thread and
+                // mint a new chat id on the next message. Past exchanges stay
+                // logged server-side, so nothing is lost — and for signed-in
+                // visitors Mykola re-runs his welcome-back recap of the last
+                // few conversations, just as at the start of a new session.
+                history = [];
+                chatId = null;
+                uiMessages = [];
+                while (messages.firstChild) messages.removeChild(messages.firstChild);
+                addMessage("mykola", GREETING);   // persisted as the new first message
+                {% if current_user %}
+                recapRequested = false;
+                requestRecap();
+                {% endif %}
+                input.focus();
+            }
             function openVideo() {
                 videoOverlay.hidden = false;
                 try { video.currentTime = 0; video.play(); } catch (e) {}
@@ -639,6 +662,7 @@
             }
 
             launcher.addEventListener("click", openPanel);
+            newBtn.addEventListener("click", newChat);
             closeBtn.addEventListener("click", closePanel);
             maxBtn.addEventListener("click", function () {
                 window.location.href = "{{ url_for('mykola_chat_page') }}";
@@ -683,8 +707,8 @@
                         addMessage(msg.kind, msg.text || "", msg.sources || [], false);
                     });
                 } else {
-                    addMessage("mykola", "Good day{% if current_user %}, {{ current_user.name }}{% endif %}! I'm Mykola 🎩 Ask me anything about English or how to use KuantorFlow — it would be my pleasure.", [], false);
-                    uiMessages = [{ kind: "mykola", text: "Good day{% if current_user %}, {{ current_user.name }}{% endif %}! I'm Mykola 🎩 Ask me anything about English or how to use KuantorFlow — it would be my pleasure.", sources: [] }];
+                    addMessage("mykola", GREETING, [], false);
+                    uiMessages = [{ kind: "mykola", text: GREETING, sources: [] }];
                 }
 
                 if (state.panelOpen) {
