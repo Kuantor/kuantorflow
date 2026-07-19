@@ -858,24 +858,28 @@ button:disabled:hover { background: #9db4c7; }
 /* Also hide in minimized mode to avoid duplicate maximize controls. */
 #mykola-panel.minimized .mykola-max { display: none; }
 
-/* New-chat button (ai_agent#55) — the new_chat.png icon (white on transparent)
-   is itself a circle, so the button shows no background disc of its own (that
-   read as a double ring); a faint circle appears only on hover. */
+/* New-chat button (ai_agent#55) — the new_chat.png icon is itself a circular
+   (reload) arrow, so the button carries NO background disc in any state; that
+   read as an extra white circle around it. Hover just brightens the icon. */
 .mykola-new {
     margin: 0 0.25rem 0 0;
     padding: 0;
     width: 1.8rem;
     height: 1.8rem;
     border: none;
-    border-radius: 50%;
-    background: transparent;
+    background: none;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
 }
-.mykola-new img { width: 1.15rem; height: 1.15rem; display: block; }
-.mykola-new:hover { background: rgba(255, 255, 255, 0.2); }
+.mykola-new img {
+    width: 1.15rem;
+    height: 1.15rem;
+    display: block;
+    opacity: 0.9;
+}
+.mykola-new:hover img { opacity: 1; }
 
 /* Minimize / maximize toggle — mirrors .mykola-close, sits to its left. */
 .mykola-min {
