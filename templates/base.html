@@ -443,6 +443,18 @@
                src="{{ mykola_media('mykola_choir.mp4') }}"></video>
     </div>
 
+    <!-- Confirm before starting a new conversation (ai_agent#55). Higher
+         z-index than the widget panel so it sits above it. -->
+    <div class="modal-overlay" id="new-chat-modal" hidden>
+        <div class="modal modal-dialog">
+            <p>Do you really want to start a new conversation?</p>
+            <div class="modal-actions">
+                <button type="button" id="new-chat-yes">Yes</button>
+                <button type="button" class="secondary" id="new-chat-no">No</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         (function () {
             var launcher = document.getElementById("mykola-launcher");
@@ -662,7 +674,19 @@
             }
 
             launcher.addEventListener("click", openPanel);
-            newBtn.addEventListener("click", newChat);
+            // The pencil asks first (ai_agent#55) — the current thread is still
+            // logged server-side, but a confirm avoids an accidental reset.
+            var newChatModal = document.getElementById("new-chat-modal");
+            function closeNewChatModal() { newChatModal.hidden = true; }
+            newBtn.addEventListener("click", function () { newChatModal.hidden = false; });
+            document.getElementById("new-chat-yes").addEventListener("click", function () {
+                closeNewChatModal();
+                newChat();
+            });
+            document.getElementById("new-chat-no").addEventListener("click", closeNewChatModal);
+            newChatModal.addEventListener("click", function (e) {
+                if (e.target === newChatModal) closeNewChatModal();
+            });
             closeBtn.addEventListener("click", closePanel);
             maxBtn.addEventListener("click", function () {
                 window.location.href = "{{ url_for('mykola_chat_page') }}";
@@ -677,7 +701,8 @@
             });
             document.addEventListener("keydown", function (e) {
                 if (e.key !== "Escape") return;
-                if (!videoOverlay.hidden) closeVideo();
+                if (!newChatModal.hidden) closeNewChatModal();   // confirm first
+                else if (!videoOverlay.hidden) closeVideo();
                 else if (!panel.hidden) closePanel();
             });
 

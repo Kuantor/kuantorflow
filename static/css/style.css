@@ -874,6 +874,8 @@ button:disabled:hover { background: #9db4c7; }
     cursor: pointer;
 }
 .mykola-new:hover { background: rgba(255, 255, 255, 0.35); }
+/* New-chat confirm dialog must sit above the widget panel (z-index 200). */
+#new-chat-modal { z-index: 400; }
 
 /* Minimize / maximize toggle — mirrors .mykola-close, sits to its left. */
 .mykola-min {
