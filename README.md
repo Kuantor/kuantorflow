@@ -13,6 +13,11 @@ It transforms notes, dictionary lookups, and study materials into interactive ac
 - Add **examples in multiple languages** to show real usage.
 - Upload notes (e.g. `.mht` files from OneNote) and convert them into structured learning entries.
 - Organize flashcards by topic for easy browsing.
+- Browse a topic as a **card deck** (#78) — a Quizlet-style activity where one
+  card shows at a time, you flip it to reveal the explanation and translation,
+  and step through with the Left/Right arrows (or the keyboard). The flip
+  animation is scoped to this activity only. Open it from a topic's list view
+  via the **Card deck** link (route `/deck/<topic>`).
 - Practice with quizzes generated from your saved entries.
 - Chat with **Mykola**, an AI study assistant, from a widget in the corner.
 - **No duplicates** (#101): a card whose word + part of speech already exists

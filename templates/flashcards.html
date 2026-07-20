@@ -5,6 +5,8 @@
 {% block content %}
     <p class="crumbs">
         <a href="{{ url_for('index') }}">&larr; Home</a>
+        {# Card-deck activity with flip animation (#78). #}
+        | <a href="{{ url_for('card_deck', topic=topic) }}">Card deck</a>
         {# A quiz needs at least one visible translation language (#46/#79). #}
         {% if settings.show_ukrainian or settings.show_russian %}
         | <a href="{{ url_for('quiz', topic=topic) }}">Take quiz</a>
