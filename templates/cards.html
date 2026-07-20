@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}Card deck — {{ topic }} | KuantorFlow{% endblock %}
+
+{#
+   Flashcards activity (#78): a browsable deck of flip cards for one topic.
+   One card at a time; Left/Right arrows step through; click (or Enter/Space)
+   flips it to reveal the explanation + one translation.
+
+   The flip-animation CSS below is deliberately scoped under #deck so it stays
+   LOCAL to this activity and never leaks into the rest of the app (issue #78
+   subpoint: "Restrict animations to this activity only, not global").
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        | <a href="{{ url_for('flashcards', topic=topic) }}">List view</a>
+        {% if settings.show_ukrainian or settings.show_russian %}
+        | <a href="{{ url_for('quiz', topic=topic) }}">Take quiz</a>
+        {% endif %}
+    </p>
+    <h1 class="page-title">Card deck: {{ topic }}</h1>
+
+    {% if demo %}
+        <div class="banner error">
+            <strong>Demo data.</strong> The database isn't reachable here, so this
+            deck shows a few sample cards to preview the activity and its
+            animation. {# TODO(#78): served from _DEMO_DECK; real cards on the server. #}
+        </div>
+    {% endif %}
+
+    {% if not cards %}
+        <div class="panel"><p>No flashcards saved under this topic yet.</p></div>
+    {% else %}
+    <div id="deck"
+         data-count="{{ cards|length }}"
+         data-trans-label="{{ trans_label or '' }}">
+
+        <div class="deck-toolbar">
+            <span class="deck-counter"><span id="deck-pos">1</span> / {{ cards|length }}</span>
+            {# Settings option to control the animation (#78 deliverable).
+               DEMO: a lightweight per-device toggle kept in localStorage.
+               TODO(#78): promote this to a real server-side Setting — add e.g.
+               `deck_animation` to settings_store.DEFAULTS and a checkbox in the
+               Settings popup (base.html), then read `settings.deck_animation`
+               here instead of the localStorage flag below. #}
+            <label class="deck-anim-toggle">
+                <input type="checkbox" id="deck-anim" checked>
+                Flip animation
+            </label>
+        </div>
+
+        <div class="deck-stage">
+            <button type="button" class="deck-nav deck-prev" aria-label="Previous card">&#10094;</button>
+
+            <div class="deck-viewport">
+                {% for card in cards %}
+                <div class="flip-card{% if not loop.first %} is-hidden{% endif %}"
+                     data-index="{{ loop.index0 }}" tabindex="0"
+                     role="button" aria-label="Flashcard {{ loop.index }}: flip to see the answer">
+                    <div class="flip-card-inner">
+                        <div class="flip-face flip-front">
+                            <div class="deck-word">{{ card.word }}
+                                {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
+                            </div>
+                            <div class="deck-hint">Click to flip</div>
+                        </div>
+                        <div class="flip-face flip-back">
+                            {% if card.explanation_en %}
+                                <p class="deck-explanation">{{ card.explanation_en }}</p>
+                            {% endif %}
+                            {% if trans_field and card[trans_field] %}
+                                <div class="lang">{{ trans_label }}</div>
+                                <p class="deck-translation">{{ card[trans_field] }}</p>
+                            {% elif not trans_field %}
+                                <p class="deck-hint">Both translations are hidden in Settings.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <button type="button" class="deck-nav deck-next" aria-label="Next card">&#10095;</button>
+        </div>
+    </div>
+
+    {# Scoped styles — everything is under #deck, so the flip animation is
+       confined to this activity (issue #78). #}
+    <style>
+        #deck { max-width: 620px; margin: 0 auto; }
+        .deck-toolbar {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 0.8rem; margin-bottom: 0.8rem;
+            color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+        }
+        .deck-counter { font-weight: 600; }
+        .deck-anim-toggle {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            font-size: 0.9rem; cursor: pointer;
+            background: rgba(20,40,60,0.45); padding: 0.3rem 0.6rem; border-radius: 999px;
+        }
+        .deck-stage { display: flex; align-items: center; gap: 0.6rem; }
+
+        .deck-viewport { flex: 1; perspective: 1200px; }
+
+        /* The card itself. A fixed min-height keeps front/back the same size
+           so the flip doesn't jump. */
+        .flip-card {
+            position: relative; width: 100%; min-height: 240px;
+            cursor: pointer; outline: none;
+        }
+        .flip-card.is-hidden { display: none; }
+        .flip-card:focus-visible .flip-card-inner { box-shadow: 0 0 0 3px var(--yellow); border-radius: 14px; }
+
+        .flip-card-inner {
+            position: relative; width: 100%; min-height: 240px;
+            transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+            transform-style: preserve-3d;
+        }
+        .flip-card.flipped .flip-card-inner { transform: rotateY(180deg); }
+
+        .flip-face {
+            position: absolute; inset: 0;
+            -webkit-backface-visibility: hidden; backface-visibility: hidden;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.96);
+            border-radius: 14px; border-left: 5px solid var(--blue);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+        }
+        .flip-back { transform: rotateY(180deg); }
+
+        .deck-word { font-size: 1.8rem; font-weight: 700; color: var(--blue-dark); }
+        .deck-word .pos { vertical-align: middle; }
+        .deck-hint { color: var(--muted); font-size: 0.8rem; margin-top: 0.6rem; }
+        .deck-explanation { margin: 0 0 0.4rem; color: var(--ink); }
+        .deck-translation { font-size: 1.2rem; font-weight: 600; color: var(--blue-dark); margin: 0.2rem 0 0; }
+
+        .deck-nav {
+            flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%;
+            font-size: 1.2rem; line-height: 1; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .deck-nav:disabled { opacity: 0.4; cursor: default; }
+
+        /* Respect users who prefer reduced motion, and the per-device toggle:
+           #deck.no-anim disables the transition entirely. */
+        #deck.no-anim .flip-card-inner { transition: none; }
+        @media (prefers-reduced-motion: reduce) {
+            .flip-card-inner { transition: none; }
+        }
+
+        @media (max-width: 480px) {
+            .deck-word { font-size: 1.5rem; }
+            .flip-card, .flip-card-inner { min-height: 260px; }
+        }
+    </style>
+
+    <script>
+        (function () {
+            var deck = document.getElementById("deck");
+            if (!deck) return;
+            var cards = Array.prototype.slice.call(deck.querySelectorAll(".flip-card"));
+            var prevBtn = deck.querySelector(".deck-prev");
+            var nextBtn = deck.querySelector(".deck-next");
+            var posLabel = document.getElementById("deck-pos");
+            var animToggle = document.getElementById("deck-anim");
+            var current = 0;
+            var ANIM_KEY = "kf_deck_animation";
+
+            function show(i) {
+                if (i < 0 || i >= cards.length) return;
+                cards[current].classList.add("is-hidden");
+                cards[current].classList.remove("flipped");   // next card starts on its front
+                current = i;
+                cards[current].classList.remove("is-hidden");
+                posLabel.textContent = current + 1;
+                prevBtn.disabled = current === 0;
+                nextBtn.disabled = current === cards.length - 1;
+            }
+            function flip(card) { card.classList.toggle("flipped"); }
+
+            cards.forEach(function (card) {
+                card.addEventListener("click", function () { flip(card); });
+                card.addEventListener("keydown", function (e) {
+                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(card); }
+                });
+            });
+            prevBtn.addEventListener("click", function () { show(current - 1); });
+            nextBtn.addEventListener("click", function () { show(current + 1); });
+
+            document.addEventListener("keydown", function (e) {
+                if (e.key === "ArrowLeft") show(current - 1);
+                else if (e.key === "ArrowRight") show(current + 1);
+            });
+
+            // Animation toggle (DEMO — see the TODO in the template). Persisted
+            // per device in localStorage; defaults to on.
+            function applyAnim(on) { deck.classList.toggle("no-anim", !on); }
+            try {
+                var stored = localStorage.getItem(ANIM_KEY);
+                if (stored === "0") { animToggle.checked = false; applyAnim(false); }
+            } catch (e) {}
+            animToggle.addEventListener("change", function () {
+                applyAnim(animToggle.checked);
+                try { localStorage.setItem(ANIM_KEY, animToggle.checked ? "1" : "0"); } catch (e) {}
+            });
+
+            show(0);
+        })();
+    </script>
+    {% endif %}
+{% endblock %}

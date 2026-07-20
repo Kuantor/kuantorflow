@@ -686,6 +686,60 @@ def flashcards(topic):
     return render_template("flashcards.html", topic=topic, cards=cards)
 
 
+# A tiny sample deck so the card-deck activity (#78) can be opened and its
+# flip animation previewed when the database is unreachable (e.g. local dev,
+# where PythonAnywhere MySQL is not accessible).
+# TODO(#78): remove this fallback once the deck can be exercised against a real
+#   DB locally (fixtures / seeded local MySQL). It exists only for the demo.
+_DEMO_DECK = [
+    {"word": "streamline", "pos": "verb",
+     "explanation_en": "to make a system or process work more simply and effectively",
+     "translation_ukr": "оптимізувати", "translation_rus": "оптимизировать"},
+    {"word": "resilient", "pos": "adjective",
+     "explanation_en": "able to recover quickly from difficult conditions",
+     "translation_ukr": "стійкий", "translation_rus": "устойчивый"},
+    {"word": "insight", "pos": "noun",
+     "explanation_en": "a clear, deep understanding of a complicated situation",
+     "translation_ukr": "розуміння", "translation_rus": "понимание"},
+]
+
+
+def _deck_translation(prefs):
+    """Which translation the deck shows, following the visibility settings
+    (#46/#79/#111): Ukrainian when visible, else Russian; both hidden -> none.
+    Per #78, when both languages are visible Ukrainian wins."""
+    if prefs["show_ukrainian"]:
+        return "translation_ukr", "Ukrainian"
+    if prefs["show_russian"]:
+        return "translation_rus", "Russian"
+    return None, None
+
+
+@app.route("/deck/<topic>")
+def card_deck(topic):
+    """Flashcards activity (#78): a browsable deck of flip cards for one topic.
+
+    One card shows at a time — its word on the front; flipping reveals the
+    explanation plus one translation. Left/Right arrows step through the deck.
+    The flip animation is scoped to this page's template, so it stays local to
+    this activity and doesn't affect the rest of the app.
+    """
+    prefs = current_settings()
+    try:
+        cards = get_flashcards_by_topic(topic)
+        demo = False
+    except Exception:
+        # DB unreachable — fall back to the sample deck so the activity still
+        # renders (see _DEMO_DECK). TODO(#78): drop this branch with a real DB.
+        cards = _DEMO_DECK
+        demo = True
+    trans_field, trans_label = _deck_translation(prefs)
+    return render_template(
+        "cards.html", topic=topic, cards=cards,
+        trans_field=trans_field, trans_label=trans_label, demo=demo,
+    )
+
+
 @app.route("/flashcards/<topic>/delete/<int:card_id>", methods=["POST"])
 def delete_card(topic, card_id):
     """Delete one flashcard and return to its topic page."""
