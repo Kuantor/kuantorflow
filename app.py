@@ -1,4 +1,5 @@
 import inspect
+import json
 import os
 import re
 import sys
@@ -629,7 +630,7 @@ def index():
                     # content for review/editing, like the word lookup does.
                     entries, mht_content = parse_mht_preview(file.read(), topic=topic)
                     if not entries:
-                        message = "No 'word — explanation' lines found in that file."
+                        message = "No vocabulary entries found in that file."
                     else:
                         proposed = entries
                         proposed_topic = topic
@@ -663,6 +664,20 @@ def add_card():
     def cleaned(field):
         return (request.form.get(field) or "").strip() or None
 
+    def json_list(field):
+        # Examples travel as a hidden JSON array (e.g. from the Reverso parser,
+        # issue #134), so they survive the review popup instead of being lost.
+        raw = (request.form.get(field) or "").strip()
+        if not raw:
+            return None
+        try:
+            value = json.loads(raw)
+        except (ValueError, TypeError):
+            return None
+        items = [str(x).strip() for x in value if str(x).strip()] \
+            if isinstance(value, list) else []
+        return items or None
+
     word = cleaned("word")
     if not word:
         return {"ok": False, "error": "word is required"}, 400
@@ -671,8 +686,11 @@ def add_card():
         "pos": cleaned("pos"),
         "topic": cleaned("topic") or "general",
         "explanation_en": cleaned("explanation_en"),
+        "examples_en": json_list("examples_en"),
         "translation_ukr": cleaned("translation_ukr"),
+        "examples_ukr": json_list("examples_ukr"),
         "translation_rus": cleaned("translation_rus"),
+        "examples_rus": json_list("examples_rus"),
     }
     if save_flashcard(entry) is None:  # duplicate word+pos (issue #101)
         return {"ok": True, "saved": False, "duplicate": True}

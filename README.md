@@ -12,6 +12,12 @@ It transforms notes, dictionary lookups, and study materials into interactive ac
 - Store words with **English explanations** and optional **Ukrainian/Russian translations**.
 - Add **examples in multiple languages** to show real usage.
 - Upload notes (e.g. `.mht` files from OneNote) and convert them into structured learning entries.
+- **Reverso copy-pastes** (#134): `.mht` notes that are OneNote copy-pastes of
+  Reverso dictionary entries are auto-detected and parsed richly — one card per
+  word + part of speech (senses aggregated), with English explanation, usage
+  examples, and translations. Reverso glues the translation terms together with
+  no separators, so Claude splits them back into individual terms (multi-word
+  phrases kept intact); without an API key the line is kept whole.
 - Organize flashcards by topic for easy browsing.
 - Browse a topic as a **card deck** (#78) — a Quizlet-style activity where one
   card shows at a time, you flip it to reveal the explanation and translation,

@@ -101,6 +101,11 @@
                                 <input type="hidden" name="word" value="{{ card.word }}">
                                 <input type="hidden" name="pos" value="{{ card.pos or '' }}">
                                 <input type="hidden" name="topic" value="{{ proposed_topic }}">
+                                {# Examples (e.g. from the Reverso parser, #134) ride along as
+                                   hidden JSON so they are saved with the card. #}
+                                {% if card.examples_en %}<input type="hidden" name="examples_en" value="{{ card.examples_en | tojson | forceescape }}">{% endif %}
+                                {% if card.examples_ukr %}<input type="hidden" name="examples_ukr" value="{{ card.examples_ukr | tojson | forceescape }}">{% endif %}
+                                {% if card.examples_rus %}<input type="hidden" name="examples_rus" value="{{ card.examples_rus | tojson | forceescape }}">{% endif %}
                                 <label>English explanation</label>
                                 <textarea name="explanation_en" rows="2">{{ card.explanation_en or '' }}</textarea>
                                 {# A hidden language's translation still travels as a hidden
