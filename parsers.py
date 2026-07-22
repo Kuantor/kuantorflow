@@ -4,6 +4,7 @@ exports) into flashcard entry dictionaries ready for utils.save_flashcard().
 """
 
 import email
+import json
 import re
 import time
 from email import policy
@@ -583,6 +584,179 @@ def _readable_text(soup):
     return "\n".join(lines)
 
 
+# --- Reverso copy-paste parsing (issue #134) --------------------------------
+# OneNote .mht copy-pastes of Reverso dictionary entries have a fixed,
+# colour-coded structure (one <p> per line):
+#   <word> <POS ru/uk>     header — the POS <span> is coloured REVERSO_POS_COLOUR
+#   N.                     sense marker
+#   (context) English def  explanation   (#222C31)
+#   English usage sentence example       (#546D79)
+#   Cyrillic translation   ex_tr         (#0A6CC2)
+#   концатенированные      translations  (#2E3C43) — glued together, no spaces
+# One card is built per word+POS with all senses aggregated. The glued
+# translation terms can't be split from the markup, so Claude splits them (per
+# the issue); without an API key the whole line is kept as a single term.
+
+REVERSO_POS_COLOUR = "#607D8B"
+REVERSO_LINE_COLOURS = {
+    "#0A6CC2": "ex_tr", "#2E3C43": "translations",
+    "#222C31": "explanation", "#546D79": "example",
+}
+REVERSO_POS_MAP = {
+    "существительное": "noun", "прилагательное": "adjective", "глагол": "verb",
+    "наречие": "adverb", "местоимение": "pronoun", "предлог": "preposition",
+    "союз": "conjunction", "числительное": "numeral",
+    "междометие": "interjection", "причастие": "participle",
+    "іменник": "noun", "прикметник": "adjective", "дієслово": "verb",
+    "прислівник": "adverb", "займенник": "pronoun", "прийменник": "preposition",
+    "сполучник": "conjunction", "числівник": "numeral",
+    "вигук": "interjection", "дієприкметник": "participle",
+}
+_UK_ONLY = set("іїєґ")
+_RU_ONLY = set("ыэъё")
+SPLIT_MODEL = "claude-haiku-4-5-20251001"
+
+
+def _p_colour(el):
+    m = re.search(r"color:(#[0-9A-Fa-f]{6})", el.get("style") or "")
+    return m.group(1).upper() if m else ""
+
+
+def _reverso_header(p):
+    """(word, pos_raw) if this <p> is a Reverso word/POS header, else None."""
+    for s in p.find_all("span"):
+        if _p_colour(s) == REVERSO_POS_COLOUR:
+            pos = s.get_text(" ", strip=True)
+            text = " ".join(p.get_text(" ", strip=True).split())
+            word = text[: text.rfind(pos)].strip() if pos and pos in text else ""
+            return (word, pos) if word and pos else None
+    return None
+
+
+def _looks_like_reverso(soup):
+    return any(_reverso_header(p) for p in soup.find_all("p"))
+
+
+def _clean_explanation(text):
+    # get_text(" ") pads the italic "(context)" span -> "( context )"; tidy it.
+    return re.sub(r"\(\s+", "(", re.sub(r"\s+\)", ")", text)).strip()
+
+
+def _reverso_entries(soup):
+    """[{word, pos_raw, senses:[{explanation, example, ex_tr, translations}]}]."""
+    entries, entry, sense = [], None, None
+    for p in soup.find_all("p"):
+        text = " ".join(p.get_text(" ", strip=True).split())
+        if not text:
+            continue
+        header = _reverso_header(p)
+        if header:
+            entry = {"word": header[0], "pos_raw": header[1], "senses": []}
+            entries.append(entry)
+            sense = None
+            continue
+        if entry is None:
+            continue
+        if re.match(r"^\d+\.$", text):
+            sense = {"explanation": None, "example": None,
+                     "ex_tr": None, "translations": None}
+            entry["senses"].append(sense)
+            continue
+        if sense is None:
+            continue
+        field = REVERSO_LINE_COLOURS.get(_p_colour(p))
+        if field and sense.get(field) is None:
+            sense[field] = _clean_explanation(text) if field == "explanation" else text
+    return [e for e in entries if e["senses"]]
+
+
+def _detect_cyrillic_lang(*texts):
+    joined = " ".join(t for t in texts if t).lower()
+    if any(ch in _UK_ONLY for ch in joined):
+        return "ukr"
+    if any(ch in _RU_ONLY for ch in joined):
+        return "rus"
+    return None
+
+
+def _split_glued_translations(strings):
+    """Split each glued Reverso translation string into its terms with Claude
+    (#134) — multi-word phrases stay together. Any failure (no API key,
+    offline, malformed reply) falls back to keeping the whole string as one
+    term, so parsing never breaks."""
+    strings = [s for s in dict.fromkeys(strings) if s]
+    fallback = {s: [s] for s in strings}
+    if not strings:
+        return {}
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+        numbered = "\n".join(f"{i}. {s}" for i, s in enumerate(strings))
+        prompt = (
+            "Below are lists of dictionary translations copied from Reverso. In "
+            "each line the individual translation terms were concatenated "
+            "without any separator. Split each line into its distinct "
+            "translation terms. A term may itself be a multi-word phrase (e.g. "
+            "'верховный правитель') — keep such phrases together. Do not "
+            "invent, translate, reorder or drop anything; only insert the "
+            "boundaries. Reply with ONLY a JSON object mapping each line number "
+            '(as a string) to an array of terms, e.g. {"0": ["term1", '
+            '"term2"]}.\n\n' + numbered
+        )
+        msg = client.messages.create(
+            model=SPLIT_MODEL, max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = "".join(b.text for b in msg.content if b.type == "text").strip()
+        raw = re.sub(r"^```(?:json)?|```$", "", raw, flags=re.MULTILINE).strip()
+        data = json.loads(raw)
+        result = dict(fallback)
+        for k, v in data.items():
+            terms = [t.strip() for t in v if isinstance(t, str) and t.strip()]
+            if terms and 0 <= int(k) < len(strings):
+                result[strings[int(k)]] = terms
+        return result
+    except Exception:
+        return fallback
+
+
+def _reverso_cards(entries, topic):
+    """One card per word+POS, senses aggregated; glued translations AI-split."""
+    splits = _split_glued_translations(
+        [s["translations"] for e in entries for s in e["senses"]
+         if s["translations"]]
+    )
+    cards = []
+    for e in entries:
+        pos = REVERSO_POS_MAP.get(e["pos_raw"].strip().lower(), "other")
+        expl, ex_en, ex_tr, terms, hints = [], [], [], [], []
+        for s in e["senses"]:
+            if s["explanation"]:
+                expl.append(s["explanation"])
+            if s["example"]:
+                ex_en.append(s["example"])
+            if s["ex_tr"]:
+                ex_tr.append(s["ex_tr"])
+                hints.append(s["ex_tr"])
+            if s["translations"]:
+                hints.append(s["translations"])
+                for t in splits.get(s["translations"], [s["translations"]]):
+                    if t not in terms:
+                        terms.append(t)
+        lang = _detect_cyrillic_lang(*hints) or "rus"
+        card = {"word": e["word"], "pos": pos, "topic": topic}
+        if expl:
+            card["explanation_en"] = "; ".join(expl)
+        if ex_en:
+            card["examples_en"] = ex_en
+        if terms:
+            card[f"translation_{lang}"] = ", ".join(terms)
+        if ex_tr:
+            card[f"examples_{lang}"] = ex_tr
+        cards.append(card)
+    return cards
+
+
 def parse_mht_file(data, topic=None):
     """
     Parse an .mht (MIME HTML, e.g. OneNote export) file and extract flashcard
@@ -598,7 +772,15 @@ def parse_mht_preview(data, topic=None):
     Like parse_mht_file, but also return the file's readable text so the UI can
     show the source alongside the parsed cards for review before saving.
 
+    Reverso dictionary copy-pastes (issue #134) are detected and parsed with
+    the richer Reverso parser (POS, senses, examples, AI-split translations);
+    any other notes fall back to the 'word — explanation' line parser.
+
     Returns (entries, source_text).
     """
     soup = _mht_soup(data)
-    return _entries_from_soup(soup, topic), _readable_text(soup)
+    if _looks_like_reverso(soup):
+        entries = _reverso_cards(_reverso_entries(soup), topic)
+    else:
+        entries = _entries_from_soup(soup, topic)
+    return entries, _readable_text(soup)
