@@ -92,6 +92,23 @@ def save_flashcard(entry):
         conn.close()
 
 
+def flashcard_word_exists(word):
+    """
+    True if any flashcard already has this word (issue #145) — used to warn on
+    lookup, before the review dialog. Matching follows the column collation
+    (case-insensitive by default), so 'Run' and 'run' count as the same word.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM flashcards WHERE word = %s LIMIT 1", (word,))
+        exists = cursor.fetchone() is not None
+        cursor.close()
+        return exists
+    finally:
+        conn.close()
+
+
 def delete_flashcard(card_id):
     """
     Delete a flashcard by id.

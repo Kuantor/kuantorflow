@@ -76,6 +76,39 @@
         </form>
     </div>
 
+    {% if duplicate_warning %}
+        {# Early duplicate warning (#145): the word already has cards, so ask
+           before running the lookup and opening the review dialog. #}
+        <div class="modal-overlay" id="dup-warning-modal">
+            <div class="modal modal-dialog">
+                <p>You already have card(s) for “<strong>{{ duplicate_warning }}</strong>” in
+                   the database. Look it up and add cards anyway?</p>
+                <form method="POST" class="modal-actions">
+                    <input type="hidden" name="action" value="parse_word">
+                    <input type="hidden" name="word" value="{{ duplicate_warning }}">
+                    <input type="hidden" name="topic" value="{{ proposed_topic }}">
+                    <input type="hidden" name="force_lookup" value="1">
+                    <button type="submit">Look up anyway</button>
+                    <button type="button" class="secondary" id="dup-warning-cancel">Cancel</button>
+                </form>
+            </div>
+        </div>
+        <script>
+            (function () {
+                var overlay = document.getElementById("dup-warning-modal");
+                if (!overlay) return;
+                function close() { overlay.hidden = true; }
+                document.getElementById("dup-warning-cancel").addEventListener("click", close);
+                overlay.addEventListener("click", function (e) {
+                    if (e.target === overlay) close();
+                });
+                document.addEventListener("keydown", function (e) {
+                    if (e.key === "Escape" && !overlay.hidden) close();
+                });
+            })();
+        </script>
+    {% endif %}
+
     {% if proposed %}
         <div class="modal-overlay" id="proposal-modal">
             <div class="modal modal-dialog proposal-dialog{% if mht_content %} proposal-dialog--mht{% endif %}">
