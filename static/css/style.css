@@ -186,12 +186,21 @@ button:hover { background: var(--blue-dark); }
 .lang-switch span { background: var(--yellow); color: #4a3a00; font-weight: 600; }
 
 /* Breadcrumbs / small links above titles */
-.crumbs { margin: 0 0 0.8rem; }
+/* Links menu shown as a blue rounded panel (#142) — shared by the flashcards,
+   card-deck and quiz pages. */
+.crumbs {
+    display: inline-block;
+    margin: 0 0 1rem;
+    padding: 0.5rem 1.1rem;
+    background: var(--blue);
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    color: rgba(255, 255, 255, 0.7);   /* the "|" separators */
+    font-size: 0.92rem;
+}
 .crumbs a {
     color: #fff;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
     text-decoration: none;
-    font-size: 0.92rem;
 }
 .crumbs a:hover { color: var(--yellow); }
 
