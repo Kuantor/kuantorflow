@@ -27,6 +27,7 @@ import settings_store
 from parsers import lookup_word, parse_mht_preview
 from utils import (
     delete_flashcard,
+    flashcard_word_exists,
     get_db_connection,
     get_flashcards_by_topic,
     get_topics,
@@ -148,6 +149,15 @@ def current_settings():
     file, or the shared default config for anonymous visitors. Always returns a
     complete, valid dict — a missing or corrupt file falls back to defaults."""
     return settings_store.load(_current_email())
+
+
+def _word_already_saved(word):
+    """Whether the word already has cards (issue #145). A DB error is treated
+    as 'unknown' → no warning, so lookups keep working when the DB is down."""
+    try:
+        return flashcard_word_exists(word)
+    except Exception:
+        return False
 
 
 def _hidden_languages():
@@ -582,6 +592,7 @@ def index():
     proposed = None
     proposed_topic = None
     mht_content = None  # readable text of an uploaded .mht, shown beside its cards
+    duplicate_warning = None  # the word to warn about before looking it up (#145)
     if request.method == "POST":
         action = request.form.get("action")
         topic = (request.form.get("topic") or "general").strip() or "general"
@@ -590,6 +601,11 @@ def index():
                 word = (request.form.get("word") or "").strip()
                 if not word:
                     message = "Please enter a word."
+                elif not request.form.get("force_lookup") and _word_already_saved(word):
+                    # Early duplicate warning (#145): the word already has
+                    # cards, so ask before the (slow) lookup and review dialog.
+                    duplicate_warning = word
+                    proposed_topic = topic
                 else:
                     prefs = current_settings()
                     entries = lookup_word(
@@ -651,7 +667,7 @@ def index():
     return render_template(
         "index.html", message=message, topics=topics,
         proposed=proposed, proposed_topic=proposed_topic,
-        mht_content=mht_content,
+        mht_content=mht_content, duplicate_warning=duplicate_warning,
     )
 
 
