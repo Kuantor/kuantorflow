@@ -67,65 +67,71 @@ The remaining Highest-Prio settings items all landed:
 1. **`tojson` needs `forceescape` inside an HTML attribute.** Its output is HTML-safe for text nodes but its literal `"` characters break a double-quoted attribute value.
 2. **Design for the degraded path first.** Both the AI translation split and the duplicate warning were built to work with no API key / no database, which also made them trivial to test offline.
 3. **Confirm destructive-looking actions, but keep them cheap.** New Chat and Reset Auth both got Yes/No dialogs; neither is actually destructive (chats stay logged, settings files survive), which is worth stating in the copy so users aren't scared off.
-4. **The project board isn't machine-readable without the scope.** Reading the "KuantorFlow Improvements" board needs the GitHub `project` token scope, which the current credential lacks — so this week's plan below is grouped from the open issues by theme rather than by board column.
+4. **Board access needs the right token.** Reading the "KuantorFlow Improvements" board needs the GitHub `project` scope; it lives on the `gh` CLI's own keyring login, so the board is queried with `gh`'s auth rather than the repo PAT used for pushes. With that in place, the plan below reflects the real board columns.
 
 ---
 
 ## Plans for Next Week
 
-*Grouped from the open issues across the three repositories. The precise
-"Highest Prio / Nice To Have" board columns could not be read this time (the
-credential lacks the GitHub `project` scope), so the grouping below is by
-theme.*
+*Taken from the **KuantorFlow Improvements** GitHub Projects board
+([dashboard](https://github.com/users/Kuantor/projects/2)), in board-column
+order: Highest Prio and Nice To Have first, then In Progress and Todo.*
 
-### Content & note import
+### Highest Prio
 
 | Repo | Issue | Title |
 |---|---|---|
+| kuantorflow | [#30](https://github.com/Kuantor/kuantorflow/issues/30) | Create logs for various actions in the app |
+| kuantorflow | [#45](https://github.com/Kuantor/kuantorflow/issues/45) | UI: enhance behaviour of MHT-processing results window |
+| kuantorflow | [#100](https://github.com/Kuantor/kuantorflow/issues/100) | Quiz: treat perfective/imperfective answers as equal (AI) |
 | kuantorflow | [#137](https://github.com/Kuantor/kuantorflow/issues/137) | Upload notes: support .txt and .docx besides .mht |
+| kuantorflow | [#138](https://github.com/Kuantor/kuantorflow/issues/138) | Develop engaging flashcard topics for the online database |
 | kuantorflow | [#144](https://github.com/Kuantor/kuantorflow/issues/144) | Add Ukrainian/Russian translations after parsing MHT files |
-| kuantorflow | [#136](https://github.com/Kuantor/kuantorflow/issues/136) | Images on flashcards (files on disk, path in MySQL) |
-| kuantorflow | [#147](https://github.com/Kuantor/kuantorflow/issues/147) | More accurate classification of words in the "General" topic |
-| kuantorflow | [#140](https://github.com/Kuantor/kuantorflow/issues/140) | [Optional] Upload notes: support .pdf (text-layer) |
+| kuantorflow | [#146](https://github.com/Kuantor/kuantorflow/issues/146) | Common "Cancel" cross for closing the new-card popup |
+| kuantorflow | [#147](https://github.com/Kuantor/kuantorflow/issues/147) | More accurate classification of words in the "General" topic + AI |
+| ai_agent | [#19](https://github.com/Kuantor/ai_agent/issues/19) | Teach Mykola to complement/extend card meanings |
+| ai_agent | [#54](https://github.com/Kuantor/ai_agent/issues/54) | Restart Mykola's conversations frequently |
 
-### New study modes & word games
+### Nice To Have
 
 | Repo | Issue | Title |
 |---|---|---|
-| kuantorflow | [#94](https://github.com/Kuantor/kuantorflow/issues/94) / [#92](https://github.com/Kuantor/kuantorflow/issues/92) | Spaced-repetition review mode (SM-2) |
+| kuantorflow | [#22](https://github.com/Kuantor/kuantorflow/issues/22) | Redesign website for a modern look |
+| kuantorflow | [#92](https://github.com/Kuantor/kuantorflow/issues/92) / [#94](https://github.com/Kuantor/kuantorflow/issues/94) | Spaced-repetition review mode (SM-2) |
+| kuantorflow | [#93](https://github.com/Kuantor/kuantorflow/issues/93) | Complete multi-user card ownership |
+| kuantorflow | [#125](https://github.com/Kuantor/kuantorflow/issues/125) | Deny unauthorized users to add/change/delete words |
+| kuantorflow | [#126](https://github.com/Kuantor/kuantorflow/issues/126) | Blacklist file for blocking users |
 | kuantorflow | [#127](https://github.com/Kuantor/kuantorflow/issues/127) | Create "Individual" cards mode |
 | kuantorflow | [#129](https://github.com/Kuantor/kuantorflow/issues/129) | Smart word-manipulation techniques for exercises (spike) |
-| kuantorflow | [#130](https://github.com/Kuantor/kuantorflow/issues/130) / [#131](https://github.com/Kuantor/kuantorflow/issues/131) | Levenshtein / keyboard-adjacency MCQ distractors |
-| kuantorflow | [#132](https://github.com/Kuantor/kuantorflow/issues/132) / [#133](https://github.com/Kuantor/kuantorflow/issues/133) | "Is this a real word?" & typoglycemia modes |
-| kuantorflow | [#100](https://github.com/Kuantor/kuantorflow/issues/100) | Quiz: treat perfective/imperfective answers as equal (AI) |
+| kuantorflow | [#136](https://github.com/Kuantor/kuantorflow/issues/136) | Images on flashcards (files on disk, path in MySQL) |
+| kuantorflow | [#139](https://github.com/Kuantor/kuantorflow/issues/139) | Delete-word request to the admin |
+| kuantorflow | [#85](https://github.com/Kuantor/kuantorflow/issues/85) | Full-screen widget mode with visible maximize button |
+| kuantorflow | [#88](https://github.com/Kuantor/kuantorflow/issues/88) / [#89](https://github.com/Kuantor/kuantorflow/issues/89) / [#90](https://github.com/Kuantor/kuantorflow/issues/90) | Backup docs / added-by field / logs disclosure |
+| kuantorflow | [#99](https://github.com/Kuantor/kuantorflow/issues/99) / [#104](https://github.com/Kuantor/kuantorflow/issues/104) | API-credits message / Allura welcome font |
+| ai_agent | [#51](https://github.com/Kuantor/ai_agent/issues/51) / [#56](https://github.com/Kuantor/ai_agent/issues/56) / [#57](https://github.com/Kuantor/ai_agent/issues/57) / [#58](https://github.com/Kuantor/ai_agent/issues/58) | Nicknames / bigger avatar / add-card confirm / save conversation |
+| kuantorflow_automation | [#4](https://github.com/Kuantor/kuantorflow_automation/issues/4) | Basic automated tests for the Mykola AI agent |
 
-### Multi-user, admin & security
+### In Progress — a new "word games" cluster
 
 | Repo | Issue | Title |
 |---|---|---|
-| kuantorflow | [#125](https://github.com/Kuantor/kuantorflow/issues/125) | Deny unauthorized users to add/change/delete words |
+| kuantorflow | [#130](https://github.com/Kuantor/kuantorflow/issues/130) | Levenshtein multiple-choice translation game |
+| kuantorflow | [#131](https://github.com/Kuantor/kuantorflow/issues/131) | Keyboard-adjacency typo distractors (MCQ) |
+| kuantorflow | [#132](https://github.com/Kuantor/kuantorflow/issues/132) | "Is this a real word?" (n-gram pseudowords) |
+| kuantorflow | [#133](https://github.com/Kuantor/kuantorflow/issues/133) | Typoglycemia scrambling mode |
+| kuantorflow | [#110](https://github.com/Kuantor/kuantorflow/issues/110) | Investigation: Learner's vs Collegiate dictionary (+ M-W API) |
+
+### Todo (selected)
+
+| Repo | Issue | Title |
+|---|---|---|
+| kuantorflow | [#74](https://github.com/Kuantor/kuantorflow/issues/74) | Dark theme for the website |
+| kuantorflow | [#25](https://github.com/Kuantor/kuantorflow/issues/25) | Export/import cards (local ↔ remote DB) |
 | kuantorflow | [#148](https://github.com/Kuantor/kuantorflow/issues/148) | IDs for users |
-| kuantorflow | [#93](https://github.com/Kuantor/kuantorflow/issues/93) | Complete multi-user card ownership |
-| kuantorflow | [#126](https://github.com/Kuantor/kuantorflow/issues/126) / [#139](https://github.com/Kuantor/kuantorflow/issues/139) | Blacklist file / delete-request to admin |
-
-### Mykola (ai_agent)
-
-| Repo | Issue | Title |
-|---|---|---|
-| ai_agent | [#57](https://github.com/Kuantor/ai_agent/issues/57) | Confirmation popup for Mykola adding cards |
-| ai_agent | [#19](https://github.com/Kuantor/ai_agent/issues/19) | Teach Mykola to complement/extend card meanings |
-| ai_agent | [#56](https://github.com/Kuantor/ai_agent/issues/56) | Make Mykola's avatar bigger |
-| ai_agent | [#58](https://github.com/Kuantor/ai_agent/issues/58) | Save the conversation to a file |
-
-### UI polish & investigations
-
-| Repo | Issue | Title |
-|---|---|---|
-| kuantorflow | [#146](https://github.com/Kuantor/kuantorflow/issues/146) | Common "Cancel" cross for closing the new-card popup |
 | kuantorflow | [#120](https://github.com/Kuantor/kuantorflow/issues/120) | Pin the Settings close button while the dialog scrolls |
-| kuantorflow | [#22](https://github.com/Kuantor/kuantorflow/issues/22) / [#74](https://github.com/Kuantor/kuantorflow/issues/74) | Website redesign / dark theme |
-| kuantorflow | [#54](https://github.com/Kuantor/kuantorflow/issues/54) | Android app (investigation — repo, board & sub-tasks created) |
-| kuantorflow | [#110](https://github.com/Kuantor/kuantorflow/issues/110) | Merriam-Webster free API (blocked-on-PA workaround) |
+| kuantorflow | [#140](https://github.com/Kuantor/kuantorflow/issues/140) | [Optional] Upload notes: support .pdf (text-layer) |
+| kuantorflow | [#19](https://github.com/Kuantor/kuantorflow/issues/19) / [#75](https://github.com/Kuantor/kuantorflow/issues/75) / [#76](https://github.com/Kuantor/kuantorflow/issues/76) / [#84](https://github.com/Kuantor/kuantorflow/issues/84) | Tutorial tip / About-popup overlap / scheduled recaps / dim welcome |
+| ai_agent | [#47](https://github.com/Kuantor/ai_agent/issues/47) / [#49](https://github.com/Kuantor/ai_agent/issues/49) / [#50](https://github.com/Kuantor/ai_agent/issues/50) | Widget-code audit / last-logs setting / faster Mykola |
 
 ---
 
