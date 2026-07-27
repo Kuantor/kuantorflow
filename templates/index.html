@@ -28,17 +28,18 @@
     </div>
 
     <div class="panel">
-        <h2>Upload notes (.mht)</h2>
+        <h2>Upload notes (.txt, .docx, .mht)</h2>
         <form method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="action" value="upload_mht">
+            <input type="hidden" name="action" value="upload_notes">
             <div class="form-row">
                 <div>
-                    <label for="mht-file">File</label>
-                    <input type="file" id="mht-file" name="mht_file" accept=".mht,.mhtml" required>
+                    <label for="notes-file">File</label>
+                    <input type="file" id="notes-file" name="notes_file"
+                           accept=".txt,.docx,.mht,.mhtml" required>
                 </div>
                 <div>
-                    <label for="mht-topic">Topic</label>
-                    <input type="text" id="mht-topic" name="topic" placeholder="general">
+                    <label for="notes-topic">Topic</label>
+                    <input type="text" id="notes-topic" name="topic" placeholder="general">
                 </div>
             </div>
             <button type="submit">Upload &amp; save</button>
@@ -111,7 +112,7 @@
 
     {% if proposed %}
         <div class="modal-overlay" id="proposal-modal">
-            <div class="modal modal-dialog proposal-dialog{% if mht_content %} proposal-dialog--mht{% endif %}">
+            <div class="modal modal-dialog proposal-dialog{% if source_content %} proposal-dialog--source{% endif %}">
                 {# One cross for the whole popup (#146): closes it and drops every
                    card that wasn't added individually. The small crosses on the
                    cards themselves only remove that one card. #}
@@ -119,17 +120,17 @@
                         aria-label="Close and discard the remaining cards"
                         title="Close and discard the remaining cards">&times;</button>
                 <p class="proposal-title">
-                    {% if mht_content %}Review the cards parsed from your file{% else %}Do you want to add the card(s) to the database?{% endif %}
+                    {% if source_content %}Review the cards parsed from your file{% else %}Do you want to add the card(s) to the database?{% endif %}
                 </p>
                 <div class="proposal-body">
-                    {% if mht_content %}
+                    {% if source_content %}
                         <div class="proposal-source">
                             <h3 class="proposal-pane-title">File content</h3>
-                            <pre>{{ mht_content }}</pre>
+                            <pre>{{ source_content }}</pre>
                         </div>
                     {% endif %}
                     <div class="modal-scroll proposal-cards-pane">
-                        {% if mht_content %}<h3 class="proposal-pane-title">Cards to add ({{ proposed|length }})</h3>{% endif %}
+                        {% if source_content %}<h3 class="proposal-pane-title">Cards to add ({{ proposed|length }})</h3>{% endif %}
                         {% for card in proposed %}
                             <form class="proposal-card" data-add-url="{{ url_for('add_card') }}">
                                 <button type="button" class="card-delete proposal-remove"
@@ -167,7 +168,7 @@
                         {% endfor %}
                     </div>
                 </div>
-                {% if mht_content %}
+                {% if source_content %}
                     <div class="proposal-footer">
                         <button type="button" id="proposal-add-all" class="add-btn">Add All</button>
                     </div>
@@ -286,7 +287,7 @@
                 var btn = form.querySelector("button[type=submit]");
                 var labels = {
                     parse_word: "Looking up…",
-                    upload_mht: "Uploading…",
+                    upload_notes: "Uploading…",
                     test_db: "Testing…"
                 };
                 var action = (form.querySelector("input[name=action]") || {}).value;

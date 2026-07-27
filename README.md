@@ -11,13 +11,20 @@ It transforms notes, dictionary lookups, and study materials into interactive ac
 ## 🚀 Features
 - Store words with **English explanations** and optional **Ukrainian/Russian translations**.
 - Add **examples in multiple languages** to show real usage.
-- Upload notes (e.g. `.mht` files from OneNote) and convert them into structured learning entries.
-- **Reverso copy-pastes** (#134): `.mht` notes that are OneNote copy-pastes of
-  Reverso dictionary entries are auto-detected and parsed richly — one card per
+- Upload notes as **`.txt`, `.docx` or `.mht`** (#137) — plain text, Word
+  documents and OneNote exports alike — and convert them into structured
+  learning entries. Simple `word — explanation` lines work in every format; a
+  Cyrillic right-hand side (`pursuit - преследование`) is stored as a
+  translation rather than an explanation.
+- **Reverso copy-pastes** (#134/#137): notes that are copy-pastes of Reverso
+  dictionary entries are auto-detected and parsed richly — one card per
   word + part of speech (senses aggregated), with English explanation, usage
-  examples, and translations. Reverso glues the translation terms together with
-  no separators, so Claude splits them back into individual terms (multi-word
-  phrases kept intact); without an API key the line is kept whole.
+  examples, and translations. `.mht` and `.docx` are recognised by Reverso's
+  colour coding, plain text by its layout. Reverso glues the translation terms
+  together with no separators, so Claude splits them back into individual terms
+  (multi-word phrases kept intact); without an API key the line is kept whole.
+  Plain text lists the terms one per line, so it needs no splitting at all.
+  One file may mix Reverso blocks and simple lines.
 - Organize flashcards by topic for easy browsing.
 - Browse a topic as a **card deck** (#78) — a Quizlet-style activity where one
   card shows at a time, you flip it to reveal the explanation and translation,
@@ -151,7 +158,7 @@ read-only (#102):
 - **Add cards automatically** (#13, off by default) — when on, *Look up &
   save* writes the parsed cards straight to the database and shows the usual
   green confirmation banner; when off, the review-before-save popup opens as
-  before. `.mht` uploads always go through review, since editing the parsed
+  before. Notes uploads always go through review, since editing the parsed
   lines is the point of that popup.
 - **Translation (ENG → UKR/RUS)** (#20) — *Google Translate* or *Bing
   Translator*.
