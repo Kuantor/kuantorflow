@@ -3,6 +3,20 @@
    Art" wallpaper); the gradient below matches its palette and shows while
    the image loads or if it is missing. */
 
+/* Allura (Google Fonts, SIL Open Font License 1.1), self-hosted in
+   static/fonts/ — no third-party request, and the site keeps working behind
+   the keyword gate offline. Used for one thing only: the welcome heading
+   (#104). woff2 first, woff for older browsers; font-display: swap so the
+   heading is readable in the fallback face while the file loads. */
+@font-face {
+    font-family: "Allura";
+    src: url("../fonts/Allura-Regular.woff2") format("woff2"),
+         url("../fonts/Allura-Regular.woff") format("woff");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
     --blue: #2e6ba0;
     --blue-dark: #245680;
@@ -67,6 +81,19 @@ body {
     color: #fff;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
     margin: 0.5rem 0 1.2rem;
+}
+/* The welcome heading only (#104) — the topic/quiz titles stay in the body
+   face. Allura is a script: it reads much smaller than a sans at the same
+   size, so it needs its own scale and a little breathing room. */
+.page-title--welcome {
+    font-family: "Allura", cursive;
+    font-weight: 400;
+    font-size: clamp(2.6rem, 7vw, 4rem);
+    line-height: 1.15;
+    letter-spacing: 0.01em;
+    /* the descenders of a script face clip against a tight line box */
+    padding-bottom: 0.15em;
+    margin-bottom: 1rem;
 }
 .site-footer {
     text-align: center;

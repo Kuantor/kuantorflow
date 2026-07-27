@@ -268,7 +268,7 @@ kuantorflow/
 ├── README.md           # Project documentation
 ├── .gitignore          # Ignore secrets, venv, cache files
 ├── templates/          # HTML templates (index.html, flashcards.html, quiz.html)
-├── static/             # CSS, JS, images
+├── static/             # CSS, JS, images, fonts (self-hosted Allura, #104)
 ├── logs/               # Action logs (gitignored, created at runtime)
 ├── settings/           # Per-identity config JSON (gitignored, created at runtime)
 └── uploads/            # Uploaded MHT files (optional)

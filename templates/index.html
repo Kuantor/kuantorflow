@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1 class="page-title">Welcome to KuantorFlow</h1>
+    {# Allura script face for the welcome line only (#104). #}
+    <h1 class="page-title page-title--welcome">Welcome to KuantorFlow</h1>
 
     {% if message %}
         <div class="banner error"><strong>{{ message }}</strong></div>
