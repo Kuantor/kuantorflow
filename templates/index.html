@@ -112,6 +112,12 @@
     {% if proposed %}
         <div class="modal-overlay" id="proposal-modal">
             <div class="modal modal-dialog proposal-dialog{% if mht_content %} proposal-dialog--mht{% endif %}">
+                {# One cross for the whole popup (#146): closes it and drops every
+                   card that wasn't added individually. The small crosses on the
+                   cards themselves only remove that one card. #}
+                <button type="button" class="modal-close" id="proposal-close"
+                        aria-label="Close and discard the remaining cards"
+                        title="Close and discard the remaining cards">&times;</button>
                 <p class="proposal-title">
                     {% if mht_content %}Review the cards parsed from your file{% else %}Do you want to add the card(s) to the database?{% endif %}
                 </p>
@@ -257,6 +263,10 @@
                         });
                     });
                 }
+
+                // The popup-wide cross (#146). Cards already added stay saved;
+                // the remaining ones were never sent, so closing cancels them.
+                document.getElementById("proposal-close").addEventListener("click", close);
 
                 overlay.addEventListener("click", function (e) {
                     if (e.target === overlay) close();

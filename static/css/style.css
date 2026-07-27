@@ -396,6 +396,12 @@ body.welcome-active {
 /* Lookup review popup (proposed cards) */
 .proposal-dialog { width: min(92vw, 560px); max-width: none; }
 .proposal-title { font-size: 1.1rem; font-weight: 600; margin: 0 0 1rem; }
+/* Popup-wide close cross (#146). Tucked inside the rounded corner rather than
+   overhanging it, since the dialog can sit close to the viewport edge; the
+   title keeps clear of it. Distinct (yellow, round) from the small grey
+   per-card crosses, which only drop a single card. */
+.proposal-dialog .modal-close { top: 0.55rem; right: 0.55rem; }
+.proposal-dialog .proposal-title { padding-right: 2.4rem; }
 .modal-scroll {
     max-height: 65vh;
     overflow-y: auto;
