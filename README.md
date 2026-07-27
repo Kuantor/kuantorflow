@@ -178,6 +178,15 @@ read-only (#102):
   in any visible language — this only sets the default. The toggle is greyed
   out while only one language is visible (the quiz then uses that language
   automatically), and it re-enables live as the checkboxes above change.
+- **Restart Mykola's chat after a break** (ai_agent#54) — a slider from 1 to
+  24 hours (default **2**). Come back after that long without writing and the
+  widget starts a fresh conversation: Mykola reviews your last three
+  exchanges, greets you back with a short recap of where you left off, and a
+  new chat-log file is opened. The **Never restart chat automatically**
+  checkbox beside it stores the interval as `0` and greys the slider out.
+  For signed-in learners the break is measured from their newest chat log, so
+  it follows them across devices; for anonymous visitors, from the browser
+  that holds the conversation.
 - **Reset Auth** (#98) — an action button under the settings (an *action*,
   not a setting: it stays enabled for anonymous visitors despite the #102
   read-only freeze). After a confirmation dialog it clears the whole

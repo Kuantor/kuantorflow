@@ -191,7 +191,7 @@ def _hidden_languages():
     return hidden
 
 
-def _agent_kwargs(method):
+def _agent_kwargs(method, away_hours=None):
     """kwargs for an agent call, holding only what the installed ai_agent
     version supports. Feature-detected so the chat keeps working even if the
     ai_agent side hasn't been updated yet."""
@@ -203,6 +203,10 @@ def _agent_kwargs(method):
     hidden = _hidden_languages()
     if hidden and "hidden_languages" in params:
         kwargs["hidden_languages"] = hidden
+    # ai_agent#54: how long the learner was silent, so a restart recap can
+    # open by acknowledging the break. Older agents simply don't take it.
+    if away_hours is not None and "away_hours" in params:
+        kwargs["away_hours"] = away_hours
     return kwargs
 
 
@@ -331,6 +335,80 @@ def _said_farewell_today() -> bool:
             newest.read_text(encoding="utf-8"))))
     except OSError:
         return False
+
+
+# One logged exchange starts with its "[YYYY-MM-DD HH:MM:SS]" stamp.
+EXCHANGE_RE = re.compile(r"^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]$", re.M)
+
+
+def _split_exchanges(text: str) -> list[str]:
+    """One chat-log file's text split into its individual exchanges."""
+    stamps = list(EXCHANGE_RE.finditer(text))
+    return [text[m.start():(stamps[i + 1].start() if i + 1 < len(stamps) else len(text))].strip()
+            for i, m in enumerate(stamps)]
+
+
+def _last_exchanges(count: int = 3) -> str:
+    """The signed-in user's last `count` exchanges with Mykola, oldest first.
+
+    The welcome-back recap (ai_agent#30) reviews whole log *files*; a restart
+    after a break reviews the last few *messages* (ai_agent#54), so it stays
+    focused on where the conversation actually stopped. '' when there is no
+    history (including every anonymous visitor, who has no per-user logs).
+    """
+    collected: list[str] = []
+    for path in _user_log_files():             # newest file first
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        # take this file's newest exchanges first, then walk further back
+        collected = _split_exchanges(text)[-(count - len(collected)):] + collected
+        if len(collected) >= count:
+            break
+    return "\n\n".join(collected[-count:])
+
+
+def _last_chat_activity() -> datetime | None:
+    """When the signed-in user last exchanged a message with Mykola, from the
+    newest log file's timestamp. None for anonymous visitors and newcomers."""
+    files = _user_log_files()
+    if not files:
+        return None
+    try:
+        return datetime.fromtimestamp(files[0].stat().st_mtime)
+    except OSError:
+        return None
+
+
+def _client_last_activity(raw) -> datetime | None:
+    """The widget's own 'last message' stamp (epoch milliseconds).
+
+    Anonymous visitors have no per-user logs, so their break can only be
+    measured from the browser that holds the conversation. Anything
+    unparseable — or in the future — is ignored (ai_agent#54).
+    """
+    try:
+        moment = datetime.fromtimestamp(float(raw) / 1000)
+    except (TypeError, ValueError, OSError, OverflowError):
+        return None
+    return moment if moment <= datetime.now() else None
+
+
+def _start_chat_log(chat_id: str, away_hours: float, recap: str | None) -> None:
+    """Open the restarted conversation's log file (ai_agent#54) with a note of
+    why it exists, so the break is visible in the history itself."""
+    log_path = _current_user_log_dir() / f"chat_{chat_id}.txt"
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(f"[{ts}]\n")
+            f.write("--- Chat restarted automatically after "
+                    f"{away_hours:.1f}h away ---\n")
+            if recap:
+                f.write("\nMykola:\n" + recap.strip() + "\n")
+    except OSError:
+        app.logger.exception("Could not start the restarted chat log")
 
 
 def _append_chat_log(chat_id: str, user_text: str, assistant_text: str) -> None:
@@ -587,6 +665,61 @@ def mykola_recap():
     except Exception:
         app.logger.exception("Mykola recap failed")
         return jsonify({"recap": None})
+
+
+@app.route("/mykola/restart-check", methods=["POST"])
+def mykola_restart_check():
+    """Should the widget's stale conversation be restarted? (ai_agent#54)
+
+    The widget asks on load, sending the moment of its own last message. A
+    break longer than the user's `restart_chat_interval` (hours; 0 = never)
+    starts a fresh chat: Mykola reviews the last three exchanges, a new
+    chat-log file is opened, and the widget is handed its id and his recap.
+
+    Like the recap endpoint, this is an optional nicety — every failure path
+    answers {"restart": false} so the chat simply carries on.
+    """
+    if not MYKOLA_AVAILABLE:
+        return jsonify({"restart": False, "reason": "unavailable"})
+    hours = current_settings()["restart_chat_interval"]
+    if not hours:
+        return jsonify({"restart": False, "reason": "disabled"})
+
+    data = request.get_json(silent=True) or {}
+    moments = [m for m in (_last_chat_activity(),
+                           _client_last_activity(data.get("last_message_at")))
+               if m is not None]
+    if not moments:
+        return jsonify({"restart": False, "reason": "no history"})
+    away_hours = (datetime.now() - max(moments)).total_seconds() / 3600
+    if away_hours < hours:
+        return jsonify({"restart": False, "away_hours": round(away_hours, 2)})
+
+    recap = _restart_recap(away_hours)
+    chat_id = _new_chat_id()
+    _start_chat_log(chat_id, away_hours, recap)
+    return jsonify({"restart": True, "away_hours": round(away_hours, 2),
+                    "chat_id": chat_id, "recap": recap})
+
+
+def _restart_recap(away_hours: float) -> str | None:
+    """Mykola's review of the last three exchanges, opening the restarted
+    chat. None whenever it can't be produced — anonymous visitors (no logs),
+    an older agent without recap(), or an API failure — in which case the
+    fresh chat simply starts from his usual greeting."""
+    agent = get_mykola()
+    if not hasattr(agent, "recap"):
+        return None
+    exchanges = _last_exchanges(3)
+    if not exchanges:
+        return None
+    try:
+        text = agent.recap(exchanges,
+                           **_agent_kwargs(agent.recap, away_hours=away_hours))
+        return text or None
+    except Exception:
+        app.logger.exception("Mykola restart recap failed")
+        return None
 
 
 @app.route("/topics.json")
