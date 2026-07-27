@@ -212,18 +212,55 @@ definitions is still useful, so definition failures never break a lookup.
 
 ---
 
+## 📝 Action logs (#30)
+
+`applog.py` writes a plain-text trail of what the app did into `logs/`
+(gitignored — runtime data, not source):
+
+| File | What lands there |
+|---|---|
+| `cards.log` | cards created, skipped as duplicates, edited, deleted — with the signed-in user's email, or `anonymous` |
+| `dict.log` | which translation and dictionary sites were used, how long each took, and every silent fallback |
+| `parsed_files.log` | `.txt` / `.docx` / `.mht` uploads: file, size, cards found, and the AI term-split |
+
+Every line is `<timestamp> ACTION key=value …`, so the logs stay greppable:
+
+```bash
+grep "word=brittle" logs/*.log
+grep "user=anonymous" logs/cards.log
+grep DELETE logs/cards.log
+```
+
+```
+2026-07-27 10:43:33 CREATE word=brittle pos=adjective topic=vocab id=68 langs=ukr source='review popup' user=anonymous
+2026-07-27 10:43:30 TRANSLATE word=brittle provider=google lang=uk pos_count=1 ms=107
+2026-07-27 10:43:37 PARSE file=LucidDream.txt bytes=403 cards=1 topic=vocab ms=0 user=anonymous
+```
+
+Files rotate every **30 days** (Python's timed handler has no calendar-month
+unit) and 12 rotations are kept, so a year of history is on disk; the live
+file keeps its plain name and rotations gain a date suffix
+(`cards.log.2026-08-26`). Archiving them is a separate task. Logging never
+breaks a user action — every helper swallows its own errors, so a full or
+read-only disk costs a log line, not a saved card. Set `KF_LOGS_DIR` to write
+them somewhere else.
+
+---
+
 ## 📂 Project Structure
 
 ```
 kuantorflow/
 ├── app.py              # Main Flask application (routes, views)
 ├── utils.py            # Database connection + helper functions
+├── applog.py           # Action logs written to logs/ (issue #30)
 ├── settings_store.py   # Per-user settings persisted as JSON (issue #86)
 ├── requirements.txt    # Python dependencies
 ├── README.md           # Project documentation
 ├── .gitignore          # Ignore secrets, venv, cache files
 ├── templates/          # HTML templates (index.html, flashcards.html, quiz.html)
 ├── static/             # CSS, JS, images
+├── logs/               # Action logs (gitignored, created at runtime)
 ├── settings/           # Per-identity config JSON (gitignored, created at runtime)
 └── uploads/            # Uploaded MHT files (optional)
 ```

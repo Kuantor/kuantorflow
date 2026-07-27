@@ -18,6 +18,8 @@ from urllib.parse import quote
 import requests
 from bs4 import BeautifulSoup
 
+import applog
+
 REVERSO_URL = "https://context.reverso.net/translation/english-{lang}/{word}"
 REVERSO_LANGS = {"ukr": "ukrainian", "rus": "russian"}
 DEFINITION_URL = "https://dictionary.reverso.net/english-definition/{word}"
@@ -387,6 +389,19 @@ def _dictionary_backend(explanatory_dictionary):
     }.get(explanatory_dictionary, _fetch_oxford_definitions)
 
 
+def _provider_name(backend):
+    """The site a backend actually talks to — what dict.log records (#30).
+    Resolved from the function so an unknown setting is logged as the provider
+    that really ran, not the one that was asked for."""
+    return {
+        _google_dictionary: "google",
+        _bing_dictionary: "bing",
+        _fetch_oxford_definitions: "oxford",
+        _fetch_merriam_webster_definitions: "merriam-webster",
+        _fetch_definitions: "reverso",
+    }.get(backend, getattr(backend, "__name__", "unknown"))
+
+
 def lookup_word(word, topic=None, translator="google", explanatory_dictionary="oxford"):
     """
     Build flashcard entries (English→Ukrainian and English→Russian) with the
@@ -400,19 +415,31 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     fallback; a lookup without definitions is still useful, so definition
     failures never break the lookup.
     """
+    overall = applog.Timer()
     fetch_translations = _translator_backend(translator)
+    primary = _provider_name(fetch_translations)
     cards = {}  # pos -> entry dict
 
     for key, code in GOOGLE_LANGS.items():
-        try:
-            pos_translations = fetch_translations(word, code)
-        except (requests.RequestException, ValueError):
-            pos_translations = {}
-        if not pos_translations and fetch_translations is not _google_dictionary:
+        error = None
+        with applog.Timer() as timer:
             try:
-                pos_translations = _google_dictionary(word, code)
-            except (requests.RequestException, ValueError):
-                pass
+                pos_translations = fetch_translations(word, code)
+            except (requests.RequestException, ValueError) as e:
+                pos_translations = {}
+                error = e
+        applog.translations_fetched(word, primary, code, len(pos_translations),
+                                    timer.ms, error=error)
+        if not pos_translations and fetch_translations is not _google_dictionary:
+            error = None
+            with applog.Timer() as timer:
+                try:
+                    pos_translations = _google_dictionary(word, code)
+                except (requests.RequestException, ValueError) as e:
+                    error = e
+            applog.translations_fetched(word, "google", code,
+                                        len(pos_translations), timer.ms,
+                                        fallback_from=primary, error=error)
         for pos, terms in pos_translations.items():
             entry = cards.setdefault(pos, {"word": word, "pos": pos, "topic": topic})
             entry[f"translation_{key}"] = ", ".join(terms)
@@ -423,22 +450,35 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
         cards.pop("other", None)
 
     if not cards:
+        applog.lookup_failed(word, "no translations")
         raise ValueError(f"No translations found for '{word}'")
 
     fetch_defs = _dictionary_backend(explanatory_dictionary)
-    try:
-        definitions = fetch_defs(word)
-    except (requests.RequestException, ValueError):
-        definitions = {}
-    if not definitions:
+    dictionary = _provider_name(fetch_defs)
+    error = None
+    with applog.Timer() as timer:
         try:
-            definitions = _fetch_definitions(word)
-        except requests.RequestException:
-            definitions = {}  # e.g. Reverso blocks datacenter IPs — skip quietly
+            definitions = fetch_defs(word)
+        except (requests.RequestException, ValueError) as e:
+            definitions = {}
+            error = e
+    applog.definitions_fetched(word, dictionary, len(definitions), timer.ms,
+                               error=error)
+    if not definitions:
+        error = None
+        with applog.Timer() as timer:
+            try:
+                definitions = _fetch_definitions(word)
+            except requests.RequestException as e:
+                definitions = {}  # Reverso blocks datacenter IPs — skip quietly
+                error = e
+        applog.definitions_fetched(word, "reverso", len(definitions), timer.ms,
+                                   fallback_from=dictionary, error=error)
     for pos, defs in definitions.items():
         if pos in cards:
             cards[pos]["explanation_en"] = "; ".join(defs)
 
+    applog.lookup_finished(word, len(cards), overall.ms)
     return list(cards.values())
 
 
@@ -790,8 +830,14 @@ def _split_glued_translations(strings):
             terms = [t.strip() for t in v if isinstance(t, str) and t.strip()]
             if terms and 0 <= int(k) < len(strings):
                 result[strings[int(k)]] = terms
+        applog.terms_split(len(strings), sum(len(t) for t in result.values()),
+                           model=SPLIT_MODEL)
         return result
-    except Exception:
+    except Exception as e:
+        # The whole line is kept as one term; log why, since the fallback is
+        # silent by design and the result looks like a parser bug (#30).
+        applog.terms_split(len(strings), len(strings), model=SPLIT_MODEL,
+                           error=e)
         return fallback
 
 
