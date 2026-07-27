@@ -24,7 +24,7 @@ from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import settings_store
-from parsers import lookup_word, parse_mht_preview
+from parsers import lookup_word, parse_notes_preview
 from utils import (
     delete_flashcard,
     flashcard_word_exists,
@@ -585,13 +585,14 @@ def topics_json():
 @app.route("/", methods=["GET", "POST"])
 def index():
     """
-    Landing page: look up a Reverso word or upload an .mht notes file.
+    Landing page: look up a Reverso word or upload a notes file
+    (.txt / .docx / .mht, #137).
     Successful submissions save flashcards and redirect to the topic page.
     """
     message = None
     proposed = None
     proposed_topic = None
-    mht_content = None  # readable text of an uploaded .mht, shown beside its cards
+    source_content = None  # readable text of an upload, shown beside its cards
     duplicate_warning = None  # the word to warn about before looking it up (#145)
     if request.method == "POST":
         action = request.form.get("action")
@@ -637,14 +638,16 @@ def index():
                     proposed = entries
                     proposed_topic = topic
 
-            elif action == "upload_mht":
-                file = request.files.get("mht_file")
+            elif action == "upload_notes":
+                file = request.files.get("notes_file")
                 if file is None or not file.filename:
-                    message = "Please choose an .mht file."
+                    message = "Please choose a .txt, .docx or .mht file."
                 else:
                     # Don't save yet: show the parsed cards next to the file
                     # content for review/editing, like the word lookup does.
-                    entries, mht_content = parse_mht_preview(file.read(), topic=topic)
+                    # The parser is picked by extension (#137).
+                    entries, source_content = parse_notes_preview(
+                        file.filename, file.read(), topic=topic)
                     if not entries:
                         message = "No vocabulary entries found in that file."
                     else:
@@ -667,7 +670,7 @@ def index():
     return render_template(
         "index.html", message=message, topics=topics,
         proposed=proposed, proposed_topic=proposed_topic,
-        mht_content=mht_content, duplicate_warning=duplicate_warning,
+        source_content=source_content, duplicate_warning=duplicate_warning,
     )
 
 

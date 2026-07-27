@@ -36,9 +36,12 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   processor expose settings to templates.
 - **`parsers.py`** — `lookup_word(word, translator, explanatory_dictionary)`
   dispatches to Google/Bing translators + Oxford/Merriam-Webster dictionaries
-  (call-time resolution so it's mockable). Also the **Reverso `.mht`
-  copy-paste parser** (colour-coded state machine; glued translation terms are
-  split by Claude with a graceful no-key fallback).
+  (call-time resolution so it's mockable). Also the **notes-upload parsers**
+  (`parse_notes_preview` dispatches on the extension: `.txt`, `.docx`, `.mht`)
+  and the **Reverso copy-paste parser** they share — one state machine fed by
+  a per-format line classifier (colours for `.mht`/`.docx`, layout for plain
+  text); glued translation terms are split by Claude with a graceful no-key
+  fallback.
 - **`utils.py`** — `save_flashcard()` is the **single DB write path** (every
   save route funnels through it), and it skips duplicate `word`+`pos` (#101).
 - **`settings_store.py`** — per-identity JSON config under `settings/`

@@ -1,12 +1,17 @@
 """
 Parsers that turn external sources (Reverso Context lookups, OneNote .mht
-exports) into flashcard entry dictionaries ready for utils.save_flashcard().
+exports, .txt and .docx notes) into flashcard entry dictionaries ready for
+utils.save_flashcard().
 """
 
 import email
+import io
 import json
+import os
 import re
 import time
+import xml.etree.ElementTree as ET
+import zipfile
 from email import policy
 from urllib.parse import quote
 
@@ -521,20 +526,26 @@ def _entry_from_line(text, topic):
     """
     Turn one line of note text into an entry if it looks like
     'word — explanation' (also accepts -, – and : as separators).
+
+    A Cyrillic right-hand side is a translation rather than an English
+    explanation ('pursuit - преследование', #137), so it is stored in the
+    matching translation field instead.
     """
     if not text:
         return None
     for sep in SEPARATORS:
         if sep in text:
-            word, explanation = text.split(sep, 1)
+            word, rest = text.split(sep, 1)
             word = word.strip()
-            explanation = explanation.strip()
-            if word and explanation and len(word) <= 80:
-                return {
-                    "word": word,
-                    "explanation_en": explanation,
-                    "topic": topic,
-                }
+            rest = rest.strip()
+            if word and rest and len(word) <= 80:
+                entry = {"word": word, "topic": topic}
+                if _has_cyrillic(rest):
+                    lang = _detect_cyrillic_lang(rest) or "rus"
+                    entry[f"translation_{lang}"] = rest
+                else:
+                    entry["explanation_en"] = rest
+                return entry
     return None
 
 
@@ -558,7 +569,11 @@ def _mht_soup(data):
 
 
 def _entries_from_soup(soup, topic):
-    """Extract flashcard entries from 'word — explanation' lines in the soup."""
+    """Extract flashcard entries from 'word — explanation' lines in the soup.
+
+    Used by parse_mht_file(); the review-popup path goes through
+    _cards_from_lines(), which also understands Reverso copy-pastes.
+    """
     entries = []
     seen_words = set()
     for node in soup.find_all(["p", "li", "td"]):
@@ -633,41 +648,101 @@ def _reverso_header(p):
     return None
 
 
-def _looks_like_reverso(soup):
-    return any(_reverso_header(p) for p in soup.find_all("p"))
-
-
 def _clean_explanation(text):
     # get_text(" ") pads the italic "(context)" span -> "( context )"; tidy it.
     return re.sub(r"\(\s+", "(", re.sub(r"\s+\)", ")", text)).strip()
 
 
-def _reverso_entries(soup):
-    """[{word, pos_raw, senses:[{explanation, example, ex_tr, translations}]}]."""
+def _new_sense():
+    return {"explanation": None, "example": None, "ex_tr": None,
+            "translations": None, "terms": None}
+
+
+def _reverso_entries_from_lines(lines):
+    """
+    The Reverso state machine, shared by every notes format (#134, #137).
+
+    `lines` are dicts describing one source line each:
+      text    — the line's text (already whitespace-normalised)
+      header  — (word, pos_raw) if the line opens a new word entry
+      sense   — True if the line opens a new sense ("1.", "2.", …)
+      field   — which sense field the text fills: explanation / example /
+                ex_tr / translations (None = not part of an entry)
+      terms   — translation terms already separated (plain text lists them one
+                per line, so they need no AI splitting)
+
+    Colour-coded formats (.mht, .docx) classify lines by the Reverso palette,
+    plain text by its structure — the state machine itself is format-agnostic.
+
+    Returns (entries, consumed): `consumed` is the set of line indices the
+    machine claimed, so the caller can run the 'word — explanation' line parser
+    over everything left over (a notes file may mix both styles, #137).
+    """
     entries, entry, sense = [], None, None
-    for p in soup.find_all("p"):
-        text = " ".join(p.get_text(" ", strip=True).split())
+    for i, line in enumerate(lines):
+        text = line["text"]
         if not text:
             continue
-        header = _reverso_header(p)
-        if header:
-            entry = {"word": header[0], "pos_raw": header[1], "senses": []}
+        if line.get("header"):
+            word, pos_raw = line["header"]
+            entry = {"word": word, "pos_raw": pos_raw, "senses": [], "lines": [i]}
             entries.append(entry)
             sense = None
             continue
         if entry is None:
             continue
-        if re.match(r"^\d+\.$", text):
-            sense = {"explanation": None, "example": None,
-                     "ex_tr": None, "translations": None}
+        field = line.get("field")
+        if line.get("sense"):
+            sense = _new_sense()
             entry["senses"].append(sense)
+            entry["lines"].append(i)
+        elif sense is None:
+            # Reverso omits the "1." marker when a word has a single sense
+            # (#137) — the first explanation line opens the sense implicitly.
+            if field != "explanation":
+                continue
+            sense = _new_sense()
+            entry["senses"].append(sense)
+        if not field:
             continue
-        if sense is None:
-            continue
-        field = REVERSO_LINE_COLOURS.get(_p_colour(p))
-        if field and sense.get(field) is None:
+        entry["lines"].append(i)
+        if line.get("terms"):
+            sense["terms"] = (sense["terms"] or []) + line["terms"]
+        elif sense.get(field) is None:
             sense[field] = _clean_explanation(text) if field == "explanation" else text
-    return [e for e in entries if e["senses"]]
+
+    entries = [e for e in entries if e["senses"]]
+    consumed = {i for e in entries for i in e["lines"]}
+    return entries, consumed
+
+
+def _reverso_lines_from_soup(soup):
+    """Classify an .mht document's lines by the Reverso colour palette.
+
+    Only <p> ever carries the palette; <li>/<td> are included so plain notes
+    keep reaching the 'word — explanation' parser as they always did.
+    """
+    lines = []
+    for p in soup.find_all(["p", "li", "td"]):
+        text = " ".join(p.get_text(" ", strip=True).split())
+        marker = bool(re.match(r"^\d+\.$", text))
+        lines.append({
+            "text": text,
+            "header": _reverso_header(p),
+            "sense": marker,
+            # a bare "N." carries no content of its own, whatever its colour
+            "field": None if marker else REVERSO_LINE_COLOURS.get(_p_colour(p)),
+        })
+    return lines
+
+
+def _reverso_entries(soup):
+    """[{word, pos_raw, senses:[…]}] for an .mht soup."""
+    return _reverso_entries_from_lines(_reverso_lines_from_soup(soup))[0]
+
+
+def _has_cyrillic(text):
+    return bool(re.search(r"[Ѐ-ӿ]", text or ""))
 
 
 def _detect_cyrillic_lang(*texts):
@@ -722,13 +797,18 @@ def _split_glued_translations(strings):
 
 def _reverso_cards(entries, topic):
     """One card per word+POS, senses aggregated; glued translations AI-split."""
+    # Only the colour-coded formats glue the terms together; plain text lists
+    # them one per line, so those senses skip the AI split entirely (#137).
     splits = _split_glued_translations(
         [s["translations"] for e in entries for s in e["senses"]
          if s["translations"]]
     )
     cards = []
     for e in entries:
-        pos = REVERSO_POS_MAP.get(e["pos_raw"].strip().lower(), "other")
+        pos_raw = e["pos_raw"].strip()
+        # plain-text copy-pastes often carry no POS at all — leave it unset
+        # rather than labelling the card "other" (#137)
+        pos = REVERSO_POS_MAP.get(pos_raw.lower(), "other") if pos_raw else None
         expl, ex_en, ex_tr, terms, hints = [], [], [], [], []
         for s in e["senses"]:
             if s["explanation"]:
@@ -743,6 +823,10 @@ def _reverso_cards(entries, topic):
                 for t in splits.get(s["translations"], [s["translations"]]):
                     if t not in terms:
                         terms.append(t)
+            for t in s["terms"] or []:
+                hints.append(t)
+                if t not in terms:
+                    terms.append(t)
         lang = _detect_cyrillic_lang(*hints) or "rus"
         card = {"word": e["word"], "pos": pos, "topic": topic}
         if expl:
@@ -767,20 +851,245 @@ def parse_mht_file(data, topic=None):
     return _entries_from_soup(_mht_soup(data), topic)
 
 
+def _cards_from_lines(lines, topic):
+    """
+    Build the cards for one notes document, in document order.
+
+    Reverso copy-pastes are parsed by the state machine (POS, senses,
+    examples, translations); every line it does not claim is offered to the
+    plain 'word — explanation' parser, so a file may mix both styles (#137).
+    Words are de-duplicated, the richer Reverso card winning.
+    """
+    entries, consumed = _reverso_entries_from_lines(lines)
+    cards = _reverso_cards(entries, topic)
+    found = [(e["lines"][0], c) for e, c in zip(entries, cards)]
+    seen_words = {c["word"].lower() for c in cards}
+    for i, line in enumerate(lines):
+        if i in consumed:
+            continue
+        entry = _entry_from_line(line["text"], topic)
+        if entry and entry["word"].lower() not in seen_words:
+            seen_words.add(entry["word"].lower())
+            found.append((i, entry))
+    found.sort(key=lambda pair: pair[0])
+    return [card for _, card in found]
+
+
 def parse_mht_preview(data, topic=None):
     """
     Like parse_mht_file, but also return the file's readable text so the UI can
     show the source alongside the parsed cards for review before saving.
 
-    Reverso dictionary copy-pastes (issue #134) are detected and parsed with
-    the richer Reverso parser (POS, senses, examples, AI-split translations);
-    any other notes fall back to the 'word — explanation' line parser.
+    Reverso dictionary copy-pastes (issue #134) are parsed with the richer
+    Reverso parser (POS, senses, examples, AI-split translations); anything
+    else falls back to the 'word — explanation' line parser.
 
     Returns (entries, source_text).
     """
     soup = _mht_soup(data)
-    if _looks_like_reverso(soup):
-        entries = _reverso_cards(_reverso_entries(soup), topic)
-    else:
-        entries = _entries_from_soup(soup, topic)
-    return entries, _readable_text(soup)
+    return _cards_from_lines(_reverso_lines_from_soup(soup), topic), _readable_text(soup)
+
+
+# --- .txt and .docx notes (issue #137) --------------------------------------
+# Same two styles as .mht, in formats that carry less structure:
+#   .docx keeps Reverso's colours in the run properties, so it reuses the
+#         colour classifier;
+#   .txt  has no formatting at all, so its lines are classified by shape
+#         (see _reverso_lines_from_text).
+
+TEXT_ENCODINGS = ("utf-8-sig", "utf-8", "cp1251", "latin-1")
+SENSE_RE = re.compile(r"^(\d+)[.)]\s*(.*)$")
+DOCX_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+
+def _decode_text(data):
+    """Decode uploaded note bytes; latin-1 accepts anything, so it can't fail."""
+    if isinstance(data, str):
+        return data
+    for encoding in TEXT_ENCODINGS:
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("latin-1", "replace")
+
+
+def _trailing_pos(text):
+    """The Cyrillic part-of-speech word a Reverso header ends with, if any."""
+    parts = text.rsplit(" ", 1)
+    if len(parts) == 2 and parts[1].lower() in REVERSO_POS_MAP:
+        return parts[1]
+    return None
+
+
+def _reverso_lines_from_text(texts):
+    """
+    Classify plain-text lines, which carry no colours, by their shape.
+
+    A Reverso block copied as text looks like:
+
+        lucid dream                                  <- header
+        1. (awareness) dream where you know …        <- sense + explanation
+        In a lucid dream, she flew over mountains.   <- English example
+        Во вещем сне она летала над горами.          <- its translation
+        вещий сон                                    <- translation terms,
+        осознанный сон                                  one per line
+
+    A header is a line ending in a Cyrillic part-of-speech name ("fount
+    Существительное"), or the line directly above a "1." sense marker. A blank
+    line ends the block, so ordinary 'word — translation' notes around it are
+    left to the line parser.
+    """
+    texts = [" ".join((t or "").split()) for t in texts]
+    headers = {}
+    for i, text in enumerate(texts):
+        if not text:
+            continue
+        pos = _trailing_pos(text)
+        if pos:
+            word = text[: -len(pos)].strip()
+            if word:
+                headers[i] = (word, pos)
+        elif (i and texts[i - 1] and (i - 1) not in headers
+                and not SENSE_RE.match(texts[i - 1])):
+            # "1." opens a block, so the line right above it is the header
+            # (later senses continue the block and must not restart it)
+            match = SENSE_RE.match(text)
+            if match and match.group(1) == "1":
+                headers[i - 1] = (texts[i - 1], "")
+
+    lines = []
+    inside = sense_open = example_seen = ex_tr_seen = False
+    for i, text in enumerate(texts):
+        line = {"text": text, "header": None, "sense": False,
+                "field": None, "terms": None}
+        lines.append(line)
+        if not text:
+            inside = False          # a blank line closes the block
+            continue
+        if i in headers:
+            line["header"] = headers[i]
+            inside, sense_open = True, False
+            continue
+        if not inside:
+            continue
+        match = SENSE_RE.match(text)
+        if match:
+            line["sense"] = True
+            sense_open, example_seen, ex_tr_seen = True, False, False
+            if match.group(2):      # "1. (context) explanation" on one line
+                line["text"] = match.group(2)
+                line["field"] = "explanation"
+            continue
+        if not sense_open:          # single-sense block: no "N." marker
+            line["sense"] = True
+            line["field"] = "explanation"
+            sense_open = True
+            continue
+        if not _has_cyrillic(text):
+            if not example_seen:
+                line["field"] = "example"
+                example_seen = True
+        elif example_seen and not ex_tr_seen:
+            line["field"] = "ex_tr"
+            ex_tr_seen = True
+        else:
+            line["field"] = "translations"
+            line["terms"] = [text]
+    return lines
+
+
+def _docx_paragraphs(data):
+    """
+    [(text, [(run_text, colour), …])] for every paragraph of a .docx, in
+    document order (table cells included — a cell simply wraps paragraphs).
+
+    Read with the standard library rather than python-docx: the app would
+    otherwise gain a runtime dependency just to reach the run colours (#137).
+    """
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        xml = archive.read("word/document.xml")
+    paragraphs = []
+    for node in ET.fromstring(xml).iter(DOCX_NS + "p"):
+        runs = []
+        for run in node.iter(DOCX_NS + "r"):
+            text = "".join(t.text or "" for t in run.iter(DOCX_NS + "t"))
+            if not text:
+                continue
+            colour = ""
+            properties = run.find(DOCX_NS + "rPr")
+            if properties is not None:
+                element = properties.find(DOCX_NS + "color")
+                value = (element.get(DOCX_NS + "val") or "") if element is not None else ""
+                if value and value.lower() != "auto":
+                    colour = "#" + value.upper()
+            runs.append((text, colour))
+        paragraphs.append(("".join(text for text, _ in runs), runs))
+    return paragraphs
+
+
+def _reverso_lines_from_docx(paragraphs):
+    """Classify .docx paragraphs by the Reverso colour palette, exactly as the
+    .mht path does — Word keeps the colours in the runs' properties."""
+    lines = []
+    for text, runs in paragraphs:
+        text = " ".join(text.split())
+        header = None
+        pos = next((" ".join(t.split()) for t, colour in runs
+                    if colour == REVERSO_POS_COLOUR), None)
+        if pos and pos in text:
+            word = text[: text.rfind(pos)].strip()
+            if word:
+                header = (word, pos)
+        # a paragraph's colour is the one covering most of its text
+        coloured = {}
+        for run_text, colour in runs:
+            if colour:
+                coloured[colour] = coloured.get(colour, 0) + len(run_text)
+        colour = max(coloured, key=coloured.get) if coloured else ""
+        marker = bool(re.match(r"^\d+\.$", text))
+        lines.append({
+            "text": text,
+            "header": header,
+            "sense": marker,
+            # Word colours the "N." markers like examples — they hold no text
+            "field": None if marker else REVERSO_LINE_COLOURS.get(colour),
+        })
+    return lines
+
+
+def parse_txt_preview(data, topic=None):
+    """Parse a plain-text notes file. Returns (entries, source_text)."""
+    text = _decode_text(data)
+    lines = _reverso_lines_from_text(text.splitlines())
+    return _cards_from_lines(lines, topic), text.strip()
+
+
+def parse_docx_preview(data, topic=None):
+    """Parse a Word (.docx) notes file. Returns (entries, source_text)."""
+    paragraphs = _docx_paragraphs(data)
+    lines = _reverso_lines_from_docx(paragraphs)
+    source = "\n".join(line["text"] for line in lines if line["text"])
+    return _cards_from_lines(lines, topic), source
+
+
+NOTES_PARSERS = {
+    ".mht": parse_mht_preview,
+    ".mhtml": parse_mht_preview,
+    ".txt": parse_txt_preview,
+    ".docx": parse_docx_preview,
+}
+
+
+def parse_notes_preview(filename, data, topic=None):
+    """
+    Parse an uploaded notes file, choosing the parser by extension (#137).
+
+    Raises ValueError for anything but .mht/.mhtml/.txt/.docx.
+    Returns (entries, source_text).
+    """
+    extension = os.path.splitext(filename or "")[1].lower()
+    parser = NOTES_PARSERS.get(extension)
+    if parser is None:
+        raise ValueError(f"Unsupported notes format: {extension or filename}")
+    return parser(data, topic=topic)
