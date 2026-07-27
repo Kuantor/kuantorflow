@@ -49,6 +49,11 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   per Google user). `DEFAULTS` is the source of truth; files self-create, are
   validated on read/write, and written atomically. **Read-only for anonymous
   visitors** (#102). Add a setting = one entry in `DEFAULTS`.
+- **`applog.py`** — the action logs in `logs/` (`cards.log`, `dict.log`,
+  `parsed_files.log`, #30). Card writes go through `app._save_and_log()`;
+  **a new save or delete path must log too**. Helpers never raise, so logging
+  can't break a request. `KF_LOGS_DIR` redirects the directory (the test
+  suite points it at a temp dir).
 - **Mykola widget** lives in `templates/base.html`; endpoints `/mykola/chat`,
   `/mykola/recap`. Its intelligence comes from the `ai_agent` package.
 

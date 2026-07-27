@@ -23,6 +23,7 @@ from authlib.integrations.flask_client import OAuth
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+import applog
 import settings_store
 from parsers import lookup_word, parse_notes_preview
 from utils import (
@@ -149,6 +150,24 @@ def current_settings():
     file, or the shared default config for anonymous visitors. Always returns a
     complete, valid dict — a missing or corrupt file falls back to defaults."""
     return settings_store.load(_current_email())
+
+
+def _save_and_log(entry, source):
+    """Save one card and record the outcome in logs/cards.log (#30).
+
+    Every card written by the app goes through here or through the explicit
+    applog calls next to the other save_flashcard() call sites — keep it that
+    way when adding a new save path.
+
+    Returns True when a row was actually written (False = duplicate).
+    """
+    card_id = save_flashcard(entry)
+    if card_id is None:
+        applog.card_skipped(entry, source=source, user=_current_email())
+        return False
+    applog.card_created(entry, source=source, user=_current_email(),
+                        card_id=card_id)
+    return True
 
 
 def _word_already_saved(word):
@@ -384,7 +403,7 @@ def _save_card_from_chat(entry):
     Look up & save flow (issue: ai_agent#20). A duplicate word+pos is
     skipped by save_flashcard (issue #101); Mykola still reports the card,
     which is accurate either way — it is in the database."""
-    save_flashcard(entry)
+    _save_and_log(entry, source="Mykola chat")
     return entry
 
 
@@ -609,6 +628,11 @@ def index():
                     proposed_topic = topic
                 else:
                     prefs = current_settings()
+                    # The provider-by-provider detail is logged by the parser;
+                    # this line carries the identity it cannot see (#30).
+                    applog.lookup_started(
+                        word, prefs["translator"],
+                        prefs["explanatory_dictionary"], user=_current_email())
                     entries = lookup_word(
                         word, topic=topic,
                         translator=prefs["translator"],
@@ -620,7 +644,7 @@ def index():
                         # Duplicates are skipped and reported (issue #101).
                         added = sum(
                             1 for entry in entries
-                            if save_flashcard(entry) is not None
+                            if _save_and_log(entry, source="automatic add")
                         )
                         skipped = len(entries) - added
                         if not added:
@@ -646,8 +670,18 @@ def index():
                     # Don't save yet: show the parsed cards next to the file
                     # content for review/editing, like the word lookup does.
                     # The parser is picked by extension (#137).
-                    entries, source_content = parse_notes_preview(
-                        file.filename, file.read(), topic=topic)
+                    data = file.read()
+                    try:
+                        with applog.Timer() as timer:
+                            entries, source_content = parse_notes_preview(
+                                file.filename, data, topic=topic)
+                    except Exception as e:
+                        applog.file_rejected(file.filename, e,
+                                             user=_current_email())
+                        raise
+                    applog.file_parsed(file.filename, len(data), len(entries),
+                                       topic=topic, user=_current_email(),
+                                       elapsed_ms=timer.ms)
                     if not entries:
                         message = "No vocabulary entries found in that file."
                     else:
@@ -711,8 +745,8 @@ def add_card():
         "translation_rus": cleaned("translation_rus"),
         "examples_rus": json_list("examples_rus"),
     }
-    if save_flashcard(entry) is None:  # duplicate word+pos (issue #101)
-        return {"ok": True, "saved": False, "duplicate": True}
+    if not _save_and_log(entry, source="review popup"):
+        return {"ok": True, "saved": False, "duplicate": True}  # #101
     return {"ok": True, "saved": True}
 
 
@@ -782,8 +816,10 @@ def delete_card(topic, card_id):
     """Delete one flashcard and return to its topic page."""
     word = delete_flashcard(card_id)
     if word:
+        applog.card_deleted(card_id, word, topic=topic, user=_current_email())
         flash((f"Deleted card '{word}'.", None))
     else:
+        applog.card_delete_missed(card_id, topic=topic, user=_current_email())
         flash(("Card not found — it may have already been deleted.", None))
     return redirect(url_for("flashcards", topic=topic))
 
