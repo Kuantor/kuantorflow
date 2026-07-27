@@ -50,6 +50,9 @@ DEFAULTS = {
     # issue #113 — the language the quiz opens in (the in-page switch still
     # lets the user take it in any visible language).
     "quiz_lang": "ukrainian",
+    # ai_agent#54 — hours of silence after which Mykola's chat is restarted
+    # (his recap of the last exchanges opens the fresh one). 0 = never.
+    "restart_chat_interval": 2,
 }
 
 # Allowed values for the non-boolean settings (issues #20, #113).
@@ -59,7 +62,14 @@ CHOICES = {
     "quiz_lang": ("ukrainian", "russian"),
 }
 
-BOOLEAN_KEYS = tuple(k for k, v in DEFAULTS.items() if isinstance(v, bool))
+# Whole-number settings and their inclusive bounds (ai_agent#54). The slider
+# offers 1–24 hours; 0 is the separate "never restart" state its checkbox sets.
+RANGES = {
+    "restart_chat_interval": (0, 24),
+}
+
+BOOLEAN_KEYS = tuple(k for k, v in DEFAULTS.items()
+                     if isinstance(v, bool))
 
 
 def safe_username(email: str | None) -> str:
@@ -100,7 +110,30 @@ def sanitize(values: dict | None) -> dict:
         elif key in CHOICES:
             if isinstance(value, str) and value.lower() in CHOICES[key]:
                 clean[key] = value.lower()
+        elif key in RANGES:
+            number = _whole_number(value)
+            low, high = RANGES[key]
+            if number is not None and low <= number <= high:
+                clean[key] = number
     return clean
+
+
+def _whole_number(value):
+    """`value` as an int, or None if it isn't a whole number (ai_agent#54).
+
+    Booleans are rejected (True would sneak in as 1) and so are fractions:
+    the slider only ever sends whole hours, and a config file that says
+    something else falls back to the default like every other invalid value.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str) and re.fullmatch(r"-?\d+", value.strip()):
+        return int(value)
+    return None
 
 
 def load(email: str | None = None) -> dict:

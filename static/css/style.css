@@ -558,6 +558,30 @@ body.welcome-active {
 .settings-group input[type="checkbox"] { accent-color: var(--blue); }
 .settings-group input[type="checkbox"] { width: 1rem; height: 1rem; }
 .settings-group-hint { margin: 0.45rem 0 0; }
+/* Automatic chat restart (ai_agent#54): full width under the two columns,
+   slider beside its live hour readout. */
+.settings-group--wide { grid-column: 1 / -1; }
+.settings-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    margin-top: 0.35rem;
+}
+.settings-slider-row input[type="range"] {
+    flex: 1;
+    min-width: 0;
+    accent-color: var(--blue);
+}
+.settings-slider-row input[type="range"]:disabled { accent-color: #b9c6d2; }
+.settings-slider-row output {
+    min-width: 3.2rem;
+    text-align: right;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--blue-dark);
+}
+/* Greyed out together with the slider it labels. */
+.settings-slider-row:has(input:disabled) output { color: var(--muted); }
 /* Grey out a whole toggle row when its control is disabled (#113, #102). */
 .settings-group label:has(input:disabled),
 .settings-check:has(input:disabled) { color: var(--muted); }

@@ -123,6 +123,33 @@
                        {% if both_visible %}hidden{% endif %}>Only one language is
                        visible — the quiz uses it automatically.</p>
                 </fieldset>
+
+                {# Automatic chat restart (ai_agent#54): after this long
+                   without a message, Mykola reviews the last exchanges and
+                   starts a fresh conversation. The checkbox is the stored
+                   value 0 — it greys the slider out (updateRestartState). #}
+                {% set restart_hours = settings.restart_chat_interval %}
+                <fieldset class="settings-group settings-group--wide">
+                    <legend>Restart Mykola&rsquo;s chat after a break</legend>
+                    <div class="settings-slider-row">
+                        <input type="range" name="restart_chat_interval"
+                               min="1" max="24" step="1"
+                               value="{{ restart_hours or 2 }}"
+                               aria-describedby="restart-interval-value"
+                               {% if not restart_hours or settings_read_only %}disabled{% endif %}>
+                        <output id="restart-interval-value"
+                                for="restart_chat_interval">{{ restart_hours or 2 }} h</output>
+                    </div>
+                    <label class="settings-check">
+                        <input type="checkbox" name="restart_never"
+                               {% if not restart_hours %}checked{% endif %}
+                               {% if settings_read_only %}disabled{% endif %}>
+                        Never restart chat automatically
+                    </label>
+                    <p class="settings-hint settings-group-hint">Come back after
+                       this long without writing and Mykola reviews your last
+                       three messages, then opens a fresh conversation.</p>
+                </fieldset>
                 </div>{# /settings-grid #}
 
                 <p class="settings-scope">
@@ -287,9 +314,23 @@
             settingsForm.show_ukrainian.addEventListener("change", updateQuizLangState);
             settingsForm.show_russian.addEventListener("change", updateQuizLangState);
 
+            // "Never restart chat automatically" (ai_agent#54) is the stored
+            // value 0: while it is checked the slider is greyed out.
+            var restartSlider = settingsForm.restart_chat_interval;
+            var restartNever = settingsForm.restart_never;
+            var restartValue = document.getElementById("restart-interval-value");
+            function updateRestartState() {
+                restartValue.textContent = restartSlider.value + " h";
+                if (settingsReadOnly) return;     // everything stays disabled
+                restartSlider.disabled = restartNever.checked;
+            }
+            restartSlider.addEventListener("input", updateRestartState);
+            restartNever.addEventListener("change", updateRestartState);
+
             function openSettings() {
                 settingsForm.reset();      // discard unsaved edits from last open
                 updateQuizLangState();     // reset() restores values, not disabled
+                updateRestartState();
                 settingsError.hidden = true;
                 settingsOverlay.hidden = false;
                 // On phones the Mykola widget overlaps the popup — the CSS
@@ -327,6 +368,9 @@
                         show_ukrainian: settingsForm.show_ukrainian.checked,
                         show_russian: settingsForm.show_russian.checked,
                         quiz_lang: settingsForm.quiz_lang.value,
+                        // checked "never" is stored as 0 (ai_agent#54)
+                        restart_chat_interval: restartNever.checked
+                            ? 0 : Number(restartSlider.value),
                     }),
                 }).then(function (resp) {
                     if (!resp.ok) throw new Error("save failed");
@@ -338,6 +382,8 @@
                     // popup shows the stored settings without a page reload.
                     settingsForm.querySelectorAll("input[type=checkbox], input[type=radio]")
                         .forEach(function (el) { el.defaultChecked = el.checked; });
+                    // same for the range input, whose reset() value is defaultValue
+                    restartSlider.defaultValue = restartSlider.value;
                     closeSettings();
                 }).catch(function () {
                     settingsError.hidden = false;
@@ -480,6 +526,9 @@
             // message (ai_agent#25); we adopt it from the response and keep
             // it for the whole conversation.
             var chatId = null;
+            // When the learner last wrote here (epoch ms) — the break the
+            // automatic restart is measured against (ai_agent#54).
+            var lastMessageAt = null;
 
             function hasStorage() {
                 try {
@@ -508,6 +557,7 @@
                     messages: uiMessages,
                     history: history,
                     chatId: chatId,
+                    lastMessageAt: lastMessageAt,
                     scrollTop: messages.scrollTop,
                 };
                 try {
@@ -612,17 +662,49 @@
                 launcher.hidden = false;
                 saveWidgetState();
             }
+            // --- Automatic restart after a break (ai_agent#54) --------------
+            // The server owns the decision: it knows the user's threshold and,
+            // for signed-in visitors, when they last wrote from any device.
+            // The stamp sent here is what an anonymous visitor's break can be
+            // measured from, since they have no per-user logs.
+            function maybeRestartChat() {
+                fetch("{{ url_for('mykola_restart_check') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ last_message_at: lastMessageAt }),
+                }).then(function (resp) { return resp.json(); })
+                  .then(function (data) {
+                      if (!data || !data.restart) return;
+                      startFreshChat(data.chat_id || null, data.recap || null);
+                  })
+                  .catch(function () {});   // a failed check just leaves the chat alone
+            }
+
+            // Wipe the thread down to Mykola's greeting. `recap` (when the
+            // server restarted a stale chat) follows it as his first message.
+            function startFreshChat(newChatId, recap) {
+                history = [];
+                chatId = newChatId;
+                uiMessages = [];
+                while (messages.firstChild) messages.removeChild(messages.firstChild);
+                addMessage("mykola", GREETING);
+                if (recap) {
+                    addMessage("mykola", recap);
+                    history.push({ role: "assistant", content: recap });
+                }
+                // The break has been accounted for: start the clock again so a
+                // second page load doesn't restart the same conversation twice.
+                lastMessageAt = Date.now();
+                saveWidgetState();
+            }
+
             function newChat() {
                 // Start a fresh conversation (ai_agent#55): wipe the thread and
                 // mint a new chat id on the next message. Past exchanges stay
                 // logged server-side, so nothing is lost — and for signed-in
                 // visitors Mykola re-runs his welcome-back recap of the last
                 // few conversations, just as at the start of a new session.
-                history = [];
-                chatId = null;
-                uiMessages = [];
-                while (messages.firstChild) messages.removeChild(messages.firstChild);
-                addMessage("mykola", GREETING);   // persisted as the new first message
+                startFreshChat(null, null);
                 {% if current_user %}
                 recapRequested = false;
                 requestRecap();
@@ -748,12 +830,17 @@
                 if (typeof state.scrollTop === "number") {
                     messages.scrollTop = state.scrollTop;
                 }
+                lastMessageAt = state.lastMessageAt || null;
+                // A conversation was restored — it may have gone stale while
+                // the learner was away (ai_agent#54).
+                if (hasConversation()) maybeRestartChat();
             })();
 
             form.addEventListener("submit", function (e) {
                 e.preventDefault();
                 var question = input.value.trim();
                 if (!question) return;
+                lastMessageAt = Date.now();     // restarts are measured from here
                 addMessage("user", question);
                 input.value = "";
                 send.disabled = true;
