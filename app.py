@@ -142,6 +142,13 @@ def _current_first_name():
     `given_name` claim, then the first word of the display name. The last step
     is a guess — it can pick a surname in a family-name-first locale — which is
     why it only runs when Google supplied no given name.
+
+    `given_name` is used **whole, on purpose**: someone whose given name is
+    "Anna Maria" is addressed as "Anna Maria". Shortening it to the first word
+    was considered and rejected — it is the app guessing at a nickname, and
+    the user already has a better way to say what they want to be called.
+    That is what `preferred_name` is for (a Settings field, or telling Mykola
+    in conversation, ai_agent#62). Please don't "fix" this to `.split()[0]`.
     """
     user = session.get("user") or {}
     preferred = (user.get("preferred_name") or "").strip()
