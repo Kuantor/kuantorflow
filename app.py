@@ -642,6 +642,32 @@ def inject_mykola():
 
 
 @app.before_request
+def drop_identity_from_before_the_users_table():
+    """Sign out a session created before #148, so the next sign-in repairs it.
+
+    Those sessions carry a name, an email and a picture but no `id` key —
+    the users row they would point at was never written, and nothing else
+    ever fills it in. The visitor still looks signed in, while every card
+    they save is attributed to nobody (#89). Session cookies here are
+    permanent, so that can go on for 30 days without a visible symptom.
+
+    Dropping the identity costs one sign-in and fixes it for good: the OAuth
+    callback writes the users row and puts its id in the session.
+
+    A stored `id` of None is a *different* case — a sign-in whose row could
+    not be written — and is deliberately left alone. That one is tolerated by
+    design (#148), and signing in again would most likely fail the same way.
+
+    Registered before require_keyword so it still runs on gated requests,
+    which return a redirect and stop the chain.
+    """
+    user = session.get("user")
+    if user is not None and "id" not in user:
+        app.logger.info("Dropping a pre-#148 session identity; it has no user id")
+        session.pop("user", None)
+
+
+@app.before_request
 def require_keyword():
     """Block every page behind the keyword gate until it's been entered."""
     if session.get("access_granted"):
