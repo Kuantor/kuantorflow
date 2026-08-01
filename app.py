@@ -27,6 +27,7 @@ import applog
 import settings_store
 from parsers import lookup_word, parse_notes_preview
 from utils import (
+    claim_anonymous_message,
     delete_flashcard,
     flashcard_word_exists,
     get_db_connection,
@@ -64,6 +65,16 @@ GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 GOOGLE_AUTH_AVAILABLE = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
 
+def _int_env(name, default):
+    """A whole-number setting from the environment; anything unparseable falls
+    back to the default rather than taking the app down at import time."""
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        app.logger.warning("%s is not a number; using %s", name, default)
+        return default
+
+
 oauth = OAuth(app)
 if GOOGLE_AUTH_AVAILABLE:
     oauth.register(
@@ -79,6 +90,19 @@ if GOOGLE_AUTH_AVAILABLE:
 # endpoint rather than a global MAX_CONTENT_LENGTH, so it can't clip legitimate
 # (and much larger) .mht uploads on the index route. 1 MB is generous for text.
 MAX_MYKOLA_REQUEST_BYTES = 1024 * 1024
+
+# How much of Mykola an anonymous visitor gets before signing in (issue #164).
+# Every message costs Anthropic credits, and only /mykola/chat can reach the
+# model without an account — the recap endpoints return early without one.
+#   ANONYMOUS_MESSAGE_LIMIT — per browser session. A nudge, not a spend cap:
+#     anonymous sessions are not permanent, so closing the browser or clearing
+#     cookies resets it. It is what people actually meet.
+#   ANONYMOUS_DAILY_LIMIT — every anonymous message, everyone, per day. This
+#     is the one that bounds the bill, counted in the database so it holds
+#     across worker processes.
+# 0 (or unset) disables either limit. Signed-in users are never limited.
+ANONYMOUS_MESSAGE_LIMIT = _int_env("ANONYMOUS_MESSAGE_LIMIT", 10)
+ANONYMOUS_DAILY_LIMIT = _int_env("ANONYMOUS_DAILY_LIMIT", 200)
 
 LOG_DIR = Path(__file__).parent / "mykola_logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -269,6 +293,41 @@ def _agent_answer(question, history):
     return agent.answer(question, history, **_agent_kwargs(agent.answer))
 
 
+SIGN_IN_PROMPT = ("You've used your free messages with Mykola. "
+                  "Sign in with Google to keep chatting.")
+BUSY_PROMPT = ("Mykola has answered a lot of questions today. "
+               "Sign in with Google to keep chatting, or come back tomorrow.")
+
+
+def _anonymous_quota_refusal():
+    """Refuse an anonymous chat message that is over quota (#164), or None to
+    let it through. Signed-in visitors are never limited.
+
+    Both counters are best-effort in the same direction: if the database is
+    unreachable the daily ceiling can't be enforced, and the message is
+    allowed rather than a dead database silencing Mykola for everyone.
+    """
+    if session.get("user"):
+        return None
+
+    used = session.get("anon_messages", 0)
+    if ANONYMOUS_MESSAGE_LIMIT and used >= ANONYMOUS_MESSAGE_LIMIT:
+        applog.anonymous_limit_hit("session", used, ANONYMOUS_MESSAGE_LIMIT)
+        return jsonify({"error": SIGN_IN_PROMPT, "sign_in_required": True}), 402
+
+    try:
+        allowed, today = claim_anonymous_message(ANONYMOUS_DAILY_LIMIT)
+    except Exception:
+        app.logger.exception("Could not count the anonymous message")
+        allowed, today = True, 0
+    if not allowed:
+        applog.anonymous_limit_hit("daily", today, ANONYMOUS_DAILY_LIMIT)
+        return jsonify({"error": BUSY_PROMPT, "sign_in_required": True}), 402
+
+    session["anon_messages"] = used + 1
+    return None
+
+
 def _handle_mykola_chat_request():
     """Shared JSON chat handler for widget and full ai_agent-style page."""
     if not MYKOLA_AVAILABLE:
@@ -283,6 +342,12 @@ def _handle_mykola_chat_request():
     chat_id = _safe_chat_id(data.get("chat_id"))
     if not question:
         return jsonify({"error": "Please type a question."}), 400
+
+    # Anonymous quota (#164) — checked before the model is called, so a
+    # refused message costs nothing.
+    refusal = _anonymous_quota_refusal()
+    if refusal:
+        return refusal
 
     try:
         result = _agent_answer(question, history)

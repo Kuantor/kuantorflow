@@ -163,6 +163,13 @@ def definitions_fetched(word, provider, count, elapsed_ms,
            ms=elapsed_ms, fallback_from=fallback_from, error=error)
 
 
+def anonymous_limit_hit(kind, used, limit):
+    """An anonymous visitor was refused a message (#164). `kind` is "session"
+    (their own allowance) or "daily" (everyone's ceiling). Worth logging: it
+    is the only way to see whether the numbers are set sensibly."""
+    _write(DICT, "LIMIT", kind=kind, used=used, limit=limit)
+
+
 def lookup_finished(word, cards, elapsed_ms):
     _write(DICT, "RESULT", word=word, cards=cards, ms=elapsed_ms)
 

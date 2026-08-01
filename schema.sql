@@ -1,6 +1,16 @@
 -- KuantorFlow database schema
 -- Apply with: mysql -u <user> -p -h <host> <database> < schema.sql
 
+-- Anonymous Mykola usage per day (issue #164). One row per day, incremented
+-- atomically, so the daily ceiling holds across PythonAnywhere's worker
+-- processes — an in-memory counter would reset on reload and a file would race.
+CREATE TABLE IF NOT EXISTS anonymous_usage (
+    day        DATE PRIMARY KEY,
+    messages   INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                   ON UPDATE CURRENT_TIMESTAMP
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- Signed-in identities (issue #148). Keyed on google_sub, Google's OIDC
 -- subject: it is unique per account and never changes, where an email can be
 -- changed by its owner. Email is ordinary updatable data.
