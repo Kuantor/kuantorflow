@@ -469,6 +469,17 @@
             <input type="text" id="mykola-input" placeholder="Type your question…" required>
             <button type="submit" id="mykola-send">Send</button>
         </form>
+        {% if not current_user %}
+        {# Shown in place of the input once the free messages run out (#164). #}
+        <div id="mykola-signin-required" class="mykola-consent" hidden>
+            <p class="mykola-consent-text">Sign in to keep chatting with Mykola.</p>
+            <div class="mykola-consent-actions">
+                {% if google_auth_enabled %}
+                <a class="mykola-consent-yes" href="{{ url_for('login_google') }}">Sign in with Google</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
         {% if google_auth_enabled %}
         <div class="mykola-auth">
             {% if current_user %}
@@ -614,6 +625,17 @@
                 saveWidgetState();
             }
             var consent = document.getElementById("mykola-consent");
+            // Out of free messages (#164): swap the input for the sign-in
+            // offer. Presentation only — the server refuses either way.
+            function showSignInRequired() {
+                var offer = document.getElementById("mykola-signin-required");
+                if (!offer) return;          // signed in, or auth disabled
+                form.hidden = true;
+                offer.hidden = false;
+                var consent = document.getElementById("mykola-consent");
+                if (consent) consent.hidden = true;   // don't stack two offers
+            }
+
             function maybeShowConsent() {
                 // Offer Google sign-in once; respect a prior "Stay anonymous".
                 if (!consent) return;
@@ -858,6 +880,9 @@
                     typing.remove();
                     if (!r.ok) {
                         addMessage("error", r.data.error || "Something went wrong.");
+                        // Out of free messages (#164): the input is replaced by
+                        // the sign-in offer, so the dead end explains itself.
+                        if (r.data.sign_in_required) showSignInRequired();
                     } else {
                         chatId = r.data.chat_id || chatId;
                         addMessage("mykola", r.data.response || "(no answer)", r.data.sources);

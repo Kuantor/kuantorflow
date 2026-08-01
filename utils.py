@@ -34,6 +34,46 @@ def get_db_connection():
     return conn
 
 
+def claim_anonymous_message(daily_limit):
+    """
+    Count one anonymous message against today's ceiling (issue #164).
+
+    Returns (allowed, used_today). The increment and the check happen in one
+    statement, so two workers can't both slip past the last message: the row
+    only advances while it is under the limit, and `ROW_COUNT()` says whether
+    this call was the one that got it.
+
+    A `daily_limit` of 0 or less means "no ceiling" and never touches the
+    database.
+    """
+    if not daily_limit or daily_limit <= 0:
+        return True, 0
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO anonymous_usage (day, messages) VALUES (CURDATE(), 1)
+            ON DUPLICATE KEY UPDATE
+                messages = IF(messages < %s, messages + 1, messages)
+            """,
+            (daily_limit,),
+        )
+        # Read straight after the write, before anything else touches the
+        # cursor: 1 = inserted, 2 = updated and changed, 0 = the IF() held it
+        # back because the ceiling was already reached. That 0 is the only way
+        # to tell "I took the last slot" from "someone else did".
+        advanced = cursor.rowcount != 0
+        conn.commit()
+        cursor.execute(
+            "SELECT messages FROM anonymous_usage WHERE day = CURDATE()")
+        row = cursor.fetchone()
+        cursor.close()
+        return advanced, (row[0] if row else 0)
+    finally:
+        conn.close()
+
+
 def upsert_user(google_sub, email, display_name=None, given_name=None,
                 family_name=None):
     """
