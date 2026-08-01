@@ -346,7 +346,7 @@ def current_settings():
     """Settings for this request (issue #86): the signed-in user's own config
     file, or the shared default config for anonymous visitors. Always returns a
     complete, valid dict — a missing or corrupt file falls back to defaults."""
-    return settings_store.load(_current_email())
+    return settings_store.load(_current_user_id(), _current_email())
 
 
 def _save_and_log(entry, source):
@@ -510,15 +510,62 @@ def _safe_email_prefix(email: str | None) -> str | None:
 
 
 def _current_user_log_dir() -> Path:
-    """Log directory for this request: mykola_logs/<email_prefix>/ for
-    signed-in visitors (issue ai_agent#30), the shared mykola_logs/ otherwise."""
-    email = (session.get("user") or {}).get("email")
-    prefix = _safe_email_prefix(email)
-    if not prefix:
+    """Log directory for this request: mykola_logs/<user id>/ for signed-in
+    visitors (ai_agent#30, re-keyed in #174), the shared mykola_logs/ otherwise.
+
+    Keyed on the id rather than the email prefix because the prefix was neither
+    stable nor unique — an address change orphaned a user's whole chat history,
+    and two addresses sharing a local part fed one person's conversations into
+    another's welcome-back recap.
+    """
+    user_id = _current_user_id()
+    if user_id is None:
         return LOG_DIR
-    user_dir = LOG_DIR / prefix
+    user_dir = LOG_DIR / str(user_id)
+    if not user_dir.is_dir():
+        _migrate_log_dir(user_dir)
     user_dir.mkdir(exist_ok=True)
+    _write_log_dir_marker(user_dir, user_id)
     return user_dir
+
+
+def _migrate_log_dir(user_dir: Path) -> None:
+    """Move this visitor's pre-#174 email-keyed chat folder onto its id-keyed
+    name. On read rather than by a script, for the same reason as the settings
+    store: a user who hasn't signed in since #148 has logs but no users row."""
+    prefix = _safe_email_prefix(_current_email())
+    if not prefix:
+        return
+    legacy = LOG_DIR / prefix
+    if not legacy.is_dir() or legacy == user_dir:
+        return
+    try:
+        os.replace(legacy, user_dir)
+    except OSError:
+        app.logger.exception("Could not migrate the chat log folder for #174")
+
+
+def _write_log_dir_marker(user_dir: Path, user_id) -> None:
+    """Record whose folder this is, so a directory listing stays readable (#174).
+
+    The full email, not the prefix: prefixes are exactly what collide, so a
+    marker reading 'anton' would not tell two anton@… accounts apart.
+
+    Rewritten only when the contents would change, so a chat doesn't rewrite it
+    every message. _user_log_files() globs chat_*.txt, so this file can never be
+    read as a conversation or reach Mykola's recap.
+    """
+    user = session.get("user") or {}
+    lines = (f"id: {user_id}\n"
+             f"email: {user.get('email') or 'unknown'}\n"
+             f"name: {user.get('name') or 'unknown'}\n")
+    marker = user_dir / "user.txt"
+    try:
+        if marker.is_file() and marker.read_text(encoding="utf-8") == lines:
+            return
+        marker.write_text(lines, encoding="utf-8")
+    except OSError:
+        pass  # a missing marker is cosmetic; never break the chat over it
 
 
 def _user_log_files() -> list[Path]:
@@ -904,7 +951,8 @@ def save_settings():
             "error": "Sign in with Google to change settings.",
         }), 403
     changes = request.get_json(silent=True) or {}
-    stored = settings_store.update(changes, _current_email())
+    stored = settings_store.update(changes, _current_user_id(),
+                                   _current_email())
     return jsonify({"ok": True, "settings": stored})
 
 
