@@ -201,10 +201,24 @@ def flashcard_word_exists(word):
         conn.close()
 
 
-def delete_flashcard(card_id):
+def delete_flashcard(card_id, owner_id=None, admin=False):
     """
-    Delete a flashcard by id.
-    Returns the deleted card's word, or None if no such card exists.
+    Delete a flashcard by id, subject to ownership (issue #162).
+
+    Returns `(word, outcome)`, where outcome is one of:
+
+    - `"deleted"` — the row is gone; `word` is what it held.
+    - `"denied"`  — the card exists but does not belong to this user.
+    - `"missing"` — no such card; `word` is None.
+
+    The removal itself is **one conditional statement**, so there is no gap
+    between deciding the card is the caller's and taking it. The word is read
+    first only so the caller has something to say afterwards; a card that
+    changes hands in between simply affects no rows and reads as denied.
+
+    `=` never matches NULL, so cards with no owner — everything saved before
+    #89, and anything saved anonymously — are deletable only by the admin.
+    That is deliberate: they are nobody's to reclaim.
     """
     conn = get_db_connection()
     try:
@@ -213,11 +227,21 @@ def delete_flashcard(card_id):
         row = cursor.fetchone()
         if row is None:
             cursor.close()
-            return None
-        cursor.execute("DELETE FROM flashcards WHERE id = %s", (card_id,))
+            return None, "missing"
+        word = row[0]
+        if admin:
+            cursor.execute("DELETE FROM flashcards WHERE id = %s", (card_id,))
+        else:
+            cursor.execute(
+                "DELETE FROM flashcards WHERE id = %s AND added_by_user_id = %s",
+                (card_id, owner_id),
+            )
+        if cursor.rowcount == 0:
+            cursor.close()
+            return word, "denied"
         conn.commit()
         cursor.close()
-        return row[0]
+        return word, "deleted"
     finally:
         conn.close()
 

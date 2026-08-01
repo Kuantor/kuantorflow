@@ -129,6 +129,17 @@ def card_delete_missed(card_id, topic=None, user=None):
     _write(CARDS, "DELETE-MISS", id=card_id, topic=topic, user=_user(user))
 
 
+def card_delete_denied(card_id, topic=None, user=None, reason=None):
+    """A delete refused by the ownership rule (#162).
+
+    Cheap to record and worth having: it shows whether the rule is getting in
+    people's way, and a burst of them is the signature of someone posting
+    delete requests by hand.
+    """
+    _write(CARDS, "DELETE-DENIED", id=card_id, topic=topic,
+           reason=reason, user=_user(user))
+
+
 def _languages(entry):
     """Which translation languages the card carries, for a sense of quality."""
     langs = [lang for lang in ("ukr", "rus") if entry.get(f"translation_{lang}")]
