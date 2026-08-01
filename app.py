@@ -55,6 +55,27 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 # Keyword that gates access to the whole site (set ACCESS_KEYWORD in .env).
 ACCESS_KEYWORD = os.environ.get("ACCESS_KEYWORD", "password")
 
+
+def _admin_emails(raw=None):
+    """The configured administrator addresses, lowercased (issue #158).
+
+    In `.env` rather than a column on `users`, deliberately: the admin's job is
+    to block other accounts, so admin-ness must not live in the table that the
+    blocking flow edits — nor be reachable by a stray UPDATE or a restored
+    backup. It also sidesteps the bootstrap problem, since the first admin has
+    no row until they sign in.
+
+    Unset, empty, or all-blank means the site simply has no admin.
+    """
+    if raw is None:
+        raw = os.environ.get("ADMIN_EMAILS", "")
+    return frozenset(
+        part.strip().lower() for part in raw.split(",") if part.strip()
+    )
+
+
+ADMIN_EMAILS = _admin_emails()
+
 # --- Optional "Sign in with Google" (OAuth 2.0 / OpenID Connect) -------------
 # Purely optional: a visitor can sign in to be greeted by name, or stay
 # anonymous ("invisible") and use the site exactly as before. Enabled only when
@@ -217,9 +238,42 @@ def _claim(info, key):
     return (info.get(key) or "").strip() or None
 
 
+def _email_verified(info):
+    """Google's `email_verified` claim as a strict bool (issue #158).
+
+    The claim is a real bool in the ID token but a string in some userinfo
+    responses, and `bool("false")` is True — so compare explicitly rather than
+    trusting truthiness. Anything unrecognised counts as not verified.
+    """
+    claim = info.get("email_verified")
+    if isinstance(claim, bool):
+        return claim
+    return str(claim).strip().lower() == "true"
+
+
 def _current_email():
     """Email of the signed-in visitor, or None for anonymous visitors."""
     return (session.get("user") or {}).get("email")
+
+
+def is_admin():
+    """Whether this request's visitor is an administrator (issue #158).
+
+    Three things must hold, and the check fails closed if any is missing: the
+    visitor is signed in, Google reported their email as verified, and the
+    address is in ADMIN_EMAILS. Requiring `email_verified` is what stops an
+    account that merely *claims* a listed address from inheriting the
+    privileges; a session predating this check carries no such claim and is
+    therefore not admin until its owner signs in again.
+
+    Nothing uses the privilege yet — #126 (blocking) and #162 (deleting any
+    card) are what will ask.
+    """
+    user = session.get("user") or {}
+    if not user.get("email_verified"):
+        return False
+    email = (user.get("email") or "").strip().lower()
+    return bool(email) and email in ADMIN_EMAILS
 
 
 def _current_user_id():
@@ -752,6 +806,11 @@ def auth_google_callback():
         "family_name": _claim(info, "family_name"),
         "preferred_name": preferred_name,
         "email": info.get("email"),
+        # Google's own verification of the address, kept so is_admin() (#158)
+        # can insist on it. Stored as a strict bool: the claim arrives as a
+        # bool from the ID token but as the string "true" from some userinfo
+        # responses, and "false" is truthy.
+        "email_verified": _email_verified(info),
         "picture": info.get("picture"),
     }
     return redirect(url_for("index"))
@@ -783,6 +842,8 @@ def inject_auth():
     return {
         "current_user": session.get("user"),
         "google_auth_enabled": GOOGLE_AUTH_AVAILABLE,
+        # Admin-only UI is then a plain {% if is_admin %} (#158).
+        "is_admin": is_admin(),
     }
 
 
