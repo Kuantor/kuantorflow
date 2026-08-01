@@ -33,6 +33,7 @@ from utils import (
     get_flashcards_by_topic,
     get_topics,
     save_flashcard,
+    upsert_user,
 )
 
 app = Flask(__name__)
@@ -56,8 +57,9 @@ ACCESS_KEYWORD = os.environ.get("ACCESS_KEYWORD", "password")
 # Purely optional: a visitor can sign in to be greeted by name, or stay
 # anonymous ("invisible") and use the site exactly as before. Enabled only when
 # both credentials are set (see .env.example) — otherwise it disables itself and
-# no sign-in button is shown. The identity lives only in the Flask session; no
-# IP address or name is ever written to the database.
+# no sign-in button is shown. Since #148 a signed-in identity is recorded in the
+# `users` table (email, name, Google's subject id) so that cards, settings and
+# chats can belong to someone; anonymous visitors are still never written down.
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 GOOGLE_AUTH_AVAILABLE = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
@@ -134,10 +136,53 @@ def _render_ai_agent_template(template_name: str, **context):
 
 
 def _current_first_name():
-    """First name of the signed-in visitor, if any — for Mykola to address them
-    by (the opening greeting uses the full name; the chat uses the first name)."""
-    name = ((session.get("user") or {}).get("name") or "").strip()
+    """What Mykola should call the signed-in visitor (issue #148).
+
+    Resolution order: their chosen `preferred_name`, then Google's
+    `given_name` claim, then the first word of the display name. The last step
+    is a guess — it can pick a surname in a family-name-first locale — which is
+    why it only runs when Google supplied no given name.
+    """
+    user = session.get("user") or {}
+    preferred = (user.get("preferred_name") or "").strip()
+    if preferred:
+        return preferred
+    given = (user.get("given_name") or "").strip()
+    if given:
+        return given
+    name = (user.get("name") or "").strip()
     return name.split()[0] if name else None
+
+
+def _record_sign_in(info):
+    """Persist the signed-in identity (#148); return (user_id, preferred_name).
+
+    Returns (None, None) if the row can't be written — an unreachable database
+    must not cost the user their login, the same way get_topics() and
+    _word_already_saved() already tolerate one.
+    """
+    google_sub = (info.get("sub") or "").strip()
+    email = (info.get("email") or "").strip()
+    if not google_sub or not email:
+        # sub is mandatory in OIDC, so this means something is badly wrong —
+        # sign in anyway, without a row.
+        app.logger.warning("Google sign-in without sub/email; not recording it")
+        return None, None
+    try:
+        return upsert_user(
+            google_sub, email,
+            display_name=_claim(info, "name"),
+            given_name=_claim(info, "given_name"),
+            family_name=_claim(info, "family_name"),
+        )
+    except Exception:
+        app.logger.exception("Could not record the Google sign-in")
+        return None, None
+
+
+def _claim(info, key):
+    """A Google claim as a stored value: blank and missing both become NULL."""
+    return (info.get(key) or "").strip() or None
 
 
 def _current_email():
@@ -555,11 +600,19 @@ def auth_google_callback():
         app.logger.exception("Google OAuth callback failed")
         return redirect(url_for("index"))
     info = token.get("userinfo") or {}
+    user_id, preferred_name = _record_sign_in(info)
     # Persist the signed-in session across browser restarts (30 days, see
     # app.permanent_session_lifetime). Anonymous sessions stay non-permanent.
     session.permanent = True
     session["user"] = {
-        "name": info.get("name") or info.get("given_name") or "there",
+        # id is None when the row couldn't be written (#148) — every reader
+        # must tolerate that, as they already do for anonymous visitors.
+        "id": user_id,
+        # "there" is a rendering placeholder, never stored as anyone's name.
+        "name": _claim(info, "name") or _claim(info, "given_name") or "there",
+        "given_name": _claim(info, "given_name"),
+        "family_name": _claim(info, "family_name"),
+        "preferred_name": preferred_name,
         "email": info.get("email"),
         "picture": info.get("picture"),
     }

@@ -34,6 +34,50 @@ def get_db_connection():
     return conn
 
 
+def upsert_user(google_sub, email, display_name=None, given_name=None,
+                family_name=None):
+    """
+    Record a Google sign-in (issue #148) and return (user_id, preferred_name).
+
+    Keyed on `google_sub` — Google's OIDC subject, which is unique per account
+    and never changes. An email change therefore updates the existing row
+    instead of creating a second one and orphaning the user's cards.
+
+    `preferred_name` is deliberately never written here: it is the user's own
+    choice of what Mykola calls them, not something Google supplies, so a
+    sign-in must not overwrite it. It is read back so the caller can put it in
+    the session without a second query.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        # LAST_INSERT_ID(id) makes lastrowid report the *existing* row's id on
+        # the update branch — without it, an update leaves lastrowid at 0.
+        cursor.execute(
+            """
+            INSERT INTO users (google_sub, email, display_name, given_name,
+                               family_name, last_seen_at)
+            VALUES (%s, %s, %s, %s, %s, NOW())
+            ON DUPLICATE KEY UPDATE
+                id = LAST_INSERT_ID(id),
+                email = VALUES(email),
+                display_name = VALUES(display_name),
+                given_name = VALUES(given_name),
+                family_name = VALUES(family_name),
+                last_seen_at = NOW()
+            """,
+            (google_sub, email, display_name, given_name, family_name),
+        )
+        user_id = cursor.lastrowid
+        cursor.execute("SELECT preferred_name FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        conn.commit()
+        cursor.close()
+        return user_id, (row[0] if row else None)
+    finally:
+        conn.close()
+
+
 FLASHCARD_FIELDS = (
     "word",
     "pos",
