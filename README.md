@@ -195,6 +195,26 @@ read-only (#102):
   back on the gate. Settings files are untouched: signing back in restores
   your preferences.
 
+### Signed-in identities (#148)
+
+Signing in with Google records a row in the **`users`** table: the account's
+Google subject id, email, name, and `preferred_name` — what Mykola calls you.
+Anonymous visitors are still never written down.
+
+The row is keyed on Google's **`sub`** claim, not the email. `sub` is unique
+per account and never changes, so someone who changes their Gmail address
+keeps the same row (and, later, the same cards) instead of appearing as a
+second person.
+
+Names come from Google's `given_name` / `family_name` claims rather than being
+split out of the display name — splitting guesses wrong on several given names
+in a row and on family-name-first locales. When Google supplies no given name,
+the first word of the display name is used as a fallback.
+
+Recording the sign-in is best-effort: if the database is unreachable you are
+still signed in, with no id, exactly as topic lists and duplicate checks
+already tolerate a dead database.
+
 ### The providers (#20, #21)
 
 Word lookups go through `parsers.lookup_word(word, topic, translator,

@@ -31,9 +31,14 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
 ## Key modules & patterns
 
 - **`app.py`** — routes; a keyword **gate** (`before_request`) blocks every
-  page until the keyword is entered; optional Google OAuth (identity in the
-  **session cookie only**, never persisted); `current_settings()` + a context
-  processor expose settings to templates.
+  page until the keyword is entered; optional Google OAuth — a sign-in upserts
+  a row in **`users`** (#148), keyed on Google's `sub` so an email change
+  updates rather than forks it, and the session carries `id`, the name claims
+  and `preferred_name`. A dead database still lets the user in, with
+  `id = None`. `_current_first_name()` is the single place that decides what
+  Mykola calls someone: `preferred_name` → `given_name` → first word of the
+  display name. `current_settings()` + a context processor expose settings to
+  templates.
 - **`parsers.py`** — `lookup_word(word, translator, explanatory_dictionary)`
   dispatches to Google/Bing translators + Oxford/Merriam-Webster dictionaries
   (call-time resolution so it's mockable). Also the **notes-upload parsers**
