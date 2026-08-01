@@ -1,3 +1,4 @@
+import hashlib
 import inspect
 import json
 import os
@@ -233,6 +234,27 @@ def _current_user_id():
     otherwise attribute its cards to somebody else.
     """
     return (session.get("user") or {}).get("id")
+
+
+def _identity_token():
+    """Opaque stamp for this identity, or None for an anonymous visitor (#170).
+
+    The chat widget keeps its transcript in localStorage and has to know
+    whether a stored thread belongs to whoever is signed in *now* — clearing
+    on the way out cannot cover an identity change the browser never sees,
+    like a session expiring or being repaired server-side.
+
+    A salted digest rather than the id or the email, because this is written
+    into localStorage: readable by anything on the origin and still there
+    after sign-out. Equality is the only thing the widget asks of it.
+
+    The token changes if SECRET_KEY does, which discards stored threads once.
+    """
+    key = _current_user_id() or _current_email()
+    if not key:
+        return None
+    salted = f"{app.secret_key}:{key}".encode("utf-8")
+    return hashlib.sha256(salted).hexdigest()[:16]
 
 
 def current_settings():
@@ -638,6 +660,7 @@ def inject_mykola():
     return {
         "mykola_enabled": MYKOLA_AVAILABLE,
         "app_boot_id": APP_BOOT_ID,
+        "mykola_identity": _identity_token(),
     }
 
 
