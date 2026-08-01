@@ -144,6 +144,15 @@ button:hover { background: var(--blue-dark); }
     line-height: 1;
 }
 .card-delete:hover { background: var(--bad-bg); color: var(--bad-border); }
+/* Not this visitor's card to delete (#162). The hover rule above has to be
+   suppressed as well — a cross you cannot use must not light up red as if
+   you could. aria-disabled, not :disabled, so the button stays hoverable and
+   its title tooltip works everywhere. */
+.card-delete[aria-disabled="true"] { color: var(--muted); cursor: default; }
+.card-delete[aria-disabled="true"]:hover {
+    background: transparent;
+    color: var(--muted);
+}
 .word { font-size: 1.3rem; font-weight: 700; }
 .pos {
     font-size: 0.72rem;
@@ -485,7 +494,10 @@ body.welcome-active {
     background: #fff;
     border-radius: 12px;
     padding: 1.5rem 1.8rem;
-    max-width: 420px;
+    /* 90vw as well as the 420px cap: this rule comes after .modal and would
+       otherwise override its min(90vw, 900px), letting a dialog whose text is
+       long enough run edge to edge on a phone. Identical on desktop. */
+    max-width: min(420px, 90vw);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 .modal-dialog p { margin: 0 0 1.1rem; font-size: 1.05rem; }

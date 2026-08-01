@@ -256,6 +256,37 @@ def _current_email():
     return (session.get("user") or {}).get("email")
 
 
+# Refusals shown when a delete is not this visitor's to make (#162). The first
+# is the wording given in the issue; the second is #125's problem — no identity
+# at all — rather than the card belonging to someone else.
+DELETE_NOT_YOURS = ("This card was created by admin or another user. "
+                    "You cannot delete the card.")
+DELETE_SIGN_IN_PROMPT = ("Sign in with Google to delete cards you have added.")
+
+
+def can_delete_card(card):
+    """Whether this request's visitor may delete `card` (issue #162).
+
+    Presentation only — it decides whether the cross is greyed. The rule is
+    enforced again in delete_card(), which is what actually protects the row;
+    this exists so the UI does not offer an action that will be refused.
+    """
+    if is_admin():
+        return True
+    user_id = _current_user_id()
+    if user_id is None:
+        return False
+    return card.get("added_by_user_id") == user_id
+
+
+def delete_refusal(card):
+    """The tooltip explaining why the cross is greyed, or None if it isn't."""
+    if can_delete_card(card):
+        return None
+    return DELETE_NOT_YOURS if _current_user_id() is not None \
+        else DELETE_SIGN_IN_PROMPT
+
+
 def is_admin():
     """Whether this request's visitor is an administrator (issue #158).
 
@@ -844,6 +875,9 @@ def inject_auth():
         "google_auth_enabled": GOOGLE_AUTH_AVAILABLE,
         # Admin-only UI is then a plain {% if is_admin %} (#158).
         "is_admin": is_admin(),
+        # Callables, not values: they answer per card (#162).
+        "can_delete_card": can_delete_card,
+        "delete_refusal": delete_refusal,
     }
 
 
@@ -1198,11 +1232,32 @@ def card_deck(topic):
 
 @app.route("/flashcards/<topic>/delete/<int:card_id>", methods=["POST"])
 def delete_card(topic, card_id):
-    """Delete one flashcard and return to its topic page."""
-    word = delete_flashcard(card_id)
-    if word:
+    """Delete one flashcard, if this visitor may (#162), and return to the topic.
+
+    Enforced here rather than in the template: greying the cross is
+    presentation, and a hand-made POST goes straight past it. Until this
+    landed the route had no identity check at all, so anyone past the keyword
+    gate could delete any card.
+    """
+    user_id = _current_user_id()
+    admin = is_admin()
+    if not admin and user_id is None:
+        # No identity at all — an anonymous visitor, or a sign-in whose users
+        # row could not be written (#148). Nothing can be theirs, so this is
+        # #125's sign-in prompt rather than #162's "someone else's card".
+        applog.card_delete_denied(card_id, topic=topic, user=_current_email(),
+                                  reason="anonymous")
+        flash((DELETE_SIGN_IN_PROMPT, None))
+        return redirect(url_for("flashcards", topic=topic))
+
+    word, outcome = delete_flashcard(card_id, owner_id=user_id, admin=admin)
+    if outcome == "deleted":
         applog.card_deleted(card_id, word, topic=topic, user=_current_email())
         flash((f"Deleted card '{word}'.", None))
+    elif outcome == "denied":
+        applog.card_delete_denied(card_id, topic=topic,
+                                  user=_current_email(), reason="not owner")
+        flash((DELETE_NOT_YOURS, None))
     else:
         applog.card_delete_missed(card_id, topic=topic, user=_current_email())
         flash(("Card not found — it may have already been deleted.", None))

@@ -22,7 +22,14 @@
 
     {% for card in cards %}
         <div class="panel card">
+            {# The cross stays on every card; it is greyed when the card is not
+               this visitor's to delete (#162). aria-disabled rather than the
+               disabled attribute, so the button keeps firing hover and click
+               everywhere — the refusal is the handler's job. #}
+            {% set refusal = delete_refusal(card) %}
             <button type="button" class="card-delete" aria-label="Delete card"
+                    {% if refusal %}aria-disabled="true" title="{{ refusal }}"
+                    data-refusal="{{ refusal }}"{% endif %}
                     data-word="{{ card.word }}{% if card.pos %} ({{ card.pos }}){% endif %}"
                     data-url="{{ url_for('delete_card', topic=topic, card_id=card.id) }}">&times;</button>
             <div class="word">{{ card.word }}
@@ -71,14 +78,36 @@
         </div>
     </div>
 
+    {# Touch devices have no hover, so the title tooltip never appears there.
+       Tapping a greyed cross shows the same sentence here instead (#162). #}
+    <div class="modal-overlay" id="delete-refused-modal" hidden>
+        <div class="modal modal-dialog">
+            <p id="delete-refused-text"></p>
+            <div class="modal-actions">
+                <button type="button" class="secondary" id="delete-refused-ok">OK</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         (function () {
             var overlay = document.getElementById("delete-modal");
             var question = document.getElementById("delete-question");
             var form = document.getElementById("delete-form");
 
+            var refusedOverlay = document.getElementById("delete-refused-modal");
+            var refusedText = document.getElementById("delete-refused-text");
+
             document.querySelectorAll(".card-delete").forEach(function (btn) {
                 btn.addEventListener("click", function () {
+                    // Greyed cross: explain instead of asking to confirm. This
+                    // is also the only explanation a touch device gets, since
+                    // the title tooltip needs a hover (#162).
+                    if (btn.getAttribute("aria-disabled") === "true") {
+                        refusedText.textContent = btn.dataset.refusal || "";
+                        refusedOverlay.hidden = false;
+                        return;
+                    }
                     question.textContent =
                         "Do you really want to delete the card '" + btn.dataset.word + "'?";
                     form.action = btn.dataset.url;
@@ -86,7 +115,14 @@
                 });
             });
 
-            function close() { overlay.hidden = true; }
+            function closeRefused() { refusedOverlay.hidden = true; }
+            document.getElementById("delete-refused-ok")
+                    .addEventListener("click", closeRefused);
+            refusedOverlay.addEventListener("click", function (e) {
+                if (e.target === refusedOverlay) closeRefused();
+            });
+
+            function close() { overlay.hidden = true; refusedOverlay.hidden = true; }
             document.getElementById("delete-no").addEventListener("click", close);
             overlay.addEventListener("click", function (e) {
                 if (e.target === overlay) close();  // click outside the dialog
