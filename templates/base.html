@@ -532,6 +532,12 @@
             var videoOverlay = document.getElementById("mykola-video-overlay");
             var video = document.getElementById("mykola-video");
             var WIDGET_STORAGE_KEY = "kf_mykola_widget_state_v1";
+            // Who the stored thread belongs to (#170): an opaque per-identity
+            // token, null when nobody is signed in. Stored state is restored
+            // only when this matches, so a sign-out the browser never saw —
+            // a session expiring, another tab, a server-side repair — cannot
+            // leave the previous user's conversation on screen.
+            var MYKOLA_IDENTITY = {{ mykola_identity | tojson }};
             var history = [];
             // The server mints a readable date-time chat id on the first
             // message (ai_agent#25); we adopt it from the response and keep
@@ -555,7 +561,15 @@
                 if (!hasStorage()) return null;
                 try {
                     var raw = localStorage.getItem(WIDGET_STORAGE_KEY);
-                    return raw ? JSON.parse(raw) : null;
+                    var state = raw ? JSON.parse(raw) : null;
+                    if (!state) return null;
+                    // Somebody else's thread, or one written before this
+                    // check existed — drop it and start fresh (#170).
+                    if ((state.identity || null) !== MYKOLA_IDENTITY) {
+                        localStorage.removeItem(WIDGET_STORAGE_KEY);
+                        return null;
+                    }
+                    return state;
                 } catch (e) {
                     return null;
                 }
@@ -563,6 +577,7 @@
             function saveWidgetState() {
                 if (!hasStorage()) return;
                 var data = {
+                    identity: MYKOLA_IDENTITY,
                     panelOpen: !panel.hidden,
                     minimized: panel.classList.contains("minimized"),
                     messages: uiMessages,
