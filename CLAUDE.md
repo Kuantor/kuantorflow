@@ -37,8 +37,10 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   and `preferred_name`. A dead database still lets the user in, with
   `id = None`. `_current_first_name()` is the single place that decides what
   Mykola calls someone: `preferred_name` → `given_name` → first word of the
-  display name. `current_settings()` + a context processor expose settings to
-  templates.
+  display name. `given_name` is used **whole** by design ("Anna Maria" stays
+  "Anna Maria"); shortening it is the app guessing at a nickname, and
+  `preferred_name` is the user's own answer to that. `current_settings()` + a
+  context processor expose settings to templates.
 - **`parsers.py`** — `lookup_word(word, translator, explanatory_dictionary)`
   dispatches to Google/Bing translators + Oxford/Merriam-Webster dictionaries
   (call-time resolution so it's mockable). Also the **notes-upload parsers**
