@@ -565,7 +565,13 @@
                     if (!state) return null;
                     // Somebody else's thread, or one written before this
                     // check existed — drop it and start fresh (#170).
-                    if ((state.identity || null) !== MYKOLA_IDENTITY) {
+                    // A thread from before the stamp has no `identity` key at
+                    // all, which is NOT the same as an anonymous thread's
+                    // `identity: null`: treating the two alike would leave a
+                    // signed-in transcript on screen for the anonymous visitor
+                    // the sign-out just created, which is the whole bug.
+                    var stamped = Object.prototype.hasOwnProperty.call(state, "identity");
+                    if (!stamped || state.identity !== MYKOLA_IDENTITY) {
                         localStorage.removeItem(WIDGET_STORAGE_KEY);
                         return null;
                     }
