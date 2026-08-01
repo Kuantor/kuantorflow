@@ -221,6 +221,20 @@ def _current_email():
     return (session.get("user") or {}).get("email")
 
 
+def _current_user_id():
+    """Row id of the signed-in visitor (#89), or None.
+
+    None covers three cases that the database cannot tell apart afterwards and
+    does not need to: an anonymous visitor, a sign-in whose users row could not
+    be written (#148), and any card saved before the column existed.
+
+    This is the only place the id may come from. It must never be read from
+    request data — the review popup posts hidden fields, so a browser could
+    otherwise attribute its cards to somebody else.
+    """
+    return (session.get("user") or {}).get("id")
+
+
 def current_settings():
     """Settings for this request (issue #86): the signed-in user's own config
     file, or the shared default config for anonymous visitors. Always returns a
@@ -236,8 +250,11 @@ def _save_and_log(entry, source):
     way when adding a new save path.
 
     Returns True when a row was actually written (False = duplicate).
+
+    Being the single funnel is also what makes #89 one change instead of four:
+    every save path records its owner here.
     """
-    card_id = save_flashcard(entry)
+    card_id = save_flashcard(entry, added_by_user_id=_current_user_id())
     if card_id is None:
         applog.card_skipped(entry, source=source, user=_current_email())
         return False
