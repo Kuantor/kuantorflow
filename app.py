@@ -222,6 +222,20 @@ def _current_email():
     return (session.get("user") or {}).get("email")
 
 
+def _current_user_id():
+    """Row id of the signed-in visitor (#89), or None.
+
+    None covers three cases that the database cannot tell apart afterwards and
+    does not need to: an anonymous visitor, a sign-in whose users row could not
+    be written (#148), and any card saved before the column existed.
+
+    This is the only place the id may come from. It must never be read from
+    request data — the review popup posts hidden fields, so a browser could
+    otherwise attribute its cards to somebody else.
+    """
+    return (session.get("user") or {}).get("id")
+
+
 def _identity_token():
     """Opaque stamp for this identity, or None for an anonymous visitor (#170).
 
@@ -236,8 +250,7 @@ def _identity_token():
 
     The token changes if SECRET_KEY does, which discards stored threads once.
     """
-    user = session.get("user") or {}
-    key = user.get("id") or user.get("email")
+    key = _current_user_id() or _current_email()
     if not key:
         return None
     salted = f"{app.secret_key}:{key}".encode("utf-8")
@@ -259,8 +272,11 @@ def _save_and_log(entry, source):
     way when adding a new save path.
 
     Returns True when a row was actually written (False = duplicate).
+
+    Being the single funnel is also what makes #89 one change instead of four:
+    every save path records its owner here.
     """
-    card_id = save_flashcard(entry)
+    card_id = save_flashcard(entry, added_by_user_id=_current_user_id())
     if card_id is None:
         applog.card_skipped(entry, source=source, user=_current_email())
         return False
@@ -646,6 +662,32 @@ def inject_mykola():
         "app_boot_id": APP_BOOT_ID,
         "mykola_identity": _identity_token(),
     }
+
+
+@app.before_request
+def drop_identity_from_before_the_users_table():
+    """Sign out a session created before #148, so the next sign-in repairs it.
+
+    Those sessions carry a name, an email and a picture but no `id` key —
+    the users row they would point at was never written, and nothing else
+    ever fills it in. The visitor still looks signed in, while every card
+    they save is attributed to nobody (#89). Session cookies here are
+    permanent, so that can go on for 30 days without a visible symptom.
+
+    Dropping the identity costs one sign-in and fixes it for good: the OAuth
+    callback writes the users row and puts its id in the session.
+
+    A stored `id` of None is a *different* case — a sign-in whose row could
+    not be written — and is deliberately left alone. That one is tolerated by
+    design (#148), and signing in again would most likely fail the same way.
+
+    Registered before require_keyword so it still runs on gated requests,
+    which return a redirect and stop the chain.
+    """
+    user = session.get("user")
+    if user is not None and "id" not in user:
+        app.logger.info("Dropping a pre-#148 session identity; it has no user id")
+        session.pop("user", None)
 
 
 @app.before_request

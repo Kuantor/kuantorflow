@@ -42,10 +42,32 @@ CREATE TABLE IF NOT EXISTS flashcards (
     translation_rus VARCHAR(255),
     examples_rus TEXT,
     topic VARCHAR(255),
+    -- Who added the card (issue #89). NULL for anonymous visitors and for
+    -- every card saved before this column existed — NULL is what SQL already
+    -- means by "references nothing", and it keeps the foreign key valid where
+    -- a sentinel like -1 would need a fake user row in every database.
+    -- Beware that NULL also breaks intuitive comparisons: "everyone else's
+    -- cards" (#127) needs IS NOT NULL / <=>, not != .
+    added_by_user_id INT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_topic (topic),
-    INDEX idx_word (word)
+    INDEX idx_word (word),
+    INDEX idx_added_by (added_by_user_id),
+    -- ON DELETE RESTRICT on purpose (settled in #165): account deletion asks
+    -- the user whether to keep or delete their cards, so the application must
+    -- resolve them first. CASCADE would let a stray row deletion destroy
+    -- someone's vocabulary, and SET NULL would silently pick "keep" even when
+    -- they chose "delete". RESTRICT turns a forgotten step into a loud failure.
+    CONSTRAINT fk_flashcards_user FOREIGN KEY (added_by_user_id)
+        REFERENCES users (id) ON DELETE RESTRICT
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- If the flashcards table already exists without the pos column, run:
 -- ALTER TABLE flashcards ADD COLUMN pos VARCHAR(20) AFTER word;
+
+-- If the flashcards table already exists without the added_by_user_id column
+-- (issue #89), run — the users table (#148) has to be in place first:
+-- ALTER TABLE flashcards ADD COLUMN added_by_user_id INT NULL AFTER topic;
+-- ALTER TABLE flashcards ADD INDEX idx_added_by (added_by_user_id);
+-- ALTER TABLE flashcards ADD CONSTRAINT fk_flashcards_user
+--     FOREIGN KEY (added_by_user_id) REFERENCES users (id) ON DELETE RESTRICT;

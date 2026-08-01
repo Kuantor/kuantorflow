@@ -131,7 +131,7 @@ FLASHCARD_FIELDS = (
 )
 
 
-def save_flashcard(entry):
+def save_flashcard(entry, added_by_user_id=None):
     """
     Insert a flashcard entry into the `flashcards` table, unless a card with
     the same word and part of speech already exists anywhere in the database
@@ -140,17 +140,25 @@ def save_flashcard(entry):
     Returns the new row id, or None when the card was skipped as a duplicate
     (callers use that to tell the user the word is already present).
     Ukrainian and Russian fields are optional; missing keys are stored as NULL.
+
+    `added_by_user_id` (issue #89) records who saved the card; None means an
+    anonymous visitor. It is a separate argument rather than a member of
+    FLASHCARD_FIELDS on purpose: `entry` is built from submitted form data, so
+    reading the id out of it would let a browser attribute a card to another
+    user. Callers must take it from the server-side session.
     """
     def serialize(value):
         if isinstance(value, (list, dict)):
             return json.dumps(value, ensure_ascii=False)
         return value
 
+    columns = FLASHCARD_FIELDS + ("added_by_user_id",)
     values = tuple(serialize(entry.get(field)) for field in FLASHCARD_FIELDS)
+    values += (added_by_user_id,)
 
     query = f"""
-        INSERT INTO flashcards ({", ".join(FLASHCARD_FIELDS)})
-        VALUES ({", ".join(["%s"] * len(FLASHCARD_FIELDS))})
+        INSERT INTO flashcards ({", ".join(columns)})
+        VALUES ({", ".join(["%s"] * len(columns))})
     """
 
     conn = get_db_connection()
