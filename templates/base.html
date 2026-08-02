@@ -152,6 +152,13 @@
                 </fieldset>
                 </div>{# /settings-grid #}
 
+                {# A blocked account keeps its own settings (#126) — the block
+                   is about changing shared things, not personal preferences.
+                   This is where they are told how to ask for access back. #}
+                {% if is_blocked %}
+                <p class="settings-blocked">{{ blocked_notice }}</p>
+                {% endif %}
+
                 <p class="settings-scope">
                     {% if current_user %}Saved for {{ current_user.email }}.
                     {% elif google_auth_enabled %}Settings are read-only for anonymous visitors &mdash;
@@ -242,7 +249,10 @@
         <div class="modal modal-dialog">
             <p id="signin-required-text">{{ add_sign_in_prompt }}</p>
             <div class="modal-actions">
-                {% if google_auth_enabled %}
+                {# No sign-in link for a blocked account (#126): they are
+                   already signed in, and signing in again changes nothing.
+                   The message names the admin to write to instead. #}
+                {% if google_auth_enabled and not is_blocked %}
                 <a class="signin-required-go" href="{{ url_for('login_google') }}">Sign in with Google</a>
                 {% endif %}
                 <button type="button" class="secondary" id="signin-required-ok">Close</button>

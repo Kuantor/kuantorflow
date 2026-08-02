@@ -33,6 +33,14 @@ CREATE TABLE IF NOT EXISTS users (
     preferred_name VARCHAR(255),
     created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_seen_at   TIMESTAMP NULL DEFAULT NULL,
+    -- Blocked accounts (issue #126). A nullable timestamp rather than a
+    -- boolean: it answers "is this account blocked?" and "since when?" from
+    -- one column. NULL means not blocked, so an account is unblocked by
+    -- clearing it and nothing else. The reason is admin-facing only — the
+    -- blocked user is shown the admin's address, not this text, because it is
+    -- a note to whoever unblocks them later.
+    blocked_at     TIMESTAMP NULL DEFAULT NULL,
+    blocked_reason VARCHAR(255),
     INDEX idx_email (email)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 

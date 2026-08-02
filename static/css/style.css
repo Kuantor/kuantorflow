@@ -525,6 +525,16 @@ body.welcome-active {
 .modal-actions .secondary { background: #e4e9ee; color: var(--ink); }
 .modal-actions .secondary:hover { background: #d3dae1; }
 
+/* How a blocked account asks for access back (#126). Stated plainly in the
+   Settings popup, which is the one place they can still change something. */
+.settings-blocked {
+    margin: 0 0 0.6rem;
+    padding: 0.6rem 0.8rem;
+    border-left: 3px solid var(--bad-border);
+    background: rgba(179, 38, 30, 0.08);
+    font-size: 0.95rem;
+}
+
 /* Sign-in prompt when a write is refused for want of an account (#125). A
    real link, not a button posting somewhere — it navigates to Google's OAuth
    flow — so it is styled to sit level with the dialog's buttons. */

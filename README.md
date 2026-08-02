@@ -232,6 +232,35 @@ could never be deleted by the person who added it (#162), so the failure is
 taken in the safe direction. Deleting was already restricted to your own cards
 by #162, and settings to your own file by #102.
 
+### Blocked accounts (#126)
+
+An account can be blocked. A blocked learner keeps everything that is
+read-only — flashcards, the card deck, quizzes, word lookups and their own
+settings — but cannot add or delete cards, and Mykola's widget is not shown to
+them. They are told *"Your account is blocked, so you cannot change the
+database. Write to &lt;admin&gt; to ask for access."*, with the address taken from
+`ADMIN_EMAILS`, so the message is a way back rather than a dead end. The same
+sentence appears in the Settings popup, which is where they will look.
+
+The block is `blocked_at` on their `users` row — a nullable timestamp, so
+"blocked?" and "since when?" are one column, and clearing it is the whole of
+unblocking. It is **read on every signed-in request**, not stamped into the
+session at sign-in: a session cookie lasts 30 days, and a block has to take
+effect on the blocked person's next request. Hiding the widget is presentation
+only; the chat endpoints refuse a hand-made request themselves.
+
+Blocking is an admin operation, run from the automation repo:
+
+```bash
+venv/bin/python maintenance/block_user.py someone@gmail.com --reason "spam in chat"
+venv/bin/python maintenance/block_user.py someone@gmail.com --unblock
+venv/bin/python maintenance/block_user.py --list
+```
+
+The script only calls `utils.set_user_blocked()`, so an admin page — if one is
+ever wanted — would share the same implementation. Both actions are recorded
+in `logs/cards.log` as `USER-BLOCK` / `USER-UNBLOCK`.
+
 ### The providers (#20, #21)
 
 Word lookups go through `parsers.lookup_word(word, topic, translator,

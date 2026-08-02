@@ -313,14 +313,14 @@
         </script>
     {% endif %}
 
-    {% if sign_in_required %}
+    {% if write_refusal %}
         <script>
-            // #125: 'Add cards automatically' is on, but there is no account to
-            // attribute the cards to, so nothing was saved. Say so as the page
-            // appears — the looked-up cards are waiting in the review popup
-            // behind this dialog, and signing in leaves them there.
+            // #125/#126: 'Add cards automatically' is on, but this visitor may
+            // not write — no account, or a blocked one. Say so as the page
+            // appears; the looked-up cards are waiting in the review popup
+            // behind this dialog, so signing in leaves them ready to add.
             document.addEventListener("DOMContentLoaded", function () {
-                window.kfSignInRequired();
+                window.kfSignInRequired({{ write_refusal | tojson }});
             });
         </script>
     {% endif %}

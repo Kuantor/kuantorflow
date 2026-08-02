@@ -13,6 +13,7 @@ from flask import (
     Flask,
     abort,
     flash,
+    g,
     jsonify,
     redirect,
     render_template,
@@ -37,6 +38,7 @@ from utils import (
     get_db_connection,
     get_flashcards_by_topic,
     get_topics,
+    get_user_block,
     save_flashcard,
     upsert_user,
 )
@@ -280,6 +282,49 @@ ADMIN_ACCOUNT_UNDELETABLE = (
     "first, then delete the account.")
 
 
+def current_block():
+    """This visitor's block, or None (issue #126). Cached for the request.
+
+    One query per signed-in request, not per call: the widget, the card pages
+    and the save routes all ask, and `g` is exactly the scope the answer is
+    valid for. Anonymous visitors have no account to block, so they never
+    reach the database here.
+
+    A dead database means no block is visible. That is the same tolerance the
+    rest of the app already has (a failed users-row write still signs you in),
+    and it fails in the direction that keeps the site usable — a blocked
+    account gets its restrictions back the moment the database answers again,
+    and #125 still refuses every write while `_current_user_id()` is unusable.
+    """
+    if "kf_block" not in g:
+        try:
+            g.kf_block = get_user_block(_current_user_id())
+        except Exception:
+            app.logger.exception("Could not read the block state")
+            g.kf_block = None
+    return g.kf_block
+
+
+def is_blocked():
+    """Whether this request's visitor is a blocked account (issue #126)."""
+    return current_block() is not None
+
+
+def blocked_notice():
+    """What a blocked user is told when they try to change something (#126).
+
+    Names an admin address so the message is an instruction rather than a
+    dead end — that is the whole of the issue's "shown the admin's address so
+    they can ask for access back". With no ADMIN_EMAILS configured there is
+    nobody to name, so the sentence stops after the fact.
+    """
+    admin = next(iter(sorted(ADMIN_EMAILS)), None)
+    if admin:
+        return ("Your account is blocked, so you cannot change the database. "
+                f"Write to {admin} to ask for access.")
+    return "Your account is blocked, so you cannot change the database."
+
+
 def can_add_cards():
     """Whether this request's visitor may write cards (issue #125).
 
@@ -291,8 +336,23 @@ def can_add_cards():
     nobody but an admin can ever remove.
 
     Admin-ness is not consulted: an admin is signed in, so they already pass.
+
+    A blocked account (#126) is refused here too — same answer, different
+    reason, which is what `add_refusal()` is for.
     """
-    return _current_user_id() is not None
+    return _current_user_id() is not None and not is_blocked()
+
+
+def add_refusal():
+    """Why this visitor may not add cards, or None if they may.
+
+    Two refusals share one path: no account at all (#125) and an account that
+    has been blocked (#126). The distinction only ever shows in the wording,
+    so it lives here rather than at each of the four call sites.
+    """
+    if can_add_cards():
+        return None
+    return blocked_notice() if is_blocked() else ADD_SIGN_IN_PROMPT
 
 
 def can_delete_card(card):
@@ -302,6 +362,12 @@ def can_delete_card(card):
     enforced again in delete_card(), which is what actually protects the row;
     this exists so the UI does not offer an action that will be refused.
     """
+    if is_blocked():
+        # Checked before admin-ness: an admin who blocked their own account
+        # is telling the app something, and #165 already refuses to let the
+        # admin delete that account, so this cannot lock the site's owner out
+        # of anything permanent.
+        return False
     if is_admin():
         return True
     user_id = _current_user_id()
@@ -314,6 +380,8 @@ def delete_refusal(card):
     """The tooltip explaining why the cross is greyed, or None if it isn't."""
     if can_delete_card(card):
         return None
+    if is_blocked():
+        return blocked_notice()
     return DELETE_NOT_YOURS if _current_user_id() is not None \
         else DELETE_SIGN_IN_PROMPT
 
@@ -397,9 +465,11 @@ def _save_and_log(entry, source):
     quietly writing. Callers that face a person check beforehand, so the
     visitor gets the sign-in prompt rather than an error.
     """
-    if not can_add_cards():
-        applog.card_add_denied(entry, source=source, user=_current_email())
-        raise PermissionError(ADD_SIGN_IN_PROMPT)
+    refusal = add_refusal()
+    if refusal:
+        applog.card_add_denied(entry, source=source, user=_current_email(),
+                               reason="blocked" if is_blocked() else "anonymous")
+        raise PermissionError(refusal)
     card_id = save_flashcard(entry, added_by_user_id=_current_user_id())
     if card_id is None:
         applog.card_skipped(entry, source=source, user=_current_email())
@@ -495,6 +565,14 @@ def _handle_mykola_chat_request():
     """Shared JSON chat handler for widget and full ai_agent-style page."""
     if not MYKOLA_AVAILABLE:
         return jsonify({"error": "Mykola is not available on this server."}), 503
+
+    # A blocked account (#126) does not get the widget, but hiding it is
+    # presentation: this is the refusal that holds for a request made by hand.
+    # Before the length and content checks, so a blocked visitor cannot use
+    # the endpoint's answers to probe anything.
+    if is_blocked():
+        applog.mykola_denied(user=_current_email())
+        return jsonify({"error": blocked_notice()}), 403
 
     if request.content_length and request.content_length > MAX_MYKOLA_REQUEST_BYTES:
         return jsonify({"error": "Your message is too long. Please shorten it and try again."}), 413
@@ -832,9 +910,14 @@ def get_mykola():
 
 @app.context_processor
 def inject_mykola():
-    """Expose whether the chat widget should render."""
+    """Expose whether the chat widget should render.
+
+    A blocked account (#126) does not get the widget. That is presentation —
+    the endpoints refuse the request themselves — but leaving a chat box that
+    answers every message with a refusal would be worse than not offering it.
+    """
     return {
-        "mykola_enabled": MYKOLA_AVAILABLE,
+        "mykola_enabled": MYKOLA_AVAILABLE and not is_blocked(),
         "app_boot_id": APP_BOOT_ID,
         "mykola_identity": _identity_token(),
     }
@@ -976,6 +1059,10 @@ def inject_auth():
         # the JSON refusal cannot drift apart.
         "add_sign_in_prompt": ADD_SIGN_IN_PROMPT,
         "can_add_cards": can_add_cards(),
+        # #126: a blocked visitor is already signed in, so the dialog must not
+        # offer them a sign-in link; the Settings popup names the admin.
+        "is_blocked": is_blocked(),
+        "blocked_notice": blocked_notice() if is_blocked() else None,
     }
 
 
@@ -1104,7 +1191,7 @@ def mykola_recap():
     (issue ai_agent#30). The recap is an optional nicety: anonymous visitors,
     empty histories, older agent versions, and errors all return
     {"recap": null} so the widget silently keeps its normal greeting."""
-    if not MYKOLA_AVAILABLE or not session.get("user"):
+    if not MYKOLA_AVAILABLE or not session.get("user") or is_blocked():
         return jsonify({"recap": None})
     # The learner already said goodbye today: wish them a good rest instead
     # of restarting the dialogue (ai_agent#39). Deterministic — no model call.
@@ -1141,6 +1228,9 @@ def mykola_restart_check():
     """
     if not MYKOLA_AVAILABLE:
         return jsonify({"restart": False, "reason": "unavailable"})
+    if is_blocked():
+        # No conversation to restart — the widget is not there (#126).
+        return jsonify({"restart": False, "reason": "blocked"})
     hours = current_settings()["restart_chat_interval"]
     if not hours:
         return jsonify({"restart": False, "reason": "disabled"})
@@ -1206,7 +1296,7 @@ def index():
     proposed_topic = None
     source_content = None  # readable text of an upload, shown beside its cards
     duplicate_warning = None  # the word to warn about before looking it up (#145)
-    sign_in_required = False  # a write was refused for want of an account (#125)
+    write_refusal = None  # why a write was refused, if one was (#125/#126)
     if request.method == "POST":
         action = request.form.get("action")
         topic = (request.form.get("topic") or "general").strip() or "general"
@@ -1233,17 +1323,18 @@ def index():
                         explanatory_dictionary=prefs["explanatory_dictionary"],
                     )
                     if prefs["cards_automatically"] and not can_add_cards():
-                        # #125: nothing may be written, so the automatic save
-                        # cannot happen. The lookup already succeeded, so show
-                        # its cards in the review popup rather than throwing
-                        # the work away — signing in from the prompt leaves
-                        # them there to be added.
-                        applog.card_add_denied({"word": word},
-                                               source="automatic add",
-                                               user=_current_email())
+                        # #125/#126: nothing may be written, so the automatic
+                        # save cannot happen. The lookup already succeeded, so
+                        # show its cards in the review popup rather than
+                        # throwing the work away — signing in from the prompt
+                        # leaves them there to be added.
+                        applog.card_add_denied(
+                            {"word": word}, source="automatic add",
+                            user=_current_email(),
+                            reason="blocked" if is_blocked() else "anonymous")
                         proposed = entries
                         proposed_topic = topic
-                        sign_in_required = True
+                        write_refusal = add_refusal()
                     elif prefs["cards_automatically"]:
                         # 'Add cards automatically' is on (#13): skip the
                         # review popup, write the cards straight to the DB.
@@ -1311,7 +1402,7 @@ def index():
         "index.html", message=message, topics=topics,
         proposed=proposed, proposed_topic=proposed_topic,
         source_content=source_content, duplicate_warning=duplicate_warning,
-        sign_in_required=sign_in_required,
+        write_refusal=write_refusal,
     )
 
 
@@ -1352,15 +1443,16 @@ def add_card():
         "translation_rus": cleaned("translation_rus"),
         "examples_rus": json_list("examples_rus"),
     }
-    if not can_add_cards():
-        # #125. Answered here rather than by hiding the button: these forms
-        # are ordinary POSTs and a hand-made one goes straight past the UI.
-        # `sign_in_required` is what tells the popup to show the prompt
+    refusal = add_refusal()
+    if refusal:
+        # #125/#126. Answered here rather than by hiding the button: these
+        # forms are ordinary POSTs and a hand-made one goes straight past the
+        # UI. `sign_in_required` is what tells the popup to show the message
         # instead of its generic "saving failed" alert.
         applog.card_add_denied(entry, source="review popup",
-                               user=_current_email())
-        return {"ok": False, "sign_in_required": True,
-                "error": ADD_SIGN_IN_PROMPT}, 403
+                               user=_current_email(),
+                               reason="blocked" if is_blocked() else "anonymous")
+        return {"ok": False, "sign_in_required": True, "error": refusal}, 403
     if not _save_and_log(entry, source="review popup"):
         return {"ok": True, "saved": False, "duplicate": True}  # #101
     return {"ok": True, "saved": True}
@@ -1436,6 +1528,15 @@ def delete_card(topic, card_id):
     landed the route had no identity check at all, so anyone past the keyword
     gate could delete any card.
     """
+    if is_blocked():
+        # #126: a blocked account keeps its cards but may not remove them,
+        # exactly as it may not add any. Checked before ownership, so the
+        # answer does not depend on whose card it is.
+        applog.card_delete_denied(card_id, topic=topic, user=_current_email(),
+                                  reason="blocked")
+        flash((blocked_notice(), None))
+        return redirect(url_for("flashcards", topic=topic))
+
     user_id = _current_user_id()
     admin = is_admin()
     if not admin and user_id is None:

@@ -153,6 +153,25 @@ def card_add_denied(entry, source, user=None, reason="anonymous"):
            source=source, user=_user(user))
 
 
+def user_blocked(user_id, email, reason=None):
+    """An account was blocked (#126). Recorded with the address, unlike an
+    account deletion: the block is a decision someone may have to justify or
+    reverse later, and 'which account?' is the first question asked."""
+    _write(CARDS, "USER-BLOCK", id=user_id, email=email, reason=reason)
+
+
+def user_unblocked(user_id, email):
+    """A block was lifted (#126)."""
+    _write(CARDS, "USER-UNBLOCK", id=user_id, email=email)
+
+
+def mykola_denied(user=None):
+    """A blocked account's chat request was refused (#126). Worth a line: the
+    widget is not rendered for them, so this only happens for a request made
+    by hand, or a page loaded before the block took effect."""
+    _write(CARDS, "MYKOLA-DENIED", reason="blocked", user=_user(user))
+
+
 def card_delete_denied(card_id, topic=None, user=None, reason=None):
     """A delete refused by the ownership rule (#162).
 
