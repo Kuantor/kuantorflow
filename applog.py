@@ -153,6 +153,18 @@ def card_add_denied(entry, source, user=None, reason="anonymous"):
            source=source, user=_user(user))
 
 
+def preferred_name_set(user_id, name, user=None):
+    """The learner told Mykola what to call them (ai_agent#62), or asked for
+    their real name back (`name` is None). Recorded because it is written by
+    the model on the user's behalf: if the wrong thing is stored, the log is
+    where you find out what was asked for."""
+    # `preferred=`, not `name=`: _write's own first parameter is the log file
+    # name, so a field called `name` collides with it.
+    _write(CARDS, "PREFERRED-NAME", id=user_id,
+           preferred=name if name is not None else "(cleared)",
+           user=_user(user))
+
+
 def user_blocked(user_id, email, reason=None):
     """An account was blocked (#126). Recorded with the address, unlike an
     account deletion: the block is a decision someone may have to justify or

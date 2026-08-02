@@ -39,6 +39,7 @@ from utils import (
     get_flashcards_by_topic,
     get_topics,
     get_user_block,
+    set_preferred_name,
     save_flashcard,
     upsert_user,
 )
@@ -912,15 +913,47 @@ def _save_card_from_chat(entry):
     return entry
 
 
+def _save_preferred_name_from_chat(name):
+    """Name saver injected into the agent: stores what the learner asked to be
+    called (ai_agent#62), or clears it when `name` is None.
+
+    Refuses an anonymous learner by raising, exactly as the card saver does
+    (#125): the agent turns the exception into an error status and Mykola says
+    he cannot remember it without an account, rather than claiming he will.
+
+    The session copy is updated too, so the very next message — and the next
+    recap — already use the new name. Without that the change would only
+    appear after signing in again, since `_current_first_name()` reads the
+    session, not the database.
+    """
+    user_id = _current_user_id()
+    if user_id is None:
+        raise PermissionError(
+            "Sign in with Google and I shall remember what to call you.")
+    if not set_preferred_name(user_id, name):
+        raise RuntimeError("I could not find your account to note that in.")
+
+    user = dict(session.get("user") or {})
+    user["preferred_name"] = name
+    session["user"] = user
+    applog.preferred_name_set(user_id, name, user=_current_email())
+    return name
+
+
 def get_mykola():
     """Lazily build the MykolaAgent (loads the knowledge base) on first use."""
     global _mykola_agent
     if _mykola_agent is None:
         # Inject our DB writer when the installed agent supports it —
         # feature-detected so older ai_agent checkouts keep working.
+        # Feature-detected, so the two repos can be deployed in either order:
+        # an older ai_agent checkout simply doesn't get the newer saver.
         kwargs = {}
-        if "card_saver" in inspect.signature(MykolaAgent.__init__).parameters:
+        accepted = inspect.signature(MykolaAgent.__init__).parameters
+        if "card_saver" in accepted:
             kwargs["card_saver"] = _save_card_from_chat
+        if "name_saver" in accepted:                      # ai_agent#62
+            kwargs["name_saver"] = _save_preferred_name_from_chat
         _mykola_agent = MykolaAgent(**kwargs)
     return _mykola_agent
 

@@ -233,6 +233,28 @@ could never be deleted by the person who added it (#162), so the failure is
 taken in the safe direction. Deleting was already restricted to your own cards
 by #162, and settings to your own file by #102.
 
+### Mykola remembers what to call you (ai_agent#62)
+
+Tell Mykola in chat — *"Anna Maria is a mouthful, call me Ann"* — and he keeps
+it: the name is stored in `users.preferred_name` and used from the next
+message on, including in the welcome-back recap. *"Go back to my proper name"*
+clears it, so a later change to your Google name is picked up again rather
+than being shadowed for ever.
+
+The tool (`set_preferred_name`) lives in `ai_agent`; KuantorFlow injects the
+saver that writes the column, exactly as it does for `add_flashcard`. The
+agent never touches the database itself. Injection is feature-detected, so the
+two repos can be deployed in either order.
+
+An anonymous learner has no account to store it in, so the tool reports the
+refusal and Mykola says so in his own voice — and still uses the name for the
+rest of that conversation. Stored names are collapsed to one line and capped
+at 40 characters, since the value is fed back into his system prompt.
+
+This is the intended answer to a long or multi-part given name: #148 uses
+Google's `given_name` **whole** rather than guessing at a nickname, and this is
+how the learner says what they would actually like to be called.
+
 ### Individual cards (#127)
 
 **Use only individual cards** in Settings hides everyone else's cards from the

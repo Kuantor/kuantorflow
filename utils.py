@@ -120,6 +120,31 @@ def upsert_user(google_sub, email, display_name=None, given_name=None,
         conn.close()
 
 
+def set_preferred_name(user_id, name):
+    """Store what Mykola should call this user, or clear it (ai_agent#62).
+
+    `name` of None clears the column back to NULL, which means "use the name
+    from the account". Storing the literal first name instead would look the
+    same today and then shadow a later change to the Google name for ever.
+
+    Returns True when a row was updated. False means no such account, which
+    the caller reports rather than treating as success.
+    """
+    if user_id is None:
+        return False
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET preferred_name = %s WHERE id = %s",
+                       (name, user_id))
+        updated = cursor.rowcount > 0
+        conn.commit()
+        cursor.close()
+        return updated
+    finally:
+        conn.close()
+
+
 def get_user_block(user_id):
     """When and why an account was blocked (issue #126), or None.
 

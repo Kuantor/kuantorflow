@@ -70,6 +70,12 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   suite points it at a temp dir).
 - **Mykola widget** lives in `templates/base.html`; endpoints `/mykola/chat`,
   `/mykola/recap`. Its intelligence comes from the `ai_agent` package.
+  **Agent tools are hosted here**: the agent defines them, this app injects the
+  callable that touches the database (`card_saver` → `_save_card_from_chat`,
+  `name_saver` → `_save_preferred_name_from_chat`, ai_agent#62). Injection is
+  feature-detected in `get_mykola()` so the repos deploy in either order, and a
+  saver refuses by **raising** — the agent turns that into an error the model
+  relays in character.
 - **`schema.sql` + `apply_schema.py`** — `schema.sql` holds `CREATE TABLE` only
   and describes a **fresh** database; every change to an **existing** one is a
   `Step` in `apply_schema.py`'s `MIGRATIONS` (#180). Adding a column is
