@@ -1,5 +1,10 @@
 -- KuantorFlow database schema
--- Apply with: mysql -u <user> -p -h <host> <database> < schema.sql
+-- Apply with: python apply_schema.py
+--
+-- This file defines a *fresh* database and holds CREATE TABLE statements only.
+-- Re-applying it cannot change a table that already exists, so a change to one
+-- — a new column, index or constraint — goes in MIGRATIONS in apply_schema.py
+-- instead (issue #180). Piping this file into mysql by hand skips those.
 
 -- Anonymous Mykola usage per day (issue #164). One row per day, incremented
 -- atomically, so the daily ceiling holds across PythonAnywhere's worker
@@ -62,12 +67,7 @@ CREATE TABLE IF NOT EXISTS flashcards (
         REFERENCES users (id) ON DELETE RESTRICT
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- If the flashcards table already exists without the pos column, run:
--- ALTER TABLE flashcards ADD COLUMN pos VARCHAR(20) AFTER word;
-
--- If the flashcards table already exists without the added_by_user_id column
--- (issue #89), run — the users table (#148) has to be in place first:
--- ALTER TABLE flashcards ADD COLUMN added_by_user_id INT NULL AFTER topic;
--- ALTER TABLE flashcards ADD INDEX idx_added_by (added_by_user_id);
--- ALTER TABLE flashcards ADD CONSTRAINT fk_flashcards_user
---     FOREIGN KEY (added_by_user_id) REFERENCES users (id) ON DELETE RESTRICT;
+-- The ALTER statements that used to be listed here as comments — pos,
+-- added_by_user_id, idx_added_by and fk_flashcards_user — are now real
+-- statements in apply_schema.py, which runs them on databases that predate
+-- them and skips them everywhere else.

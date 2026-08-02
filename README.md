@@ -276,12 +276,47 @@ them somewhere else.
 
 ---
 
+## 🗄️ Database schema and deploys (#180)
+
+The schema lives in two places on purpose, and one command applies both:
+
+```bash
+venv/Scripts/python apply_schema.py            # create/alter whatever is missing
+venv/Scripts/python apply_schema.py --dry-run  # just say what would change
+```
+
+- **`schema.sql`** describes a **fresh** database and holds `CREATE TABLE`
+  statements only.
+- **`apply_schema.py`** holds the changes to a database that already
+  exists — new columns, indexes and constraints — as an ordered list of real
+  statements.
+
+Why the split: `CREATE TABLE IF NOT EXISTS` does nothing to a table that is
+already there, so re-applying `schema.sql` adds a new *table* but never a new
+*column*. The `ALTER` statements used to sit in `schema.sql` as comments, which
+meant a deploy that followed the instructions faithfully still skipped them —
+on 2026-08-02 that took card saving down until they were run by hand.
+
+The script is **idempotent**: each step is skipped when the object it creates
+is already present, so a re-run reports `nothing to do`, a half-applied
+database finishes cleanly, and a failure exits non-zero instead of passing
+quietly. Every step is reported either way — `+ applied` or `= already
+present` — so a deploy that changed nothing looks different from one that did.
+
+**Adding a column** is two edits: put it in `schema.sql` for databases that
+don't exist yet, and add a migration to `MIGRATIONS` in `apply_schema.py` for
+the one that does.
+
+---
+
 ## 📂 Project Structure
 
 ```
 kuantorflow/
 ├── app.py              # Main Flask application (routes, views)
 ├── utils.py            # Database connection + helper functions
+├── schema.sql          # Tables for a fresh database (CREATE TABLE only)
+├── apply_schema.py     # Applies schema.sql + pending migrations (issue #180)
 ├── applog.py           # Action logs written to logs/ (issue #30)
 ├── settings_store.py   # Per-user settings persisted as JSON (issue #86)
 ├── requirements.txt    # Python dependencies
