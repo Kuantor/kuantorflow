@@ -3,8 +3,12 @@
 One config file per identity, all inside the ``settings/`` directory:
 
     settings/config-default.json    every anonymous (not signed-in) visitor
-    settings/config-<username>.json one per Google-authorised user,
-                                    <username> = the email part before the '@'
+    settings/config-<id>.json       one per signed-in user, <id> being their
+                                    users-table id (issue #174)
+
+The file records the owner's address under EMAIL_KEY so a directory listing
+can still be read by a human; pre-#174 files named after the email prefix are
+moved onto their id-keyed name the first time that user is seen.
 
 The store is deliberately independent of Flask: it takes an email (or None)
 and does the rest, which keeps it importable and testable on its own. app.py
@@ -85,9 +89,93 @@ def safe_username(email: str | None) -> str:
     return safe[:64] or DEFAULT_USERNAME
 
 
-def config_path(email: str | None = None) -> Path:
+# The email is stored inside the file rather than in its name (issue #174,
+# settled in #148 decision 1). A composite name like config-7-anton.json goes
+# stale the moment the address changes, and turns every lookup into a glob —
+# load() runs on every rendered page through inject_settings, so a per-render
+# directory scan is a poor trade for a nicer `ls`. This key is written by
+# save() and stripped by sanitize(), so it never reaches the app's settings.
+EMAIL_KEY = "_email"
+
+
+def safe_key(user_id=None) -> str:
+    """File-name stem for this identity: the users row id, or 'default'.
+
+    Keyed on the id (issue #174) because the email prefix was neither stable
+    nor unique: an address change orphaned the file, and everything before the
+    '@' collides — anton@gmail.com and anton@outlook.com shared one config.
+
+    Anything that isn't already a whole number falls back to the shared
+    default, so a junk value can't build a path outside SETTINGS_DIR.
+    Deliberately strict rather than coercing with int(): int(7.5) is 7, which
+    would silently hand one identity another's settings file.
+    """
+    if isinstance(user_id, bool) or user_id is None:
+        return DEFAULT_USERNAME  # bool is an int subclass — reject it first
+    if isinstance(user_id, int):
+        return str(user_id)
+    if isinstance(user_id, str) and re.fullmatch(r"\d+", user_id.strip()):
+        return str(int(user_id))
+    return DEFAULT_USERNAME
+
+
+def config_path(user_id=None) -> Path:
     """Path of the config file backing this identity (may not exist yet)."""
-    return SETTINGS_DIR / f"config-{safe_username(email)}.json"
+    return SETTINGS_DIR / f"config-{safe_key(user_id)}.json"
+
+
+def legacy_config_path(email: str | None = None) -> Path | None:
+    """Where this identity's settings lived before #174, or None if nowhere.
+
+    None for an address that yields no usable prefix — that visitor was on the
+    shared default config, which is not anyone's to migrate.
+    """
+    username = safe_username(email)
+    if username == DEFAULT_USERNAME:
+        return None
+    return SETTINGS_DIR / f"config-{username}.json"
+
+
+def _stored_email(path: Path) -> str | None:
+    """The EMAIL_KEY recorded in a config file, or None if absent/unreadable."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    value = raw.get(EMAIL_KEY) if isinstance(raw, dict) else None
+    return value if isinstance(value, str) else None
+
+
+def _migrate(user_id, email: str | None) -> bool:
+    """Move a pre-#174 email-keyed config onto its id-keyed name, once.
+
+    Done on read rather than by a maintenance script: a user who has not
+    signed in since #148 has a settings file but no users row, so a script
+    sweeping the table would skip exactly the files that need moving. Doing it
+    here also means no migration window in which two files exist.
+    """
+    path = config_path(user_id)
+    legacy = legacy_config_path(email)
+    if legacy is None or not legacy.is_file() or legacy == path:
+        return False
+    if path.exists():
+        # Something already holds this id's name. If it carries EMAIL_KEY it is
+        # this user's own migrated file and the legacy one is a leftover; leave
+        # both alone. If it doesn't, it is a pre-#174 file belonging to whoever
+        # had the numeric email prefix (7@example.com → config-7.json), so move
+        # it aside rather than letting this user inherit a stranger's settings.
+        if _stored_email(path) is not None:
+            return False
+        try:
+            os.replace(path, path.with_suffix(".json.orphaned"))
+        except OSError:
+            return False
+    try:
+        os.replace(legacy, path)
+    except OSError:
+        return False  # a failed move just means the defaults are used this once
+    return True
 
 
 def sanitize(values: dict | None) -> dict:
@@ -136,15 +224,24 @@ def _whole_number(value):
     return None
 
 
-def load(email: str | None = None) -> dict:
+def load(user_id=None, email: str | None = None) -> dict:
     """Settings for this identity, always complete and valid.
+
+    Keyed on ``user_id`` (issue #174); ``email`` is only recorded inside the
+    file and used to find a pre-#174 file to migrate.
 
     A missing file is created with the defaults on first read, so every
     identity that has visited the site has a real config file on disk
     (issue #86). Never raises: an unreadable file, invalid JSON, or a failed
     first write all yield the defaults, so settings can't break the page.
     """
-    path = config_path(email)
+    path = config_path(user_id)
+    migrated = False
+    if user_id is not None:
+        # Attempted whenever a pre-#174 file exists for this address — not only
+        # when the id-keyed name is free, because that name may itself be a
+        # legacy file belonging to whoever had a numeric email prefix.
+        migrated = _migrate(user_id, email)
     try:
         with open(path, encoding="utf-8") as fh:
             raw = json.load(fh)
@@ -153,27 +250,45 @@ def load(email: str | None = None) -> dict:
         # file deliberately does NOT take this path: it may hold hand-edited
         # values worth fixing, so it is never silently overwritten.
         try:
-            return save(DEFAULTS, email)
+            return save(DEFAULTS, user_id, email)
         except OSError:
             return dict(DEFAULTS)  # read-only disk etc. — defaults still work
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return dict(DEFAULTS)
-    return sanitize(raw)
+    values = sanitize(raw)
+    if migrated:
+        # Stamp EMAIL_KEY straight away rather than waiting for the user's
+        # next settings save — otherwise a just-migrated file is unreadable in
+        # a directory listing, which is most of the point of migrating it.
+        try:
+            return save(values, user_id, email)
+        except OSError:
+            pass
+    return values
 
 
-def save(values: dict, email: str | None = None) -> dict:
+def save(values: dict, user_id=None, email: str | None = None) -> dict:
     """Validate ``values``, write them atomically, and return what was stored.
 
     The write goes to a temp file in the same directory and is then moved into
     place, so readers only ever see a complete file.
+
+    ``email`` is written into the file under EMAIL_KEY so a directory listing
+    can be tied back to a person (#174). It refreshes on every save, so an
+    address change corrects itself without renaming anything. It is not part
+    of the returned settings — sanitize() drops it — so it never reaches a
+    template or the /settings JSON response.
     """
     clean = sanitize(values)
-    path = config_path(email)
+    payload = dict(clean)
+    if email:
+        payload[EMAIL_KEY] = email
+    path = config_path(user_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".config-", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(clean, fh, indent=2, ensure_ascii=False, sort_keys=True)
+            json.dump(payload, fh, indent=2, ensure_ascii=False, sort_keys=True)
             fh.write("\n")
         os.replace(tmp, path)  # atomic on the same filesystem
     except BaseException:
@@ -186,8 +301,8 @@ def save(values: dict, email: str | None = None) -> dict:
     return clean
 
 
-def update(changes: dict, email: str | None = None) -> dict:
+def update(changes: dict, user_id=None, email: str | None = None) -> dict:
     """Merge ``changes`` into the stored settings and persist the result."""
-    current = load(email)
+    current = load(user_id, email)
     current.update(changes or {})
-    return save(current, email)
+    return save(current, user_id, email)
