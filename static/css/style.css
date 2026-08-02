@@ -525,6 +525,21 @@ body.welcome-active {
 .modal-actions .secondary { background: #e4e9ee; color: var(--ink); }
 .modal-actions .secondary:hover { background: #d3dae1; }
 
+/* Sign-in prompt when a write is refused for want of an account (#125). A
+   real link, not a button posting somewhere — it navigates to Google's OAuth
+   flow — so it is styled to sit level with the dialog's buttons. */
+.signin-required-go {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.55rem 1.1rem;
+    border-radius: 6px;
+    background: var(--blue);
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+}
+.signin-required-go:hover { background: var(--blue-dark); }
+
 /* Settings popup (issues #13 / #20; two-column layout #118) */
 .settings-dialog {
     width: min(92vw, 700px);

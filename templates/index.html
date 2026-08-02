@@ -200,6 +200,17 @@
                     btn.textContent = "Adding…";
                     return fetch(form.dataset.addUrl, { method: "POST", body: new FormData(form) })
                         .then(function (resp) {
+                            if (resp.status === 403) {
+                                // Refused for want of an account (#125). A
+                                // distinct error so the caller shows the
+                                // sign-in prompt, not "please try again" —
+                                // trying again is exactly what won't help.
+                                return resp.json().then(function (data) {
+                                    var err = new Error(data.error || "sign in required");
+                                    err.signInRequired = true;
+                                    throw err;
+                                });
+                            }
                             if (!resp.ok) throw new Error("save failed");
                             return resp.json();
                         })
@@ -229,7 +240,13 @@
                         e.preventDefault();
                         addCard(form)
                             .then(function () { setTimeout(maybeAutoClose, 700); })
-                            .catch(function () { alert("Saving failed — please try again."); });
+                            .catch(function (err) {
+                                if (err && err.signInRequired) {
+                                    window.kfSignInRequired(err.message);
+                                } else {
+                                    alert("Saving failed — please try again.");
+                                }
+                            });
                     });
                     form.querySelector(".proposal-remove").addEventListener("click", function () {
                         form.remove();
@@ -245,15 +262,32 @@
                         var forms = Array.prototype.slice.call(
                             overlay.querySelectorAll(".proposal-card:not(.added)"));
                         var failed = 0;
+                        var refused = false;  // #125: no account — stop, don't retry
                         // Add sequentially so we don't hammer the database.
                         var chain = Promise.resolve();
                         forms.forEach(function (form) {
                             chain = chain
-                                .then(function () { return addCard(form); })
-                                .catch(function () { failed++; });
+                                .then(function () {
+                                    // Once one card is refused for want of an
+                                    // account, the rest would be too: sending
+                                    // them is a queue of certain failures.
+                                    if (refused) return;
+                                    return addCard(form);
+                                })
+                                .catch(function (err) {
+                                    if (err && err.signInRequired) {
+                                        refused = true;
+                                        window.kfSignInRequired(err.message);
+                                    } else {
+                                        failed++;
+                                    }
+                                });
                         });
                         chain.then(function () {
-                            if (failed) {
+                            if (refused) {
+                                addAllBtn.disabled = false;
+                                addAllBtn.textContent = "Add All";
+                            } else if (failed) {
                                 addAllBtn.disabled = false;
                                 addAllBtn.textContent = "Add All";
                                 alert(failed + " card(s) could not be saved — please try again.");
@@ -276,6 +310,18 @@
                     if (e.key === "Escape" && !overlay.hidden) close();
                 });
             })();
+        </script>
+    {% endif %}
+
+    {% if sign_in_required %}
+        <script>
+            // #125: 'Add cards automatically' is on, but there is no account to
+            // attribute the cards to, so nothing was saved. Say so as the page
+            // appears — the looked-up cards are waiting in the review popup
+            // behind this dialog, and signing in leaves them there.
+            document.addEventListener("DOMContentLoaded", function () {
+                window.kfSignInRequired();
+            });
         </script>
     {% endif %}
 

@@ -234,6 +234,22 @@
         </div>
     </div>
 
+    {# A write refused for want of an account (#125). Shown on the attempt
+       rather than by disabling the controls: the save routes are what
+       actually refuse, and this is how the visitor learns why. Any page can
+       raise it through window.kfSignInRequired(). #}
+    <div class="modal-overlay" id="signin-required-modal" hidden>
+        <div class="modal modal-dialog">
+            <p id="signin-required-text">{{ add_sign_in_prompt }}</p>
+            <div class="modal-actions">
+                {% if google_auth_enabled %}
+                <a class="signin-required-go" href="{{ url_for('login_google') }}">Sign in with Google</a>
+                {% endif %}
+                <button type="button" class="secondary" id="signin-required-ok">Close</button>
+            </div>
+        </div>
+    </div>
+
     {# Reset Auth confirmation (#98) — same pattern as card deletion. #}
     <div class="modal-overlay" id="reset-auth-modal" hidden>
         <div class="modal modal-dialog">
@@ -389,6 +405,24 @@
                     localStorage.removeItem("kf_mykola_auth_dismissed");
                 } catch (e) {}
                 try { sessionStorage.removeItem("kf_welcome_seen_{{ app_boot_id }}"); } catch (e) {}
+            });
+
+            // --- "Sign in to change anything" (#125) -------------------------
+            // Global so any page can raise it — the review popup calls it when
+            // /cards/add answers 403. An optional message argument lets a
+            // future refusal (a blocked account, #126) reuse the same dialog.
+            var signInOverlay = document.getElementById("signin-required-modal");
+            var signInText = document.getElementById("signin-required-text");
+            var signInDefaultText = signInText.textContent;
+            function closeSignInRequired() { signInOverlay.hidden = true; }
+            window.kfSignInRequired = function (message) {
+                signInText.textContent = message || signInDefaultText;
+                signInOverlay.hidden = false;
+            };
+            document.getElementById("signin-required-ok")
+                .addEventListener("click", closeSignInRequired);
+            signInOverlay.addEventListener("click", function (e) {
+                if (e.target === signInOverlay) closeSignInRequired();
             });
 
             // --- Settings popup (issues #13 / #20) ---------------------------
