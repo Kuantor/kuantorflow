@@ -170,8 +170,17 @@
                        An ACTION like Reset Auth, so type=button, but it is
                        irreversible — hence its own confirmation below. #}
                     {% if current_user and current_user.id %}
+                    {# Greyed for the admin (#165): losing the account that
+                       keeps the site running is a footgun with no upside.
+                       aria-disabled, not disabled, so it stays hoverable and
+                       its tooltip works everywhere — same pattern as the card
+                       delete cross (#162). #}
                     <button type="button" id="delete-account-btn" class="settings-reset"
-                            title="Permanently delete your account">Delete account</button>
+                            {% if account_delete_refusal %}aria-disabled="true"
+                            title="{{ account_delete_refusal }}"
+                            data-refusal="{{ account_delete_refusal }}"
+                            {% else %}title="Permanently delete your account"{% endif %}
+                            >Delete account</button>
                     {% endif %}
                     <button type="button" class="secondary" id="settings-cancel">{% if settings_read_only %}Close{% else %}Cancel{% endif %}</button>
                     <button type="submit" id="settings-save"
@@ -211,6 +220,17 @@
                     <button type="button" class="secondary" id="delete-account-no">Cancel</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    {# Why the admin's delete-account control is greyed (#165). Informational,
+       single OK — and the only explanation a touch device gets. #}
+    <div class="modal-overlay" id="delete-account-refused-modal" hidden>
+        <div class="modal modal-dialog">
+            <p id="delete-account-refused-text"></p>
+            <div class="modal-actions">
+                <button type="button" class="secondary" id="delete-account-refused-ok">OK</button>
+            </div>
         </div>
     </div>
 
@@ -311,9 +331,26 @@
             if (deleteAccountBtn) {
                 var deleteAccountOverlay = document.getElementById("delete-account-modal");
                 function closeDeleteAccount() { deleteAccountOverlay.hidden = true; }
+                var deleteRefusedOverlay = document.getElementById("delete-account-refused-modal");
                 deleteAccountBtn.addEventListener("click", function () {
                     closeSettings();
+                    // Greyed for the admin: explain instead of confirming.
+                    // Also the only explanation a touch device gets, since the
+                    // title tooltip needs a hover (#162).
+                    if (deleteAccountBtn.getAttribute("aria-disabled") === "true") {
+                        document.getElementById("delete-account-refused-text")
+                                .textContent = deleteAccountBtn.dataset.refusal || "";
+                        deleteRefusedOverlay.hidden = false;
+                        return;
+                    }
                     deleteAccountOverlay.hidden = false;
+                });
+                document.getElementById("delete-account-refused-ok")
+                        .addEventListener("click", function () {
+                    deleteRefusedOverlay.hidden = true;
+                });
+                deleteRefusedOverlay.addEventListener("click", function (e) {
+                    if (e.target === deleteRefusedOverlay) deleteRefusedOverlay.hidden = true;
                 });
                 document.getElementById("delete-account-no")
                         .addEventListener("click", closeDeleteAccount);

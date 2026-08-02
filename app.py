@@ -268,6 +268,12 @@ DELETE_SIGN_IN_PROMPT = ("Sign in with Google to delete cards you have added.")
 # #165: an anonymous visitor has no account, and neither does a sign-in whose
 # users row could not be written (#148).
 SIGN_IN_TO_DELETE_ACCOUNT = "Sign in with Google to delete your account."
+# The admin keeps the site running; removing that account from inside the app
+# is a footgun with no upside. Admin-ness lives in ADMIN_EMAILS (#158), so the
+# way out is to stop being an admin first — then the account deletes normally.
+ADMIN_ACCOUNT_UNDELETABLE = (
+    "Admin account cannot be deleted. Remove this address from ADMIN_EMAILS "
+    "first, then delete the account.")
 
 
 def can_delete_card(card):
@@ -928,6 +934,9 @@ def inject_auth():
         "google_auth_enabled": GOOGLE_AUTH_AVAILABLE,
         # Admin-only UI is then a plain {% if is_admin %} (#158).
         "is_admin": is_admin(),
+        # Why the delete-account control is greyed, or None if it isn't (#165).
+        "account_delete_refusal": (ADMIN_ACCOUNT_UNDELETABLE if is_admin()
+                                   else None),
         # Callables, not values: they answer per card (#162).
         "can_delete_card": can_delete_card,
         "delete_refusal": delete_refusal,
@@ -990,6 +999,10 @@ def account_delete():
     user_id = _current_user_id()
     if user_id is None:
         return jsonify({"ok": False, "error": SIGN_IN_TO_DELETE_ACCOUNT}), 403
+    if is_admin():
+        # Enforced here, not only by greying the button: the control is
+        # presentation and a hand-made POST goes straight past it (#162).
+        return jsonify({"ok": False, "error": ADMIN_ACCOUNT_UNDELETABLE}), 403
 
     # Anything other than an explicit "delete" keeps the cards. The safer of
     # the two options is the one a malformed request falls back to.

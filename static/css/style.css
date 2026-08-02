@@ -503,6 +503,13 @@ body.welcome-active {
 .modal-dialog p { margin: 0 0 1.1rem; font-size: 1.05rem; }
 .modal-actions { display: flex; gap: 0.8rem; justify-content: flex-end; }
 .modal-actions button { margin-top: 0; }
+/* A settings action that isn't available to this visitor — the admin's
+   delete-account control (#165). aria-disabled, not :disabled, so it stays
+   hoverable and its tooltip works; the hover state is suppressed so a control
+   you cannot use doesn't light up as if you could. Same shape as #162. */
+.settings-reset[aria-disabled="true"] { color: var(--muted); cursor: default; }
+.settings-reset[aria-disabled="true"]:hover { background: #e4e9ee; color: var(--muted); }
+
 /* Delete account (#165) — the consequences, spelled out in the dialog. */
 .delete-account-list { margin: 0 0 1.1rem 1.1rem; padding: 0; }
 .delete-account-list li { margin-bottom: 0.25rem; }
