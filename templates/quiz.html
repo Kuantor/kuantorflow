@@ -30,6 +30,12 @@
     {% if not cards %}
         <div class="panel">
             <p>No flashcards with {{ lang_name }} translations in this topic yet — nothing to quiz on.</p>
+            {# The quiz has two reasons to be empty — no translations, or the
+               #127 filter — and the first message alone would mislead. #}
+            {% if settings.individual_cards %}
+            <p class="hint"><em>Use only individual cards</em> is on, so anyone
+               else&rsquo;s cards in this topic are hidden.</p>
+            {% endif %}
         </div>
 
     {% elif results is none %}

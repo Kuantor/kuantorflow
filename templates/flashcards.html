@@ -16,7 +16,16 @@
 
     {% if not cards %}
         <div class="panel">
-            <p>No flashcards saved under this topic yet.</p>
+            {# With the #127 filter on, an empty page usually means "other
+               people's cards are hidden", not "there is nothing here" —
+               saying the first would send the user looking for a bug. #}
+            {% if settings.individual_cards %}
+                <p>No cards of your own under this topic yet.
+                   <em>Use only individual cards</em> is on, so anyone else&rsquo;s
+                   are hidden — turn it off in Settings to see them.</p>
+            {% else %}
+                <p>No flashcards saved under this topic yet.</p>
+            {% endif %}
         </div>
     {% endif %}
 
