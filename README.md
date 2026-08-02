@@ -215,6 +215,23 @@ Recording the sign-in is best-effort: if the database is unreachable you are
 still signed in, with no id, exactly as topic lists and duplicate checks
 already tolerate a dead database.
 
+### Only an account may change the database (#125)
+
+Browsing, the card deck, quizzes and word lookups are open to everyone past
+the keyword gate. **Writing** is not: adding a card — from the review popup,
+the automatic-add path, or by asking Mykola in chat — needs a signed-in
+account. An attempt answers with *"Please sign in with Google to make any
+changes of the database."* and a working sign-in link, and the looked-up cards
+stay in the review popup, so signing in from the prompt leaves them ready to
+add.
+
+The refusal lives in the routes, not the buttons: nothing is greyed out, and a
+request made by hand is refused exactly the same way. A sign-in whose `users`
+row could not be written counts as having no account here — an unowned card
+could never be deleted by the person who added it (#162), so the failure is
+taken in the safe direction. Deleting was already restricted to your own cards
+by #162, and settings to your own file by #102.
+
 ### The providers (#20, #21)
 
 Word lookups go through `parsers.lookup_word(word, topic, translator,

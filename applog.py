@@ -142,6 +142,17 @@ def account_deleted(user_id, cards=0, kept=True):
            choice="kept" if kept else "deleted")
 
 
+def card_add_denied(entry, source, user=None, reason="anonymous"):
+    """A save refused because the visitor has no account (#125).
+
+    The counterpart to DELETE-DENIED: it separates "the card never arrived"
+    from "the card was refused", which is otherwise guesswork when someone
+    reports that a word they added is missing.
+    """
+    _write(CARDS, "ADD-DENIED", **_card_fields(entry), reason=reason,
+           source=source, user=_user(user))
+
+
 def card_delete_denied(card_id, topic=None, user=None, reason=None):
     """A delete refused by the ownership rule (#162).
 

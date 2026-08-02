@@ -265,6 +265,10 @@ def _current_email():
 DELETE_NOT_YOURS = ("This card was created by admin or another user. "
                     "You cannot delete the card.")
 DELETE_SIGN_IN_PROMPT = ("Sign in with Google to delete cards you have added.")
+# #125: shown when a visitor with no account tries to write to the database.
+# The wording is the issue's own, so the popup says what was specified.
+ADD_SIGN_IN_PROMPT = ("Please sign in with Google to make any changes "
+                      "of the database.")
 # #165: an anonymous visitor has no account, and neither does a sign-in whose
 # users row could not be written (#148).
 SIGN_IN_TO_DELETE_ACCOUNT = "Sign in with Google to delete your account."
@@ -274,6 +278,21 @@ SIGN_IN_TO_DELETE_ACCOUNT = "Sign in with Google to delete your account."
 ADMIN_ACCOUNT_UNDELETABLE = (
     "Admin account cannot be deleted. Remove this address from ADMIN_EMAILS "
     "first, then delete the account.")
+
+
+def can_add_cards():
+    """Whether this request's visitor may write cards (issue #125).
+
+    Signed in *and* carrying a users-row id. The id is the requirement rather
+    than a name in the session, because #89 records who added a card and a
+    card with no owner cannot be deleted by its author later (#162) — so a
+    sign-in whose users row could not be written is refused here too. That is
+    the fail-closed direction: the alternative writes an unowned card that
+    nobody but an admin can ever remove.
+
+    Admin-ness is not consulted: an admin is signed in, so they already pass.
+    """
+    return _current_user_id() is not None
 
 
 def can_delete_card(card):
@@ -372,7 +391,15 @@ def _save_and_log(entry, source):
 
     Being the single funnel is also what makes #89 one change instead of four:
     every save path records its owner here.
+
+    It is also where #125 is enforced, for the same reason: a save path that
+    forgets to ask `can_add_cards()` first fails loudly here instead of
+    quietly writing. Callers that face a person check beforehand, so the
+    visitor gets the sign-in prompt rather than an error.
     """
+    if not can_add_cards():
+        applog.card_add_denied(entry, source=source, user=_current_email())
+        raise PermissionError(ADD_SIGN_IN_PROMPT)
     card_id = save_flashcard(entry, added_by_user_id=_current_user_id())
     if card_id is None:
         applog.card_skipped(entry, source=source, user=_current_email())
@@ -780,7 +807,12 @@ def _save_card_from_chat(entry):
     asked to add in chat, through the same save_flashcard mechanism as the
     Look up & save flow (issue: ai_agent#20). A duplicate word+pos is
     skipped by save_flashcard (issue #101); Mykola still reports the card,
-    which is accurate either way — it is in the database."""
+    which is accurate either way — it is in the database.
+
+    An anonymous visitor's card is refused (#125) by _save_and_log raising:
+    the agent turns an exception from its card_saver into an error the model
+    relays, so Mykola says he cannot save it and why, instead of claiming a
+    card that was never written."""
     _save_and_log(entry, source="Mykola chat")
     return entry
 
@@ -940,6 +972,10 @@ def inject_auth():
         # Callables, not values: they answer per card (#162).
         "can_delete_card": can_delete_card,
         "delete_refusal": delete_refusal,
+        # #125: the sign-in dialog's text, kept in one place so the popup and
+        # the JSON refusal cannot drift apart.
+        "add_sign_in_prompt": ADD_SIGN_IN_PROMPT,
+        "can_add_cards": can_add_cards(),
     }
 
 
@@ -1170,6 +1206,7 @@ def index():
     proposed_topic = None
     source_content = None  # readable text of an upload, shown beside its cards
     duplicate_warning = None  # the word to warn about before looking it up (#145)
+    sign_in_required = False  # a write was refused for want of an account (#125)
     if request.method == "POST":
         action = request.form.get("action")
         topic = (request.form.get("topic") or "general").strip() or "general"
@@ -1195,7 +1232,19 @@ def index():
                         translator=prefs["translator"],
                         explanatory_dictionary=prefs["explanatory_dictionary"],
                     )
-                    if prefs["cards_automatically"]:
+                    if prefs["cards_automatically"] and not can_add_cards():
+                        # #125: nothing may be written, so the automatic save
+                        # cannot happen. The lookup already succeeded, so show
+                        # its cards in the review popup rather than throwing
+                        # the work away — signing in from the prompt leaves
+                        # them there to be added.
+                        applog.card_add_denied({"word": word},
+                                               source="automatic add",
+                                               user=_current_email())
+                        proposed = entries
+                        proposed_topic = topic
+                        sign_in_required = True
+                    elif prefs["cards_automatically"]:
                         # 'Add cards automatically' is on (#13): skip the
                         # review popup, write the cards straight to the DB.
                         # Duplicates are skipped and reported (issue #101).
@@ -1262,6 +1311,7 @@ def index():
         "index.html", message=message, topics=topics,
         proposed=proposed, proposed_topic=proposed_topic,
         source_content=source_content, duplicate_warning=duplicate_warning,
+        sign_in_required=sign_in_required,
     )
 
 
@@ -1302,6 +1352,15 @@ def add_card():
         "translation_rus": cleaned("translation_rus"),
         "examples_rus": json_list("examples_rus"),
     }
+    if not can_add_cards():
+        # #125. Answered here rather than by hiding the button: these forms
+        # are ordinary POSTs and a hand-made one goes straight past the UI.
+        # `sign_in_required` is what tells the popup to show the prompt
+        # instead of its generic "saving failed" alert.
+        applog.card_add_denied(entry, source="review popup",
+                               user=_current_email())
+        return {"ok": False, "sign_in_required": True,
+                "error": ADD_SIGN_IN_PROMPT}, 403
     if not _save_and_log(entry, source="review popup"):
         return {"ok": True, "saved": False, "duplicate": True}  # #101
     return {"ok": True, "saved": True}
