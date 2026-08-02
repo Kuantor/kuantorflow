@@ -79,6 +79,18 @@ MIGRATIONS = (
             "ON DELETE RESTRICT",
         ),
     ),
+    # Blocking an account (#126). Two columns in one ALTER, so they arrive
+    # together or not at all — checking only blocked_at is then enough, and
+    # there is no half-applied state for the check to miss.
+    Step(
+        "users.blocked_at",
+        Column("users", "blocked_at"),
+        (
+            "ALTER TABLE users "
+            "ADD COLUMN blocked_at TIMESTAMP NULL DEFAULT NULL, "
+            "ADD COLUMN blocked_reason VARCHAR(255) NULL",
+        ),
+    ),
 )
 
 

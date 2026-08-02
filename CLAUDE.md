@@ -56,6 +56,13 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   per Google user). `DEFAULTS` is the source of truth; files self-create, are
   validated on read/write, and written atomically. **Read-only for anonymous
   visitors** (#102). Add a setting = one entry in `DEFAULTS`.
+- **Who may do what** — `can_add_cards()` / `add_refusal()` (#125: only an
+  account writes), `can_delete_card()` / `delete_refusal()` (#162: only your
+  own), `is_admin()` (#158), `current_block()` / `is_blocked()` (#126: read
+  live per request, cached in `g`). Every one of them is enforced in the
+  **route**; the template versions only decide what to grey or hide. A new
+  write path asks the predicate *and* leans on `_save_and_log()`, which
+  refuses on its own.
 - **`applog.py`** — the action logs in `logs/` (`cards.log`, `dict.log`,
   `parsed_files.log`, #30). Card writes go through `app._save_and_log()`;
   **a new save or delete path must log too**. Helpers never raise, so logging

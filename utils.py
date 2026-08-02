@@ -5,6 +5,8 @@ from pathlib import Path
 import mysql.connector
 from dotenv import load_dotenv
 
+import applog
+
 # Load settings from a .env file next to this module (gitignored).
 # Values already present in the environment take precedence.
 load_dotenv(Path(__file__).with_name(".env"))
@@ -114,6 +116,86 @@ def upsert_user(google_sub, email, display_name=None, given_name=None,
         conn.commit()
         cursor.close()
         return user_id, (row[0] if row else None)
+    finally:
+        conn.close()
+
+
+def get_user_block(user_id):
+    """When and why an account was blocked (issue #126), or None.
+
+    Returns (blocked_at, blocked_reason) for a blocked account and None for
+    an account in good standing — so the caller reads it as a plain truth
+    value and never has to compare timestamps.
+
+    Read live rather than stamped into the session at sign-in: a block has to
+    take effect on the blocked person's *next request*, not whenever they
+    happen to sign in again, and a session cookie lasts 30 days.
+    """
+    if user_id is None:
+        return None
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT blocked_at, blocked_reason FROM users WHERE id = %s",
+            (user_id,))
+        row = cursor.fetchone()
+        cursor.close()
+        if row is None or row[0] is None:
+            return None
+        return row[0], row[1]
+    finally:
+        conn.close()
+
+
+def set_user_blocked(email, blocked, reason=None):
+    """Block or unblock the account with this email (issue #126).
+
+    Returns (user_id, was_blocked) for the account it changed, or None when
+    the email matches no account — so a typo reports a miss instead of
+    reporting success on nothing. Matched exactly and case-insensitively:
+    never a prefix or a LIKE, which could catch a bystander.
+
+    Unblocking clears the reason as well. It is a note about a block that is
+    over, and leaving it behind would make the next reader think the account
+    is still blocked.
+
+    Logged here rather than by the caller — unlike save_flashcard, whose
+    logging lives in app._save_and_log. There is no request behind this and
+    only one caller today, so putting the line where the change happens is
+    what makes an unlogged block impossible.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, blocked_at FROM users WHERE LOWER(email) = LOWER(%s)",
+            ((email or "").strip(),))
+        row = cursor.fetchone()
+        if row is None:
+            cursor.close()
+            return None
+        user_id, blocked_at = row
+        if blocked:
+            cursor.execute(
+                "UPDATE users SET blocked_at = NOW(), blocked_reason = %s "
+                "WHERE id = %s", (reason, user_id))
+        else:
+            cursor.execute(
+                "UPDATE users SET blocked_at = NULL, blocked_reason = NULL "
+                "WHERE id = %s", (user_id,))
+        conn.commit()
+        cursor.close()
+        was_blocked = blocked_at is not None
+        if blocked:
+            # Re-blocking an already-blocked account is still an event: the
+            # timestamp moves and the reason may be new.
+            applog.user_blocked(user_id, email, reason=reason)
+        elif was_blocked:
+            # Unblocking one that was not blocked changed nothing, and a line
+            # for it would make the log over-count the blocks that were lifted.
+            applog.user_unblocked(user_id, email)
+        return user_id, was_blocked
     finally:
         conn.close()
 
