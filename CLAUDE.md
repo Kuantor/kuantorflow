@@ -63,6 +63,13 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   suite points it at a temp dir).
 - **Mykola widget** lives in `templates/base.html`; endpoints `/mykola/chat`,
   `/mykola/recap`. Its intelligence comes from the `ai_agent` package.
+- **`schema.sql` + `apply_schema.py`** — `schema.sql` holds `CREATE TABLE` only
+  and describes a **fresh** database; every change to an **existing** one is a
+  `Step` in `apply_schema.py`'s `MIGRATIONS` (#180). Adding a column is
+  therefore two edits: the column in `schema.sql`, and a migration in the
+  script. Never leave an `ALTER` in `schema.sql` as a comment — re-applying the
+  file can't run it, which is how card saving broke in production on
+  2026-08-02.
 
 ## Conventions
 
@@ -79,7 +86,9 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
 ## Deploy (PythonAnywhere)
 
 `git pull` **both** `kuantorflow` and `ai_agent` (siblings), install
-requirements into the app venv, reload the web app. Note: Reverso and
+requirements into the app venv, run **`python apply_schema.py`** (idempotent —
+it prints what it changed and what was already in place; `--dry-run` to look
+first), reload the web app. Note: Reverso and
 Merriam-Webster are blocked from PythonAnywhere's IPs, so those paths fall
 back (Google / Reverso alternatives); `ANTHROPIC_API_KEY` lives in
 `ai_agent/.env`.
