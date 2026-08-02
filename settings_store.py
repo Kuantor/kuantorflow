@@ -57,6 +57,11 @@ DEFAULTS = {
     # ai_agent#54 — hours of silence after which Mykola's chat is restarted
     # (his recap of the last exchanges opens the fresh one). 0 = never.
     "restart_chat_interval": 2,
+    # issue #127 — show only the cards this user added (#89 records who), and
+    # hide everyone else's. Off by default: the deck is shared by design, and
+    # a learner who has added nothing would otherwise open an empty site.
+    # A view filter only — nothing about what is stored or who may change it.
+    "individual_cards": False,
 }
 
 # Allowed values for the non-boolean settings (issues #20, #113).

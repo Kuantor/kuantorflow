@@ -57,6 +57,12 @@
                     <a class="chip" href="{{ url_for('flashcards', topic=topic) }}">{{ topic }} <small>({{ count }})</small></a>
                 {% endfor %}
             </p>
+        {% elif settings.individual_cards %}
+            {# Same reasoning as the topic page: with #127 on, "nothing here"
+               is far more likely to be "nothing of yours here". #}
+            <p class="hint">No topics of your own yet — <em>Use only individual
+               cards</em> is on, so other people&rsquo;s are hidden. Look up a word to
+               start your own, or turn the setting off in Settings.</p>
         {% else %}
             <p class="hint">No topics yet — look up a word or upload notes to create one.</p>
         {% endif %}

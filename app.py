@@ -441,6 +441,23 @@ def _identity_token():
     return hashlib.sha256(salted).hexdigest()[:16]
 
 
+def cards_owner_filter():
+    """The owner to restrict card reads to, or None for the shared deck (#127).
+
+    None whenever the filter cannot mean anything: the setting is off, or the
+    visitor has no account to own cards. An anonymous visitor is the case that
+    matters — they share config-default.json, so if the toggle were ever left
+    on there they would all see an empty site with no way to change it back
+    (#102 makes that config read-only for them).
+
+    Returning None rather than a falsy id also keeps the SQL honest: the query
+    layer treats None as "no filter", never as "owned by nobody".
+    """
+    if not current_settings()["individual_cards"]:
+        return None
+    return _current_user_id()
+
+
 def current_settings():
     """Settings for this request (issue #86): the signed-in user's own config
     file, or the shared default config for anonymous visitors. Always returns a
@@ -1278,7 +1295,7 @@ def topics_json():
     Mykola widget to refresh the chips after a card is added from chat
     (issue #53). Same DB-unreachable fallback as the index page."""
     try:
-        topics = get_topics()
+        topics = get_topics(cards_owner_filter())
     except Exception:
         topics = []
     return jsonify({"topics": topics})
@@ -1394,7 +1411,7 @@ def index():
             message = f"Error: {e}"
 
     try:
-        topics = get_topics()
+        topics = get_topics(cards_owner_filter())
     except Exception:
         topics = []  # DB unreachable (e.g. locally) — page still works
 
@@ -1461,7 +1478,7 @@ def add_card():
 @app.route("/flashcards/<topic>")
 def flashcards(topic):
     """Display all flashcards saved under the given topic."""
-    cards = get_flashcards_by_topic(topic)
+    cards = get_flashcards_by_topic(topic, cards_owner_filter())
     return render_template("flashcards.html", topic=topic, cards=cards)
 
 
@@ -1505,7 +1522,7 @@ def card_deck(topic):
     """
     prefs = current_settings()
     try:
-        cards = get_flashcards_by_topic(topic)
+        cards = get_flashcards_by_topic(topic, cards_owner_filter())
         demo = False
     except Exception:
         # DB unreachable — fall back to the sample deck so the activity still
@@ -1617,7 +1634,8 @@ def quiz(topic):
         lang = default_lang if default_lang in langs else next(iter(langs))
     field = f"translation_{lang}"
 
-    cards = [c for c in get_flashcards_by_topic(topic) if c.get(field)]
+    cards = [c for c in get_flashcards_by_topic(topic, cards_owner_filter())
+             if c.get(field)]
 
     if request.method == "POST":
         results = []

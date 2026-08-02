@@ -124,6 +124,7 @@ is the source of truth for which settings exist:
 | `show_ukrainian` | `true` | #46 — hide Ukrainian everywhere |
 | `show_russian` | `true` | #46 — hide Russian everywhere |
 | `quiz_lang` | `ukrainian` | #113 — the language the quiz opens in (`ukrainian` or `russian`) |
+| `individual_cards` | `false` | #127 — show only the cards you added yourself |
 
 Behaviour worth knowing:
 
@@ -231,6 +232,31 @@ row could not be written counts as having no account here — an unowned card
 could never be deleted by the person who added it (#162), so the failure is
 taken in the safe direction. Deleting was already restricted to your own cards
 by #162, and settings to your own file by #102.
+
+### Individual cards (#127)
+
+**Use only individual cards** in Settings hides everyone else's cards from the
+topic list, the topic page, the card deck and the quiz — you see only what you
+added yourself (#89 records who added each card). Off by default: the deck is
+shared by design, and a learner who has added nothing would otherwise open an
+empty site.
+
+It is a **view filter and nothing else**. No card is deleted, nobody else's
+view changes, and it has no bearing on who may write (#125) or delete (#162).
+Cards saved before #89 have no owner, so they are nobody's and are hidden too.
+
+The filter needs an account to filter by, so the checkbox is disabled for
+anonymous visitors — they share `config-default.json`, and a filter left on
+there would hide the site from every anonymous visitor at once, with no way to
+switch it back (#102 makes that config read-only for them).
+
+An emptied page says **why**: "No cards of your own in this topic — *Use only
+individual cards* is on". Without that, a filtered page is indistinguishable
+from a broken one.
+
+**Duplicate prevention stays global** (#101): a word already in the database
+is not saved again even when the existing card belongs to someone else and is
+hidden from you. That is deliberate for now — see #186.
 
 ### Blocked accounts (#126)
 

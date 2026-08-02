@@ -30,7 +30,13 @@
     {% endif %}
 
     {% if not cards %}
-        <div class="panel"><p>No flashcards saved under this topic yet.</p></div>
+        {# As on the topic page: with #127 on, an empty deck almost always
+           means the topic is someone else's, not that it is empty. #}
+        <div class="panel"><p>
+            {% if settings.individual_cards %}No cards of your own in this topic —
+                <em>Use only individual cards</em> is on, so other people&rsquo;s are
+                hidden.{% else %}No flashcards saved under this topic yet.{% endif %}
+        </p></div>
     {% else %}
     <div id="deck"
          data-count="{{ cards|length }}"

@@ -377,18 +377,42 @@ def delete_flashcard(card_id, owner_id=None, admin=False):
         conn.close()
 
 
-def get_topics():
+def _owner_clause(owner_id):
+    """SQL and parameters restricting a card query to one owner (issue #127).
+
+    `owner_id` of None means "every card", which is the shared deck the site
+    has always shown — not "cards belonging to nobody". The distinction
+    matters: `added_by_user_id = NULL` is never true in SQL, so an
+    accidentally-None owner would silently hide the entire deck instead of
+    showing it, and the page would look broken rather than filtered.
+
+    Equality is also what correctly excludes the unowned cards (NULL: saved
+    before #89) from an individual view. They are nobody's, so they are not
+    yours.
+    """
+    if owner_id is None:
+        return "", ()
+    return " AND added_by_user_id = %s", (owner_id,)
+
+
+def get_topics(owner_id=None):
     """
     Return all topics that have flashcards, as (topic, card_count) tuples
     sorted by topic name.
+
+    With `owner_id`, only that user's cards are counted (#127), so a topic
+    made entirely of other people's cards disappears from the list rather
+    than opening empty.
     """
+    clause, params = _owner_clause(owner_id)
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT topic, COUNT(*) FROM flashcards "
-            "WHERE topic IS NOT NULL AND topic != '' "
-            "GROUP BY topic ORDER BY topic"
+            "WHERE topic IS NOT NULL AND topic != ''" + clause +
+            " GROUP BY topic ORDER BY topic",
+            params,
         )
         rows = cursor.fetchall()
         cursor.close()
@@ -421,17 +445,22 @@ def _to_list(value):
     return [value]
 
 
-def get_flashcards_by_topic(topic):
+def get_flashcards_by_topic(topic, owner_id=None):
     """
     Fetch all flashcards for the given topic as a list of dictionaries.
     The examples_* fields are deserialized back into lists.
+
+    With `owner_id`, only that user's cards come back (#127). None means
+    every card, as it always has — see _owner_clause().
     """
+    clause, params = _owner_clause(owner_id)
     conn = get_db_connection()
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT * FROM flashcards WHERE topic = %s ORDER BY word",
-            (topic,),
+            "SELECT * FROM flashcards WHERE topic = %s" + clause +
+            " ORDER BY word",
+            (topic,) + params,
         )
         rows = cursor.fetchall()
         cursor.close()

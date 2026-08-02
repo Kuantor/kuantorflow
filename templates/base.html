@@ -47,6 +47,22 @@
                 <p class="settings-hint">When on, &ldquo;Look up &amp; save&rdquo; writes the cards straight
                    to the database instead of opening the review popup first.</p>
 
+                {# Individual cards (#127). A view filter, so it needs an
+                   account to filter by — an anonymous visitor shares the
+                   default config and would hide the whole site from every
+                   other anonymous visitor with no way back (#102). #}
+                <label class="settings-check">
+                    <input type="checkbox" name="individual_cards"
+                           {% if settings.individual_cards %}checked{% endif %}
+                           {% if settings_read_only or not current_user %}disabled{% endif %}>
+                    Use only individual cards
+                </label>
+                <p class="settings-hint">When on, you see only the cards you added
+                   yourself &mdash; everyone else&rsquo;s are hidden from the topic list,
+                   the card deck and the quiz. Nothing is deleted, and your cards
+                   stay visible to others.{% if not current_user %}
+                   Needs a signed-in account.{% endif %}</p>
+
                 {# Two-column grid (#118): providers on the first row,
                    language controls side by side on the second. #}
                 <div class="settings-grid">
@@ -505,11 +521,18 @@
                 settingsError.hidden = true;
                 settingsSave.disabled = true;
                 settingsSave.textContent = "Saving…";
+                // #127 decides which cards this page is showing, so the page
+                // in front of the user goes stale the moment it changes.
+                // Compared against defaultChecked, which holds what the server
+                // rendered (and is moved forward after each save below).
+                var filterChanged = settingsForm.individual_cards.checked
+                    !== settingsForm.individual_cards.defaultChecked;
                 fetch("{{ url_for('save_settings') }}", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         cards_automatically: settingsForm.cards_automatically.checked,
+                        individual_cards: settingsForm.individual_cards.checked,
                         translator: settingsForm.translator.value,
                         explanatory_dictionary: settingsForm.explanatory_dictionary.value,
                         show_ukrainian: settingsForm.show_ukrainian.checked,
@@ -532,6 +555,7 @@
                     // same for the range input, whose reset() value is defaultValue
                     restartSlider.defaultValue = restartSlider.value;
                     closeSettings();
+                    if (filterChanged) window.location.reload();
                 }).catch(function () {
                     settingsError.hidden = false;
                 }).then(function () {
