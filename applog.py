@@ -129,6 +129,19 @@ def card_delete_missed(card_id, topic=None, user=None):
     _write(CARDS, "DELETE-MISS", id=card_id, topic=topic, user=_user(user))
 
 
+def account_deleted(user_id, cards=0, kept=True):
+    """An account removed itself, or an admin removed it (#165).
+
+    Recorded without the address, deliberately: the point of the operation is
+    to remove the identifier, so writing it into a fresh log line would undo
+    part of what the user just asked for. Existing lines are left alone —
+    rewriting an append-only audit trail costs more than the identifier is
+    worth, and log retention ages them out on its own.
+    """
+    _write(CARDS, "ACCOUNT-DELETE", id=user_id, cards=cards,
+           choice="kept" if kept else "deleted")
+
+
 def card_delete_denied(card_id, topic=None, user=None, reason=None):
     """A delete refused by the ownership rule (#162).
 

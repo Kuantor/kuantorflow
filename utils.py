@@ -201,6 +201,55 @@ def flashcard_word_exists(word):
         conn.close()
 
 
+def resolve_user_cards(user_id, keep_cards=True) -> int:
+    """Settle a departing user's cards (#165) and return how many were touched.
+
+    ``keep_cards`` leaves them in place with no owner — they become community
+    property, readable by everyone and deletable only by the admin (#162).
+    Otherwise they are removed with the account.
+
+    This has to happen **before** the users row goes: `added_by_user_id` is
+    ON DELETE RESTRICT (#89/#165), so a deletion that skipped this step would
+    fail loudly on the foreign key rather than quietly cascading or
+    anonymising against the user's wishes.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        if keep_cards:
+            cursor.execute(
+                "UPDATE flashcards SET added_by_user_id = NULL "
+                "WHERE added_by_user_id = %s", (user_id,))
+        else:
+            cursor.execute(
+                "DELETE FROM flashcards WHERE added_by_user_id = %s", (user_id,))
+        affected = cursor.rowcount
+        conn.commit()
+        cursor.close()
+        return affected
+    finally:
+        conn.close()
+
+
+def delete_user(user_id) -> bool:
+    """Delete a users row; True if it was there. Call this LAST (#165).
+
+    While the row exists the account is still coherent and the deletion can be
+    retried; once it is gone, any files or cards left behind are orphaned with
+    nothing to attribute them to.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+        cursor.close()
+        return deleted
+    finally:
+        conn.close()
+
+
 def delete_flashcard(card_id, owner_id=None, admin=False):
     """
     Delete a flashcard by id, subject to ownership (issue #162).

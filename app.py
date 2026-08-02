@@ -3,6 +3,7 @@ import inspect
 import json
 import os
 import re
+import shutil
 import sys
 import uuid
 from pathlib import Path
@@ -30,6 +31,8 @@ from parsers import lookup_word, parse_notes_preview
 from utils import (
     claim_anonymous_message,
     delete_flashcard,
+    delete_user,
+    resolve_user_cards,
     flashcard_word_exists,
     get_db_connection,
     get_flashcards_by_topic,
@@ -262,6 +265,15 @@ def _current_email():
 DELETE_NOT_YOURS = ("This card was created by admin or another user. "
                     "You cannot delete the card.")
 DELETE_SIGN_IN_PROMPT = ("Sign in with Google to delete cards you have added.")
+# #165: an anonymous visitor has no account, and neither does a sign-in whose
+# users row could not be written (#148).
+SIGN_IN_TO_DELETE_ACCOUNT = "Sign in with Google to delete your account."
+# The admin keeps the site running; removing that account from inside the app
+# is a footgun with no upside. Admin-ness lives in ADMIN_EMAILS (#158), so the
+# way out is to stop being an admin first — then the account deletes normally.
+ADMIN_ACCOUNT_UNDELETABLE = (
+    "Admin account cannot be deleted. Remove this address from ADMIN_EMAILS "
+    "first, then delete the account.")
 
 
 def can_delete_card(card):
@@ -922,6 +934,9 @@ def inject_auth():
         "google_auth_enabled": GOOGLE_AUTH_AVAILABLE,
         # Admin-only UI is then a plain {% if is_admin %} (#158).
         "is_admin": is_admin(),
+        # Why the delete-account control is greyed, or None if it isn't (#165).
+        "account_delete_refusal": (ADMIN_ACCOUNT_UNDELETABLE if is_admin()
+                                   else None),
         # Callables, not values: they answer per card (#162).
         "can_delete_card": can_delete_card,
         "delete_refusal": delete_refusal,
@@ -934,6 +949,81 @@ def inject_settings():
     Settings UI (#13), dictionary choice (#20) and language switches (#46)
     will read from."""
     return {"settings": current_settings()}
+
+
+def delete_account(user_id, keep_cards=True) -> dict:
+    """Delete an account and everything belonging to it (issue #165).
+
+    One implementation, two entry points: the Settings popup calls it for the
+    signed-in visitor, and the admin maintenance script calls it with any id.
+    Deliberately free of Flask request state so both can.
+
+    The order is the whole design. Files cannot join a database transaction,
+    so if something fails midway the account must still be in a state that can
+    be retried:
+
+    1. Resolve the cards — the choice the user just made.
+    2. Delete the chat transcripts and the settings file.
+    3. Delete the users row **last**, once nothing points at it any more.
+
+    Returns what happened, for the confirmation message and the log line.
+    """
+    result = {"cards": 0, "kept": keep_cards, "logs": False,
+              "settings": False, "row": False}
+
+    result["cards"] = resolve_user_cards(user_id, keep_cards)
+
+    log_dir = LOG_DIR / str(user_id)
+    if log_dir.is_dir():
+        shutil.rmtree(log_dir, ignore_errors=True)
+        result["logs"] = not log_dir.exists()
+
+    config = settings_store.config_path(user_id)
+    try:
+        config.unlink()
+        result["settings"] = True
+    except FileNotFoundError:
+        pass  # nothing saved yet — not a failure
+
+    result["row"] = delete_user(user_id)
+    return result
+
+
+@app.route("/account/delete", methods=["POST"])
+def account_delete():
+    """Delete my account (issue #165), with the card choice the user made.
+
+    Signed-in visitors only: an anonymous visitor has no account, and a
+    sign-in whose users row could not be written (#148) has nothing to delete.
+    """
+    user_id = _current_user_id()
+    if user_id is None:
+        return jsonify({"ok": False, "error": SIGN_IN_TO_DELETE_ACCOUNT}), 403
+    if is_admin():
+        # Enforced here, not only by greying the button: the control is
+        # presentation and a hand-made POST goes straight past it (#162).
+        return jsonify({"ok": False, "error": ADMIN_ACCOUNT_UNDELETABLE}), 403
+
+    # Anything other than an explicit "delete" keeps the cards. The safer of
+    # the two options is the one a malformed request falls back to.
+    keep_cards = (request.form.get("cards") or "keep").strip().lower() != "delete"
+    try:
+        result = delete_account(user_id, keep_cards)
+    except Exception:
+        app.logger.exception("Account deletion failed for user %s", user_id)
+        flash(("Deleting your account failed — nothing was removed. "
+               "Please try again.", None))
+        return redirect(url_for("index"))
+
+    applog.account_deleted(user_id, cards=result["cards"], kept=result["kept"])
+    # The identity only — not the whole session. The keyword gate is about the
+    # site, not the account, so a deleted user lands back inside it as an
+    # anonymous visitor rather than being asked for the keyword again (which
+    # is what Reset Auth is for, #98).
+    session.pop("user", None)
+    flash((f"Your account was deleted. {result['cards']} card(s) were "
+           f"{'kept for other learners' if keep_cards else 'deleted'}.", None))
+    return redirect(url_for("index"))
 
 
 @app.route("/settings", methods=["POST"])
