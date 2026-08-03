@@ -1431,10 +1431,31 @@ def _restart_recap(away_hours: float) -> str | None:
         return None
 
 
+@app.route("/db/test", methods=["POST"])
+def test_db_connection():
+    """Is the database reachable? (#184)
+
+    Answers JSON rather than flashing a banner and redirecting, because the
+    button moved into the Settings popup, which opens on every page — a
+    redirect would drop the visitor onto the index from wherever they were,
+    losing a half-typed lookup for the sake of a diagnostic.
+
+    A failure is a normal answer here, not a server error: the caller asked a
+    question and gets one, so this stays 200 either way and the popup shows
+    the reason.
+    """
+    try:
+        conn = get_db_connection()
+        conn.close()
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+    return jsonify({"ok": True})
+
+
 @app.route("/topics.json")
 def topics_json():
-    """Topic chips data for the Browse flashcards section — fetched by the
-    Mykola widget to refresh the chips after a card is added from chat
+    """Topic tile data for the Browse flashcards section — fetched by the
+    Mykola widget to refresh the tiles after a card is added from chat
     (issue #53). Same DB-unreachable fallback as the index page."""
     try:
         topics = get_topics(cards_owner_filter())
@@ -1545,11 +1566,6 @@ def index():
                         proposed = entries
                         proposed_topic = topic
 
-            elif action == "test_db":
-                conn = get_db_connection()
-                conn.close()
-                flash(("Database connection successful!", None))
-                return redirect(url_for("index"))
         except Exception as e:
             message = f"Error: {e}"
 
