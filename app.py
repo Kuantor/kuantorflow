@@ -899,10 +899,31 @@ def _client_last_activity(raw) -> datetime | None:
     return moment if moment <= datetime.now() else None
 
 
+def _chat_log_path(chat_id: str) -> Path | None:
+    """Where this conversation is written, or None when nobody is signed in.
+
+    The widget promises an anonymous visitor that "nothing is kept under your
+    name", and until #163 that held only in a lawyer's reading: their
+    conversation went to the shared mykola_logs/ root instead of a per-user
+    folder, but both sides of it were still on the server.
+
+    Nothing ever read those files — _user_log_files() returns [] for the shared
+    root, so the welcome-back recap (ai_agent#30) and the restart
+    (ai_agent#54) skip them — so declining to write them costs no behaviour at
+    all. It only makes the sentence true as a visitor would read it.
+    """
+    user_dir = _current_user_log_dir()
+    if user_dir == LOG_DIR:          # the same test _user_log_files() makes
+        return None
+    return user_dir / f"chat_{chat_id}.txt"
+
+
 def _start_chat_log(chat_id: str, away_hours: float, recap: str | None) -> None:
     """Open the restarted conversation's log file (ai_agent#54) with a note of
     why it exists, so the break is visible in the history itself."""
-    log_path = _current_user_log_dir() / f"chat_{chat_id}.txt"
+    log_path = _chat_log_path(chat_id)
+    if log_path is None:             # anonymous: not written at all (#163)
+        return
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
         with log_path.open("a", encoding="utf-8") as f:
@@ -916,9 +937,12 @@ def _start_chat_log(chat_id: str, away_hours: float, recap: str | None) -> None:
 
 
 def _append_chat_log(chat_id: str, user_text: str, assistant_text: str) -> None:
-    """Append one user/assistant exchange to chat_<chat_id>.txt in the shared
-    log dir, or in the signed-in user's subdirectory."""
-    log_path = _current_user_log_dir() / f"chat_{chat_id}.txt"
+    """Append one user/assistant exchange to chat_<chat_id>.txt in the
+    signed-in user's subdirectory. An anonymous conversation is not written
+    down (#163)."""
+    log_path = _chat_log_path(chat_id)
+    if log_path is None:
+        return
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with log_path.open("a", encoding="utf-8") as f:
         f.write(f"[{ts}]\n")
