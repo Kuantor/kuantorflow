@@ -41,6 +41,33 @@
                     data-refusal="{{ refusal }}"{% endif %}
                     data-word="{{ card.word }}{% if card.pos %} ({{ card.pos }}){% endif %}"
                     data-url="{{ url_for('delete_card', topic=topic, card_id=card.id) }}">&times;</button>
+            {# The pencil (#176) sits beside the cross and is greyed by the same
+               rule, with the same aria-disabled treatment — editing a card's
+               word is as consequential as removing it.
+
+               The card's values ride along as data attributes so the dialog
+               fills without a second request — but only for languages this
+               visitor has *not* hidden (#46/#79/#111). A hidden language must
+               not appear in the page at all, and the field the dialog never
+               renders is simply not submitted, so the edit leaves it alone. #}
+            {% set edit_no = edit_refusal(card) %}
+            <button type="button" class="card-edit" aria-label="Edit card"
+                    {% if edit_no %}aria-disabled="true" title="{{ edit_no }}"
+                    data-refusal="{{ edit_no }}"{% endif %}
+                    data-url="{{ url_for('edit_card', topic=topic, card_id=card.id) }}"
+                    data-word="{{ card.word }}"
+                    data-pos="{{ card.pos or '' }}"
+                    data-explanation_en="{{ card.explanation_en or '' }}"
+                    data-examples_en="{{ (card.examples_en or []) | join('\n') }}"
+                    {% if settings.show_ukrainian %}
+                    data-translation_ukr="{{ card.translation_ukr or '' }}"
+                    data-examples_ukr="{{ (card.examples_ukr or []) | join('\n') }}"
+                    {% endif %}
+                    {% if settings.show_russian %}
+                    data-translation_rus="{{ card.translation_rus or '' }}"
+                    data-examples_rus="{{ (card.examples_rus or []) | join('\n') }}"
+                    {% endif %}
+                    >&#9998;</button>
             <div class="word">{{ card.word }}
                 {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
             </div>
@@ -87,6 +114,46 @@
         </div>
     </div>
 
+    {# Edit a saved card (#176). Same fields as the review popup, so the two
+       editors stay recognisably one thing; examples are one per line here
+       rather than hidden JSON, because this one is meant to be typed in. #}
+    <div class="modal-overlay" id="edit-modal" hidden>
+        <div class="modal modal-dialog edit-dialog">
+            <button type="button" class="modal-close" id="edit-close"
+                    aria-label="Close without saving">&times;</button>
+            <p class="proposal-title">Edit the card</p>
+            <form id="edit-form" class="modal-scroll edit-fields">
+                <label for="edit-word">Word</label>
+                <input type="text" id="edit-word" name="word" required>
+                <label for="edit-pos">Part of speech</label>
+                <input type="text" id="edit-pos" name="pos">
+                <label for="edit-explanation_en">English explanation</label>
+                <textarea id="edit-explanation_en" name="explanation_en" rows="2"></textarea>
+                <label for="edit-examples_en">English examples <small>(one per line)</small></label>
+                <textarea id="edit-examples_en" name="examples_en" rows="2"></textarea>
+                {# A hidden language gets no field, and so is never submitted —
+                   the card keeps it untouched (#46/#79/#111). #}
+                {% if settings.show_ukrainian %}
+                <label for="edit-translation_ukr">Ukrainian translation</label>
+                <input type="text" id="edit-translation_ukr" name="translation_ukr">
+                <label for="edit-examples_ukr">Ukrainian examples <small>(one per line)</small></label>
+                <textarea id="edit-examples_ukr" name="examples_ukr" rows="2"></textarea>
+                {% endif %}
+                {% if settings.show_russian %}
+                <label for="edit-translation_rus">Russian translation</label>
+                <input type="text" id="edit-translation_rus" name="translation_rus">
+                <label for="edit-examples_rus">Russian examples <small>(one per line)</small></label>
+                <textarea id="edit-examples_rus" name="examples_rus" rows="2"></textarea>
+                {% endif %}
+            </form>
+            <p id="edit-error" class="settings-error" hidden></p>
+            <div class="modal-actions">
+                <button type="submit" form="edit-form" id="edit-save">Save changes</button>
+                <button type="button" class="secondary" id="edit-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     {# Touch devices have no hover, so the title tooltip never appears there.
        Tapping a greyed cross shows the same sentence here instead (#162). #}
     <div class="modal-overlay" id="delete-refused-modal" hidden>
@@ -124,6 +191,76 @@
                 });
             });
 
+            // --- editing a card (#176) ---------------------------------
+            var editOverlay = document.getElementById("edit-modal");
+            var editForm = document.getElementById("edit-form");
+            var editError = document.getElementById("edit-error");
+            var editSave = document.getElementById("edit-save");
+            var editUrl = null;
+            // Read off the form rather than a fixed list: the dialog renders
+            // no field for a hidden language, and that absence is what keeps
+            // the edit from touching it.
+            var EDIT_FIELDS = Array.prototype.map.call(
+                editForm.elements, function (el) { return el.name; })
+                .filter(function (n) { return n; });
+
+            function closeEdit() { editOverlay.hidden = true; }
+
+            document.querySelectorAll(".card-edit").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    // Greyed pencil: explain, exactly as the cross does — and
+                    // this is the only explanation a touch device gets.
+                    if (btn.getAttribute("aria-disabled") === "true") {
+                        refusedText.textContent = btn.dataset.refusal || "";
+                        refusedOverlay.hidden = false;
+                        return;
+                    }
+                    EDIT_FIELDS.forEach(function (f) {
+                        editForm.elements[f].value = btn.dataset[f] || "";
+                    });
+                    editUrl = btn.dataset.url;
+                    editError.hidden = true;
+                    editSave.disabled = false;
+                    editSave.textContent = "Save changes";
+                    editOverlay.hidden = false;
+                    editForm.elements.word.focus();
+                });
+            });
+
+            editForm.addEventListener("submit", function (e) {
+                e.preventDefault();
+                editError.hidden = true;
+                editSave.disabled = true;
+                editSave.textContent = "Saving…";
+                fetch(editUrl, { method: "POST", body: new FormData(editForm) })
+                    .then(function (resp) {
+                        return resp.json().then(function (data) {
+                            return { ok: resp.ok, data: data };
+                        });
+                    })
+                    .then(function (r) {
+                        if (!r.ok) throw new Error(r.data.error || "Saving failed.");
+                        // Reload so the card shows its new content — the page
+                        // was rendered from the old row.
+                        window.location.reload();
+                    })
+                    .catch(function (err) {
+                        // The dialog stays open with the typed values intact:
+                        // a rejected rename is worth another attempt, not a
+                        // lost one.
+                        editError.textContent = err.message;
+                        editError.hidden = false;
+                        editSave.disabled = false;
+                        editSave.textContent = "Save changes";
+                    });
+            });
+
+            document.getElementById("edit-cancel").addEventListener("click", closeEdit);
+            document.getElementById("edit-close").addEventListener("click", closeEdit);
+            editOverlay.addEventListener("click", function (e) {
+                if (e.target === editOverlay) closeEdit();
+            });
+
             function closeRefused() { refusedOverlay.hidden = true; }
             document.getElementById("delete-refused-ok")
                     .addEventListener("click", closeRefused);
@@ -137,7 +274,7 @@
                 if (e.target === overlay) close();  // click outside the dialog
             });
             document.addEventListener("keydown", function (e) {
-                if (e.key === "Escape") close();
+                if (e.key === "Escape") { close(); closeEdit(); }
             });
         })();
     </script>

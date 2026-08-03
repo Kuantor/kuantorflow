@@ -153,6 +153,37 @@ button:hover { background: var(--blue-dark); }
     background: transparent;
     color: var(--muted);
 }
+/* Edit the card (#176) — the same control as the cross, one slot to its left,
+   greyed by the same rule. Blue on hover rather than red: editing is a change,
+   not a removal, and the colour should say which. */
+.card-edit {
+    position: absolute;
+    top: 0.6rem;
+    right: 2.5rem;
+    margin: 0;
+    width: 1.8rem;
+    height: 1.8rem;
+    padding: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted);
+    font-size: 1.05rem;
+    line-height: 1;
+}
+.card-edit:hover { background: #e8f0f8; color: var(--blue); }
+.card-edit[aria-disabled="true"] { color: var(--muted); cursor: default; }
+.card-edit[aria-disabled="true"]:hover {
+    background: transparent;
+    color: var(--muted);
+}
+
+/* The edit dialog is a form, so it needs room and its own scroll (#176). */
+.edit-dialog { max-width: min(560px, 92vw); }
+.edit-fields { max-height: 58vh; text-align: left; }
+.edit-fields label { display: block; margin-top: 0.55rem; font-weight: 600; }
+.edit-fields label small { font-weight: 400; color: var(--muted); }
+.edit-fields input, .edit-fields textarea { width: 100%; }
+
 .word { font-size: 1.3rem; font-weight: 700; }
 .pos {
     font-size: 0.72rem;
@@ -1173,3 +1204,12 @@ button:disabled:hover { background: #9db4c7; }
     cursor: pointer;
 }
 .lightbox-close:hover { color: var(--yellow); }
+
+/* A duplicate whose card the #127 filter hides (#186). Marked so the "Already
+   in DB" answer looks like an explanation rather than a flat refusal; the
+   sentence itself is the button's tooltip. */
+.proposal-card.duplicate-hidden .add-btn {
+    background: #f6efdc;
+    color: #6b5626;
+    border: 1px solid #e0d0a8;
+}

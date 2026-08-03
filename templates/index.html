@@ -226,6 +226,13 @@
                                 // Already in the database (issue #101):
                                 // nothing was written, so no refresh needed.
                                 btn.textContent = "Already in DB";
+                                // #186: when the blocking card is hidden by the
+                                // individual-cards filter, "already there" is
+                                // baffling on its own — say where it is.
+                                if (data.note) {
+                                    btn.title = data.note;
+                                    form.classList.add("duplicate-hidden");
+                                }
                             } else {
                                 addedCount++;
                                 btn.textContent = "Added ✓";
