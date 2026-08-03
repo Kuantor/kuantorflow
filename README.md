@@ -233,6 +233,35 @@ could never be deleted by the person who added it (#162), so the failure is
 taken in the safe direction. Deleting was already restricted to your own cards
 by #162, and settings to your own file by #102.
 
+### Editing a saved card (#176)
+
+A pencil sits beside the delete cross on every card. It opens a dialog with
+every content field — word, part of speech, English explanation and examples,
+and both translations — pre-filled from the card, examples one per line.
+
+**Who may edit is exactly who may delete** (#162): the admin any card, a
+signed-in user only their own, nobody else at all. Renaming a card's word is
+as consequential as removing it, so a weaker rule here would undo #162. Both
+the pencil and the route enforce it; a hand-made POST is refused with a 403
+and an `EDIT-DENIED` log line.
+
+**Renaming is the interesting part.** A card whose word + part of speech
+already exist elsewhere would create exactly the duplicate #101 prevents, so
+the edit runs the same check — excluding the card being edited, which would
+otherwise collide with itself. A refusal names the card in the way, keeps the
+dialog open with what you typed, and changes nothing.
+
+Two things an edit deliberately does *not* do: it never touches `created_at`
+(that is the card's age, not its last touch), and it never changes a field the
+dialog did not show. A language you have hidden (#46/#79/#111) is not rendered,
+so it is not submitted, and `update_flashcard()` reads a missing key as "leave
+this alone" — hiding a language has always been visual only, and an editor that
+silently emptied the hidden half would make it destructive.
+
+Changing a card's **topic** is not part of this; it has its own rules and its
+own ticket (#177). Every edit is logged with the list of fields that actually
+changed, and an edit that changed nothing is not logged at all.
+
 ### Mykola remembers what to call you (ai_agent#62)
 
 Tell Mykola in chat — *"Anna Maria is a mouthful, call me Ann"* — and he keeps
@@ -276,9 +305,13 @@ An emptied page says **why**: "No cards of your own in this topic — *Use only
 individual cards* is on". Without that, a filtered page is indistinguishable
 from a broken one.
 
-**Duplicate prevention stays global** (#101): a word already in the database
-is not saved again even when the existing card belongs to someone else and is
-hidden from you. That is deliberate for now — see #186.
+**Duplicate prevention stays global** (#101): a word already in the database is
+not saved again even when the existing card belongs to someone else and is
+hidden from you. What *changed* in #186 is what you are told — the app now adds
+"It is in the shared deck, hidden from you by your 'Use only individual cards'
+setting", because "already in the database" about a card you cannot find reads
+as the app contradicting itself. The storage rule is untouched; only the
+explanation is.
 
 ### Blocked accounts (#126)
 

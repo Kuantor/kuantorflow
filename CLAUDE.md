@@ -51,6 +51,10 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   fallback.
 - **`utils.py`** — `save_flashcard()` is the **single DB write path** (every
   save route funnels through it), and it skips duplicate `word`+`pos` (#101).
+  `update_flashcard()` is its edit counterpart (#176): ownership is part of the
+  `UPDATE`, not a check before it, and only the keys **present** in `entry` are
+  touched — a missing key means "leave it", which is what keeps an editor that
+  hides a language from wiping it.
 - **`settings_store.py`** — per-identity JSON config under `settings/`
   (`config-default.json` shared by anonymous visitors, `config-<username>.json`
   per Google user). `DEFAULTS` is the source of truth; files self-create, are

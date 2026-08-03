@@ -118,6 +118,13 @@ def card_edited(entry, source, user=None, card_id=None, changed=None):
            source=source, user=_user(user))
 
 
+def card_edit_denied(card_id, topic=None, user=None, reason=None):
+    """An edit refused by the ownership rule (#176) — the counterpart to
+    DELETE-DENIED, and worth the same line for the same reason."""
+    _write(CARDS, "EDIT-DENIED", id=card_id, topic=topic,
+           reason=reason, user=_user(user))
+
+
 def card_deleted(card_id, word, topic=None, user=None, source="topic page"):
     """A card was removed from the database."""
     _write(CARDS, "DELETE", id=card_id, word=word, topic=topic,

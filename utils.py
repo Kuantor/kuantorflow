@@ -291,6 +291,134 @@ def save_flashcard(entry, added_by_user_id=None):
         conn.close()
 
 
+# What an edit may change (issue #176). `topic` is deliberately absent: moving
+# a card between topics has different rules and its own ticket (#177), and
+# `added_by_user_id` is never editable at all — it is the answer to "whose card
+# is this?", which is the question the edit permission itself depends on.
+EDITABLE_FIELDS = tuple(f for f in FLASHCARD_FIELDS if f != "topic")
+
+
+def find_duplicate(word, pos, exclude_id=None):
+    """The card that already holds this word + part of speech, or None (#101).
+
+    Returns (id, added_by_user_id) so the caller can say something useful — in
+    particular whether the blocking card is even visible to this visitor
+    (#186), which is not obvious when #127's filter is on.
+
+    `exclude_id` leaves one card out of the search: an edit must not find
+    *itself* and refuse to save (#176).
+
+    Matching is the same as save_flashcard's, and for the same reasons: the
+    column collation makes it case-insensitive, and `<=>` is NULL-safe so two
+    pos-less cards count as duplicates of each other.
+    """
+    sql = "SELECT id, added_by_user_id FROM flashcards WHERE word = %s AND pos <=> %s"
+    params = [word, pos]
+    if exclude_id is not None:
+        sql += " AND id != %s"
+        params.append(exclude_id)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(sql + " LIMIT 1", tuple(params))
+        row = cursor.fetchone()
+        cursor.close()
+        return (row[0], row[1]) if row else None
+    finally:
+        conn.close()
+
+
+def update_flashcard(card_id, entry, owner_id=None, admin=False):
+    """Change a saved card's content (issue #176).
+
+    Returns `(outcome, detail)`:
+
+    - `("updated", [changed field names])`
+    - `("unchanged", [])`  — the submitted values match what is stored
+    - `("duplicate", (other_id, word, pos))` — word+pos already taken
+    - `("denied", None)`   — the card is not this visitor's to edit
+    - `("missing", None)`  — no such card
+
+    Ownership works exactly as `delete_flashcard()` does, and for the same
+    reason: the write is **one conditional statement**, so there is no gap
+    between deciding the card is the caller's and changing it. `=` never
+    matches NULL, so unowned cards (pre-#89) are admin-only.
+
+    `created_at` is left alone — it is the card's age, not its last touch.
+
+    "unchanged" is distinct from "updated" on purpose: an edit that changed
+    nothing should not write an EDIT line into the action log, which counts
+    events rather than attempts (the lesson from #126's unblock logging).
+
+    Only the fields **present in `entry`** are touched. A missing key means
+    "leave this alone", which is different from a key holding None ("clear
+    it"). That distinction is what lets the editor omit a language the visitor
+    has hidden (#46/#79/#111) without wiping it from the card — hiding a
+    language has always been visual only, and an editor that silently emptied
+    the hidden half would make it destructive.
+    """
+    def serialize(value):
+        if isinstance(value, (list, dict)):
+            return json.dumps(value, ensure_ascii=False)
+        return value
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            f"SELECT id, {', '.join(EDITABLE_FIELDS)} FROM flashcards WHERE id = %s",
+            (card_id,))
+        current = cursor.fetchone()
+        if current is None:
+            cursor.close()
+            return "missing", None
+
+        new = {f: serialize(entry[f]) for f in EDITABLE_FIELDS if f in entry}
+
+        # A rename can collide with an existing card, which is the whole point
+        # of #101 — but the card being edited must not count as its own
+        # duplicate. Checked before the write so nothing is half-applied, and
+        # against the values the card will *end up* with, since either half of
+        # the word+pos pair may be the one left untouched.
+        word = new.get("word", current["word"])
+        pos = new.get("pos", current["pos"])
+        if word != current["word"] or pos != current["pos"]:
+            cursor.execute(
+                "SELECT id FROM flashcards "
+                "WHERE word = %s AND pos <=> %s AND id != %s LIMIT 1",
+                (word, pos, card_id))
+            clash = cursor.fetchone()
+            if clash is not None:
+                cursor.close()
+                return "duplicate", (clash["id"], word, pos)
+
+        changed = [f for f in EDITABLE_FIELDS
+                   if f in new and new[f] != current[f]]
+        if not changed:
+            cursor.close()
+            return "unchanged", []
+
+        assignments = ", ".join(f"{f} = %s" for f in changed)
+        values = tuple(new[f] for f in changed)
+        if admin:
+            cursor.execute(
+                f"UPDATE flashcards SET {assignments} WHERE id = %s",
+                values + (card_id,))
+        else:
+            cursor.execute(
+                f"UPDATE flashcards SET {assignments} "
+                "WHERE id = %s AND added_by_user_id = %s",
+                values + (card_id, owner_id))
+        if cursor.rowcount == 0:
+            cursor.close()
+            return "denied", None
+        conn.commit()
+        cursor.close()
+        return "updated", changed
+    finally:
+        conn.close()
+
+
 def flashcard_word_exists(word):
     """
     True if any flashcard already has this word (issue #145) — used to warn on

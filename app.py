@@ -39,7 +39,9 @@ from utils import (
     get_flashcards_by_topic,
     get_topics,
     get_user_block,
+    find_duplicate,
     set_preferred_name,
+    update_flashcard,
     save_flashcard,
     upsert_user,
 )
@@ -268,6 +270,10 @@ def _current_email():
 DELETE_NOT_YOURS = ("This card was created by admin or another user. "
                     "You cannot delete the card.")
 DELETE_SIGN_IN_PROMPT = ("Sign in with Google to delete cards you have added.")
+# #176: the same two refusals, for editing.
+EDIT_NOT_YOURS = ("This card was created by admin or another user. "
+                  "You cannot edit the card.")
+EDIT_SIGN_IN_PROMPT = "Sign in with Google to edit cards you have added."
 # #125: shown when a visitor with no account tries to write to the database.
 # The wording is the issue's own, so the popup says what was specified.
 ADD_SIGN_IN_PROMPT = ("Please sign in with Google to make any changes "
@@ -375,6 +381,30 @@ def can_delete_card(card):
     if user_id is None:
         return False
     return card.get("added_by_user_id") == user_id
+
+
+def can_edit_card(card):
+    """Whether this visitor may edit `card` (issue #176).
+
+    Deliberately the same rule as deleting (#162): the admin may change any
+    card, a signed-in user only their own, and nobody else at all. Editing a
+    card's word is as destructive as removing it — the person who added it
+    would find it silently different — so a weaker rule here would undo #162.
+
+    Kept as its own name rather than a call site of can_delete_card so that if
+    the two ever do diverge, the change is a visible one.
+    """
+    return can_delete_card(card)
+
+
+def edit_refusal(card):
+    """The tooltip explaining why the pencil is greyed, or None if it isn't."""
+    if can_edit_card(card):
+        return None
+    if is_blocked():
+        return blocked_notice()
+    return EDIT_NOT_YOURS if _current_user_id() is not None \
+        else EDIT_SIGN_IN_PROMPT
 
 
 def delete_refusal(card):
@@ -495,6 +525,32 @@ def _save_and_log(entry, source):
     applog.card_created(entry, source=source, user=_current_email(),
                         card_id=card_id)
     return True
+
+
+def duplicate_notice(entries):
+    """Extra sentence for a save skipped as a duplicate (#186), or None.
+
+    Duplicate prevention (#101) is global, but #127 hides other people's cards
+    — so "already in the database" can be said about a card the visitor cannot
+    see, which reads as the app contradicting itself. Naming the setting turns
+    a puzzle into a choice they can act on.
+
+    Only ever an *addition* to the existing message: the plain wording is
+    correct whenever the blocking card is one they can actually find.
+    """
+    if not current_settings()["individual_cards"]:
+        return None
+    owner = _current_user_id()
+    try:
+        for entry in entries:
+            existing = find_duplicate(entry.get("word"), entry.get("pos"))
+            if existing and existing[1] != owner:
+                return ("It is in the shared deck, hidden from you by your "
+                        "'Use only individual cards' setting.")
+    except Exception:
+        # A dead database here costs a nicety, not the save path's answer.
+        app.logger.exception("Could not check whether the duplicate is hidden")
+    return None
 
 
 def _word_already_saved(word):
@@ -1102,9 +1158,11 @@ def inject_auth():
         # Why the delete-account control is greyed, or None if it isn't (#165).
         "account_delete_refusal": (ADMIN_ACCOUNT_UNDELETABLE if is_admin()
                                    else None),
-        # Callables, not values: they answer per card (#162).
+        # Callables, not values: they answer per card (#162, #176).
         "can_delete_card": can_delete_card,
         "delete_refusal": delete_refusal,
+        "can_edit_card": can_edit_card,
+        "edit_refusal": edit_refusal,
         # #125: the sign-in dialog's text, kept in one place so the popup and
         # the JSON refusal cannot drift apart.
         "add_sign_in_prompt": ADD_SIGN_IN_PROMPT,
@@ -1395,9 +1453,10 @@ def index():
                         )
                         skipped = len(entries) - added
                         if not added:
+                            note = duplicate_notice(entries)   # #186
                             flash((f"All {skipped} card(s) for '{word}' are "
-                                   "already in the database — nothing added.",
-                                   None))
+                                   "already in the database — nothing added."
+                                   + (f" {note}" if note else ""), None))
                         elif skipped:
                             flash((f"Added {added} card(s) for '{word}' "
                                    f"automatically, skipped {skipped} already "
@@ -1504,7 +1563,14 @@ def add_card():
                                reason="blocked" if is_blocked() else "anonymous")
         return {"ok": False, "sign_in_required": True, "error": refusal}, 403
     if not _save_and_log(entry, source="review popup"):
-        return {"ok": True, "saved": False, "duplicate": True}  # #101
+        # #101 skipped it; #186 explains when the blocking card is hidden.
+        # The key is present only when there is something extra to say, so the
+        # ordinary duplicate answer keeps its existing shape.
+        body = {"ok": True, "saved": False, "duplicate": True}
+        note = duplicate_notice([entry])
+        if note:
+            body["note"] = note
+        return body
     return {"ok": True, "saved": True}
 
 
@@ -1610,6 +1676,86 @@ def delete_card(topic, card_id):
         applog.card_delete_missed(card_id, topic=topic, user=_current_email())
         flash(("Card not found — it may have already been deleted.", None))
     return redirect(url_for("flashcards", topic=topic))
+
+
+@app.route("/flashcards/<topic>/edit/<int:card_id>", methods=["POST"])
+def edit_card(topic, card_id):
+    """Change a saved card's content (#176). JSON, so the dialog can stay open
+    and show a refusal in place rather than losing what was typed.
+
+    Enforced here rather than in the template for the same reason as #162:
+    greying the pencil is presentation, and a hand-made POST goes past it.
+    """
+    def cleaned(field):
+        return (request.form.get(field) or "").strip() or None
+
+    def json_list(field):
+        raw = (request.form.get(field) or "").strip()
+        if not raw:
+            return None
+        # Examples arrive either as the hidden JSON the review popup uses
+        # (#134) or as one-per-line text from the edit dialog's textarea.
+        if raw.startswith("["):
+            try:
+                value = json.loads(raw)
+            except (ValueError, TypeError):
+                value = None
+            if isinstance(value, list):
+                items = [str(x).strip() for x in value if str(x).strip()]
+                return items or None
+        items = [line.strip() for line in raw.splitlines() if line.strip()]
+        return items or None
+
+    if is_blocked():
+        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+                                reason="blocked")
+        return {"ok": False, "error": blocked_notice()}, 403
+    user_id = _current_user_id()
+    admin = is_admin()
+    if not admin and user_id is None:
+        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+                                reason="anonymous")
+        return {"ok": False, "error": EDIT_SIGN_IN_PROMPT}, 403
+
+    word = cleaned("word")
+    if not word:
+        return {"ok": False, "error": "word is required"}, 400
+
+    # Only what was actually submitted: a field the dialog did not render —
+    # a language this visitor has hidden (#46/#79/#111) — must be left alone,
+    # not blanked. `update_flashcard` reads a missing key as "don't touch".
+    readers = {
+        "word": lambda: word,
+        "pos": cleaned,
+        "explanation_en": cleaned,
+        "translation_ukr": cleaned,
+        "translation_rus": cleaned,
+        "examples_en": json_list,
+        "examples_ukr": json_list,
+        "examples_rus": json_list,
+    }
+    entry = {field: (read() if field == "word" else read(field))
+             for field, read in readers.items() if field in request.form}
+
+    outcome, detail = update_flashcard(card_id, entry, owner_id=user_id,
+                                       admin=admin)
+    if outcome == "updated":
+        applog.card_edited(entry, source="card page", user=_current_email(),
+                           card_id=card_id, changed=detail)
+        return {"ok": True, "changed": detail}
+    if outcome == "unchanged":
+        return {"ok": True, "changed": []}
+    if outcome == "duplicate":
+        _, dup_word, dup_pos = detail
+        named = f"'{dup_word}'" + (f" ({dup_pos})" if dup_pos else "")
+        return {"ok": False, "error": (
+            f"Another card for {named} already exists, so this one cannot be "
+            "renamed to it.")}, 409
+    if outcome == "denied":
+        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+                                reason="not owner")
+        return {"ok": False, "error": EDIT_NOT_YOURS}, 403
+    return {"ok": False, "error": "Card not found — it may have been deleted."}, 404
 
 
 def _answer_variants(translation):
