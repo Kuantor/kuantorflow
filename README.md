@@ -258,9 +258,31 @@ so it is not submitted, and `update_flashcard()` reads a missing key as "leave
 this alone" — hiding a language has always been visual only, and an editor that
 silently emptied the hidden half would make it destructive.
 
-Changing a card's **topic** is not part of this; it has its own rules and its
-own ticket (#177). Every edit is logged with the list of fields that actually
-changed, and an edit that changed nothing is not logged at all.
+Changing a card's **topic** is a separate control — see below. Every edit is
+logged with the list of fields that actually changed, and an edit that changed
+nothing is not logged at all.
+
+### Moving a card to another topic (#177)
+
+The arrow beside the pencil moves one card to a different topic. Type an
+existing topic — the current ones are offered as suggestions — or a new name,
+which creates it: **topics are not a table**, they are derived from the cards,
+so there is nothing to register.
+
+The same consequence runs the other way: moving the **last** card out of a
+topic makes that topic cease to exist. When that happens you land on the topic
+list rather than on a page that is now empty for a topic that has vanished
+from the chips.
+
+Ownership follows #162 and #176 — your own cards, or any card if you are the
+admin — because a card in a shared topic is still its author's. **No duplicate
+check applies**: `save_flashcard()` deduplicates on word + part of speech
+*globally*, never per topic, so a move can never create a duplicate where a
+rename can. A move is recorded in `cards.log` as an edit of `topic`, so it is
+distinguishable from a content edit without a log entry of its own.
+
+Moving *every* card from one topic to another — renaming a topic in bulk — is
+deliberately not here; it is a much larger blast radius and lives in #178.
 
 ### Mykola remembers what to call you (ai_agent#62)
 

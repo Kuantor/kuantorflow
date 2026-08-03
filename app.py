@@ -40,6 +40,7 @@ from utils import (
     get_topics,
     get_user_block,
     find_duplicate,
+    move_flashcard,
     set_preferred_name,
     update_flashcard,
     save_flashcard,
@@ -274,6 +275,10 @@ DELETE_SIGN_IN_PROMPT = ("Sign in with Google to delete cards you have added.")
 EDIT_NOT_YOURS = ("This card was created by admin or another user. "
                   "You cannot edit the card.")
 EDIT_SIGN_IN_PROMPT = "Sign in with Google to edit cards you have added."
+# #177: moving a card between topics is an edit, with its own wording.
+MOVE_NOT_YOURS = ("This card was created by admin or another user. "
+                  "You cannot move the card.")
+MOVE_SIGN_IN_PROMPT = "Sign in with Google to move cards you have added."
 # #125: shown when a visitor with no account tries to write to the database.
 # The wording is the issue's own, so the popup says what was specified.
 ADD_SIGN_IN_PROMPT = ("Please sign in with Google to make any changes "
@@ -383,6 +388,36 @@ def can_delete_card(card):
     return card.get("added_by_user_id") == user_id
 
 
+def _card_refusal(card, not_yours, sign_in_prompt):
+    """Why this visitor may not change `card`, or None if they may.
+
+    The three ways to change a card — delete (#162), edit (#176) and move
+    (#177) — share one rule and differ only in wording, so they share this and
+    supply their own sentences. A blocked account (#126) is told that instead,
+    since it is the more informative answer.
+    """
+    if can_delete_card(card):
+        return None
+    if is_blocked():
+        return blocked_notice()
+    return not_yours if _current_user_id() is not None else sign_in_prompt
+
+
+def can_move_card(card):
+    """Whether this visitor may move `card` to another topic (issue #177).
+
+    A move is an edit: the card sits in a shared topic, but it is still its
+    author's, so moving someone else's card is closer to editing theirs than
+    to organising your own.
+    """
+    return can_delete_card(card)
+
+
+def move_refusal(card):
+    """The tooltip explaining why the move control is greyed, or None."""
+    return _card_refusal(card, MOVE_NOT_YOURS, MOVE_SIGN_IN_PROMPT)
+
+
 def can_edit_card(card):
     """Whether this visitor may edit `card` (issue #176).
 
@@ -399,22 +434,12 @@ def can_edit_card(card):
 
 def edit_refusal(card):
     """The tooltip explaining why the pencil is greyed, or None if it isn't."""
-    if can_edit_card(card):
-        return None
-    if is_blocked():
-        return blocked_notice()
-    return EDIT_NOT_YOURS if _current_user_id() is not None \
-        else EDIT_SIGN_IN_PROMPT
+    return _card_refusal(card, EDIT_NOT_YOURS, EDIT_SIGN_IN_PROMPT)
 
 
 def delete_refusal(card):
     """The tooltip explaining why the cross is greyed, or None if it isn't."""
-    if can_delete_card(card):
-        return None
-    if is_blocked():
-        return blocked_notice()
-    return DELETE_NOT_YOURS if _current_user_id() is not None \
-        else DELETE_SIGN_IN_PROMPT
+    return _card_refusal(card, DELETE_NOT_YOURS, DELETE_SIGN_IN_PROMPT)
 
 
 def is_admin():
@@ -1163,6 +1188,8 @@ def inject_auth():
         "delete_refusal": delete_refusal,
         "can_edit_card": can_edit_card,
         "edit_refusal": edit_refusal,
+        "can_move_card": can_move_card,
+        "move_refusal": move_refusal,
         # #125: the sign-in dialog's text, kept in one place so the popup and
         # the JSON refusal cannot drift apart.
         "add_sign_in_prompt": ADD_SIGN_IN_PROMPT,
@@ -1578,6 +1605,10 @@ def add_card():
 def flashcards(topic):
     """Display all flashcards saved under the given topic."""
     cards = get_flashcards_by_topic(topic, cards_owner_filter())
+    # The move dialog's topic suggestions (#177) are fetched from
+    # /topics.json when it first opens, rather than queried here: this page is
+    # loaded by everyone and the list is only needed by someone who actually
+    # moves a card.
     return render_template("flashcards.html", topic=topic, cards=cards)
 
 
@@ -1676,6 +1707,66 @@ def delete_card(topic, card_id):
         applog.card_delete_missed(card_id, topic=topic, user=_current_email())
         flash(("Card not found — it may have already been deleted.", None))
     return redirect(url_for("flashcards", topic=topic))
+
+
+@app.route("/flashcards/<topic>/move/<int:card_id>", methods=["POST"])
+def move_card(topic, card_id):
+    """Move one card to another topic (#177), then go somewhere sensible.
+
+    A redirect with a flash rather than JSON, unlike editing: the card leaves
+    the page it was moved from, so there is nothing to re-render in place and
+    the useful feedback is a sentence naming where it went.
+    """
+    to_topic = (request.form.get("to_topic") or "").strip()
+
+    if is_blocked():
+        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+                                reason="blocked")
+        flash((blocked_notice(), None))
+        return redirect(url_for("flashcards", topic=topic))
+    user_id = _current_user_id()
+    admin = is_admin()
+    if not admin and user_id is None:
+        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+                                reason="anonymous")
+        flash((MOVE_SIGN_IN_PROMPT, None))
+        return redirect(url_for("flashcards", topic=topic))
+    if not to_topic:
+        flash(("Choose a topic to move the card to.", None))
+        return redirect(url_for("flashcards", topic=topic))
+
+    outcome, detail = move_flashcard(card_id, to_topic, owner_id=user_id,
+                                     admin=admin)
+    if outcome == "denied":
+        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+                                reason="not owner")
+        flash((MOVE_NOT_YOURS, None))
+        return redirect(url_for("flashcards", topic=topic))
+    if outcome == "missing":
+        flash(("Card not found — it may have already been deleted.", None))
+        return redirect(url_for("flashcards", topic=topic))
+    if outcome == "unchanged":
+        flash((f"That card is already in '{topic}'.", None))
+        return redirect(url_for("flashcards", topic=topic))
+
+    word, from_topic = detail
+    # A move is an edit of one field, so it needs no log helper of its own.
+    applog.card_edited({"word": word, "topic": to_topic}, source="topic move",
+                       user=_current_email(), card_id=card_id,
+                       changed=["topic"])
+    flash((f"Moved '{word}' to '{to_topic}'.", to_topic))
+
+    # Moving the last card out of a topic makes that topic cease to exist —
+    # there is no topics table. Landing back on a page that no longer has
+    # anything to show, for a topic that has vanished from the chips, reads as
+    # a bug; the topic list is the honest destination.
+    try:
+        remaining = [name for name, _ in get_topics(cards_owner_filter())]
+    except Exception:
+        remaining = [from_topic]      # DB unreachable: stay put rather than guess
+    if from_topic not in remaining:
+        return redirect(url_for("index"))
+    return redirect(url_for("flashcards", topic=from_topic))
 
 
 @app.route("/flashcards/<topic>/edit/<int:card_id>", methods=["POST"])
