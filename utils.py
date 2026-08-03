@@ -419,6 +419,62 @@ def update_flashcard(card_id, entry, owner_id=None, admin=False):
         conn.close()
 
 
+def move_flashcard(card_id, to_topic, owner_id=None, admin=False):
+    """Move one card to another topic (issue #177).
+
+    Returns `(outcome, detail)`:
+
+    - `("moved", (word, from_topic))` — `from_topic` so the caller can tell
+      whether the topic it came from still exists
+    - `("unchanged", None)` — it is already filed there
+    - `("denied", None)` / `("missing", None)` — as elsewhere
+
+    Separate from `update_flashcard()` because the rules genuinely differ, not
+    because the SQL does. **No duplicate check applies**: `save_flashcard()`
+    deduplicates on word+pos *globally*, never per topic, so moving a card
+    between topics cannot create a duplicate — where renaming its word can.
+
+    Topics are not a table — `get_topics()` derives them with GROUP BY — so a
+    move to an unknown topic simply creates it, and moving the last card out
+    of a topic makes that topic cease to exist. Both fall out of the data
+    rather than needing a step.
+
+    Ownership is the same conditional-UPDATE shape as everything else that
+    changes a card: a move is treated as an edit, since a card sitting in a
+    shared topic is still its author's.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT word, topic FROM flashcards WHERE id = %s",
+                       (card_id,))
+        row = cursor.fetchone()
+        if row is None:
+            cursor.close()
+            return "missing", None
+        word, from_topic = row
+        if from_topic == to_topic:
+            cursor.close()
+            return "unchanged", None
+
+        if admin:
+            cursor.execute("UPDATE flashcards SET topic = %s WHERE id = %s",
+                           (to_topic, card_id))
+        else:
+            cursor.execute(
+                "UPDATE flashcards SET topic = %s "
+                "WHERE id = %s AND added_by_user_id = %s",
+                (to_topic, card_id, owner_id))
+        if cursor.rowcount == 0:
+            cursor.close()
+            return "denied", None
+        conn.commit()
+        cursor.close()
+        return "moved", (word, from_topic)
+    finally:
+        conn.close()
+
+
 def flashcard_word_exists(word):
     """
     True if any flashcard already has this word (issue #145) — used to warn on

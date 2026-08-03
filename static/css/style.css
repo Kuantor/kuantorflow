@@ -177,6 +177,29 @@ button:hover { background: var(--blue-dark); }
     color: var(--muted);
 }
 
+/* Move to another topic (#177) — third in the row, same rule, same greying.
+   An arrow rather than a word: it sits with two other icon controls. */
+.card-move {
+    position: absolute;
+    top: 0.6rem;
+    right: 4.4rem;
+    margin: 0;
+    width: 1.8rem;
+    height: 1.8rem;
+    padding: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted);
+    font-size: 1.1rem;
+    line-height: 1;
+}
+.card-move:hover { background: #e8f0f8; color: var(--blue); }
+.card-move[aria-disabled="true"] { color: var(--muted); cursor: default; }
+.card-move[aria-disabled="true"]:hover {
+    background: transparent;
+    color: var(--muted);
+}
+
 /* The edit dialog is a form, so it needs room and its own scroll (#176). */
 .edit-dialog { max-width: min(560px, 92vw); }
 .edit-fields { max-height: 58vh; text-align: left; }

@@ -68,6 +68,16 @@
                     data-examples_rus="{{ (card.examples_rus or []) | join('\n') }}"
                     {% endif %}
                     >&#9998;</button>
+            {# Move to another topic (#177). A third control on the same rule:
+               a card in a shared topic is still its author's, so moving
+               someone else's is closer to editing theirs than to organising
+               your own. #}
+            {% set move_no = move_refusal(card) %}
+            <button type="button" class="card-move" aria-label="Move card to another topic"
+                    {% if move_no %}aria-disabled="true" title="{{ move_no }}"
+                    data-refusal="{{ move_no }}"{% else %}title="Move to another topic"{% endif %}
+                    data-url="{{ url_for('move_card', topic=topic, card_id=card.id) }}"
+                    data-word="{{ card.word }}">&#8594;</button>
             <div class="word">{{ card.word }}
                 {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
             </div>
@@ -154,6 +164,32 @@
         </div>
     </div>
 
+    {# Move a card to another topic (#177). Free text with the existing topics
+       offered as suggestions, not as the only choices — topics are derived
+       from the cards, so typing a new one simply creates it. #}
+    <div class="modal-overlay" id="move-modal" hidden>
+        <div class="modal modal-dialog">
+            <p id="move-question">Move the card to another topic</p>
+            <form method="POST" id="move-form">
+                <label for="move-topic">Topic</label>
+                <input type="text" id="move-topic" name="to_topic" required
+                       list="move-topic-options" autocomplete="off"
+                       placeholder="an existing topic, or a new name">
+                {# Filled from /topics.json the first time the dialog opens —
+                   suggestions only, so an empty list still leaves a working
+                   free-text field. #}
+                <datalist id="move-topic-options"></datalist>
+                <p class="settings-hint">Typing a topic that does not exist yet
+                   creates it. Moving the last card out of a topic removes that
+                   topic from the list.</p>
+                <div class="modal-actions">
+                    <button type="submit">Move</button>
+                    <button type="button" class="secondary" id="move-cancel">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     {# Touch devices have no hover, so the title tooltip never appears there.
        Tapping a greyed cross shows the same sentence here instead (#162). #}
     <div class="modal-overlay" id="delete-refused-modal" hidden>
@@ -189,6 +225,57 @@
                     form.action = btn.dataset.url;
                     overlay.hidden = false;
                 });
+            });
+
+            // --- moving a card to another topic (#177) -----------------
+            var moveOverlay = document.getElementById("move-modal");
+            var moveForm = document.getElementById("move-form");
+            var moveQuestion = document.getElementById("move-question");
+            var moveTopic = document.getElementById("move-topic");
+
+            function closeMove() { moveOverlay.hidden = true; }
+
+            // Suggestions are a convenience, so they are fetched once, lazily,
+            // and their absence changes nothing — the field is free text and a
+            // topic that does not exist yet is created by the move.
+            var topicsLoaded = false;
+            function loadTopicSuggestions() {
+                if (topicsLoaded) return;
+                topicsLoaded = true;
+                fetch("{{ url_for('topics_json') }}")
+                    .then(function (resp) { return resp.json(); })
+                    .then(function (data) {
+                        var list = document.getElementById("move-topic-options");
+                        (data.topics || []).forEach(function (row) {
+                            var option = document.createElement("option");
+                            option.value = row[0];
+                            list.appendChild(option);
+                        });
+                    })
+                    .catch(function () { /* free text still works */ });
+            }
+
+            document.querySelectorAll(".card-move").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    // Greyed control: explain, as the cross and pencil do.
+                    if (btn.getAttribute("aria-disabled") === "true") {
+                        refusedText.textContent = btn.dataset.refusal || "";
+                        refusedOverlay.hidden = false;
+                        return;
+                    }
+                    moveQuestion.textContent =
+                        "Move '" + btn.dataset.word + "' to another topic";
+                    moveForm.action = btn.dataset.url;
+                    moveTopic.value = "";
+                    loadTopicSuggestions();
+                    moveOverlay.hidden = false;
+                    moveTopic.focus();
+                });
+            });
+
+            document.getElementById("move-cancel").addEventListener("click", closeMove);
+            moveOverlay.addEventListener("click", function (e) {
+                if (e.target === moveOverlay) closeMove();
             });
 
             // --- editing a card (#176) ---------------------------------
@@ -274,7 +361,7 @@
                 if (e.target === overlay) close();  // click outside the dialog
             });
             document.addEventListener("keydown", function (e) {
-                if (e.key === "Escape") { close(); closeEdit(); }
+                if (e.key === "Escape") { close(); closeEdit(); closeMove(); }
             });
         })();
     </script>
