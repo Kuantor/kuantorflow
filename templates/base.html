@@ -900,9 +900,18 @@
                     .catch(function () { typing.remove(); });
             }
             {% endif %}
+            // Step the page aside while the panel is open (#184) so the widget
+            // floats over the background rather than over the content. One
+            // helper, called from every place that shows or hides the panel —
+            // there are three, and a missed one leaves the page shifted with
+            // nothing beside it.
+            function syncWidgetSpace() {
+                document.body.classList.toggle("mykola-open", !panel.hidden);
+            }
             function openPanel() {
                 panel.hidden = false;
                 launcher.hidden = true;
+                syncWidgetSpace();
                 input.focus();
                 maybeShowConsent();
                 saveWidgetState();
@@ -912,6 +921,7 @@
                 panel.hidden = true;
                 setMinimized(false);   // next open starts full-size
                 launcher.hidden = false;
+                syncWidgetSpace();
                 saveWidgetState();
             }
             // --- Automatic restart after a break (ai_agent#54) --------------
@@ -1083,6 +1093,7 @@
                     panel.hidden = true;
                     launcher.hidden = false;
                 }
+                syncWidgetSpace();   // a restored open panel needs the room too
                 setMinimized(!!state.minimized && !panel.hidden);
 
                 if (typeof state.scrollTop === "number") {

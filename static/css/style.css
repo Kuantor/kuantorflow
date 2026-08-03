@@ -63,6 +63,32 @@ body {
     margin: 2rem auto 3rem;
     padding: 0 1rem;
 }
+
+/* Mykola's panel is fixed to the bottom-right and floats above everything. On
+   a wide screen the page is centred, so the panel lands on top of its right
+   edge — the last topic tile, the end of the topic field. While the panel is
+   open the page is centred in what is left instead, so the widget covers the
+   background rather than the content.
+
+   Only .page moves: the header and footer span the window, and a panel
+   anchored to the bottom-right does not cover the menu.
+
+   Below this width the two cannot both fit (860 + 340 + gaps), so the page
+   stays put and the panel floats over it as before — shifting there would
+   push the content off the left edge to solve a smaller problem. */
+:root { --mykola-space: calc(340px + 2.4rem); }
+
+@media (min-width: 1240px) {
+    .page { transition: margin-left 0.18s ease; }
+    body.mykola-open .page {
+        margin-left: max(1rem, calc((100vw - var(--mykola-space) - 860px) / 2));
+        margin-right: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .page { transition: none; }
+}
 .page-title {
     color: #fff;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
