@@ -102,10 +102,23 @@ body {
     padding: 1rem 0 2rem;
 }
 
-/* Panels (translucent cards over the background) */
+/* Panels (translucent cards over the background) — #197.
+
+   Two knobs, not one. The main page's panels hold short forms and a grid of
+   tiles, so the background can come through strongly; Mykola's panel holds a
+   whole conversation, which is the most reading-heavy surface on the site, so
+   it stays more opaque. Both are here rather than at their rules so the pair
+   can be compared and tuned in one place.
+
+   No backdrop blur: it hides the background, which is the thing this is
+   meant to reveal. */
+:root {
+    --panel-alpha: 0.72;
+    --widget-alpha: 0.88;
+}
+
 .panel {
-    background: rgba(255, 255, 255, 0.93);
-    backdrop-filter: blur(4px);
+    background: rgba(255, 255, 255, var(--panel-alpha));
     border-radius: 12px;
     padding: 1.3rem 1.5rem;
     margin-bottom: 1.2rem;
@@ -950,7 +963,7 @@ button:disabled:hover { background: #9db4c7; }
     height: min(460px, calc(100vh - 2rem));
     display: flex;
     flex-direction: column;
-    background: #fff;
+    background: rgba(255, 255, 255, var(--widget-alpha));   /* #197 */
     border-radius: 14px;
     overflow: hidden;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
@@ -987,11 +1000,15 @@ button:disabled:hover { background: #9db4c7; }
 }
 .mykola-close:hover { background: rgba(255, 255, 255, 0.35); }
 
+/* Transparent so --widget-alpha is what shows (#197). These panes used to be
+   solid, which covered the panel's own background completely and left the
+   opacity knob doing nothing at all. The message bubbles keep their fills —
+   they are content, not the surface behind it. */
 #mykola-messages {
     flex: 1;
     overflow-y: auto;
     padding: 0.8rem;
-    background: #f4f6f8;
+    background: transparent;
 }
 .mykola-msg {
     max-width: 85%;
@@ -1021,7 +1038,7 @@ button:disabled:hover { background: #9db4c7; }
     gap: 0.4rem;
     padding: 0.6rem;
     border-top: 1px solid #e4e9ee;
-    background: #fff;
+    background: transparent;   /* see #mykola-messages (#197) */
 }
 #mykola-form input {
     flex: 1;
@@ -1201,7 +1218,7 @@ button:disabled:hover { background: #9db4c7; }
     gap: 0.6rem;
     padding: 0.35rem 0.7rem;
     border-top: 1px solid #e4e9ee;
-    background: #fff;
+    background: transparent;   /* see #mykola-messages (#197) */
     font-size: 0.78rem;
     color: var(--muted);
 }
