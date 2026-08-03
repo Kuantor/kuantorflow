@@ -268,19 +268,44 @@ button:hover { background: var(--blue-dark); }
 .crumbs a:hover { color: var(--yellow); }
 
 /* Topic chips */
-.topic-chips { margin: 0.2rem 0 0.8rem; }
-.chip {
-    display: inline-block;
-    margin: 0 0.4rem 0.5rem 0;
-    padding: 0.3rem 0.9rem;
-    border-radius: 999px;
+/* Topic tiles (#184). Squares with rounded corners rather than pills: #185
+   will give each topic a picture, and a picture needs a shape to sit in. The
+   text is bottom-aligned and the tile clips its contents, so an image can be
+   dropped in behind it without the layout moving.
+
+   auto-fill rather than a fixed column count: the number of topics is the
+   user's, not the design's, and this gives two tiles across on a phone and as
+   many as fit on a desktop. */
+.topic-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+    gap: 0.8rem;
+    margin: 0.2rem 0 1rem;
+}
+.topic-tile {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 0.15rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 14px;
     background: var(--blue);
     color: #fff;
     text-decoration: none;
-    font-size: 0.92rem;
+    overflow: hidden;
+    transition: background 0.12s ease, transform 0.12s ease;
 }
-.chip:hover { background: var(--blue-dark); }
-.chip small { opacity: 0.8; }
+.topic-tile:hover { background: var(--blue-dark); transform: translateY(-2px); }
+/* A long topic name must not push the count out of a fixed-height tile. */
+.topic-tile-name {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+.topic-tile-count { font-size: 0.85rem; opacity: 0.8; }
 .hint { color: var(--muted); font-size: 0.92rem; }
 
 /* About modal */
@@ -578,6 +603,33 @@ body.welcome-active {
 .modal-actions .danger:hover { background: #b3261e; }
 .modal-actions .secondary { background: #e4e9ee; color: var(--ink); }
 .modal-actions .secondary:hover { background: #d3dae1; }
+
+/* Test DB Connection (#184), in the Settings popup rather than a section of
+   its own on the main page. Neutral styling: it is a diagnostic, not the
+   destructive kind of action .settings-reset marks in red. */
+.settings-diagnostics {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    margin: 0 0 0.6rem;
+    font-size: 0.9rem;
+}
+.settings-action {
+    margin: 0;
+    padding: 0.4rem 0.9rem;
+    background: #fff;
+    color: var(--blue);
+    border: 1px solid var(--blue);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+.settings-action:hover { background: var(--blue); color: #fff; }
+.settings-action:disabled { opacity: 0.6; cursor: default; }
+.settings-action:disabled:hover { background: #fff; color: var(--blue); }
+.test-db-ok { color: var(--ok-ink); }
+.test-db-bad { color: var(--bad-border); }
 
 /* How a blocked account asks for access back (#126). Stated plainly in the
    Settings popup, which is the one place they can still change something. */

@@ -175,6 +175,17 @@
                 <p class="settings-blocked">{{ blocked_notice }}</p>
                 {% endif %}
 
+                {# Test DB Connection (#184), moved here from the main page's
+                   own Database section. An ACTION, so type=button — and it
+                   answers in place rather than reloading, because the popup
+                   opens on every page and a reload would throw away whatever
+                   the visitor was in the middle of. #}
+                <p class="settings-diagnostics">
+                    <button type="button" id="test-db-btn" class="settings-action"
+                            title="Check that the site can reach the database">Test DB Connection</button>
+                    <span id="test-db-result" role="status" aria-live="polite" hidden></span>
+                </p>
+
                 <p class="settings-scope">
                     {% if current_user %}Saved for {{ current_user.email }}.
                     {% elif google_auth_enabled %}Settings are read-only for anonymous visitors &mdash;
@@ -461,6 +472,33 @@
             // popup is read-only for them (#102) — the server refuses their
             // saves too; this flag guards the client-side interactions.
             var settingsReadOnly = {{ 'true' if settings_read_only else 'false' }};
+
+            // Test DB Connection (#184). Not a setting and not read-only: it
+            // changes nothing, so an anonymous visitor may check it too, the
+            // same way Reset Auth stays available to them.
+            var testDbBtn = document.getElementById("test-db-btn");
+            var testDbResult = document.getElementById("test-db-result");
+            testDbBtn.addEventListener("click", function () {
+                testDbBtn.disabled = true;
+                testDbResult.hidden = false;
+                testDbResult.className = "";
+                testDbResult.textContent = "Testing…";
+                fetch("{{ url_for('test_db_connection') }}", { method: "POST" })
+                    .then(function (resp) { return resp.json(); })
+                    .then(function (data) {
+                        testDbResult.className = data.ok ? "test-db-ok" : "test-db-bad";
+                        testDbResult.textContent = data.ok
+                            ? "Database connection successful!"
+                            : "Error: " + (data.error || "connection failed");
+                    })
+                    .catch(function () {
+                        // The request itself never arrived — saying "database
+                        // is down" would name the wrong culprit.
+                        testDbResult.className = "test-db-bad";
+                        testDbResult.textContent = "Could not reach the site to ask.";
+                    })
+                    .then(function () { testDbBtn.disabled = false; });
+            });
 
             // With only one visible language the quiz-language toggle has
             // nothing to choose (#113): keep its disabled state and hint in
@@ -934,7 +972,7 @@
                 video.pause();
             }
             function refreshBrowseTopics() {
-                // Rebuild the index page's "Browse flashcards" chips after
+                // Rebuild the index page's "Browse flashcards" tiles after
                 // Mykola saved a card from the chat (issue #53). The section
                 // only exists on the index page — elsewhere this is a no-op —
                 // and the refresh is cosmetic, so errors stay silent.
@@ -945,26 +983,32 @@
                     .then(function (data) {
                         var topics = data.topics || [];
                         while (box.firstChild) box.removeChild(box.firstChild);
-                        var p = document.createElement("p");
                         if (!topics.length) {
-                            p.className = "hint";
-                            p.textContent = "No topics yet — look up a word or upload notes to create one.";
-                            box.appendChild(p);
+                            var hint = document.createElement("p");
+                            hint.className = "hint";
+                            hint.textContent = "No topics yet — look up a word or upload notes to create one.";
+                            box.appendChild(hint);
                             return;
                         }
-                        p.className = "topic-chips";
+                        // Same markup the template renders (#184), or a chat
+                        // save would rebuild the section as the old pills.
+                        var grid = document.createElement("div");
+                        grid.className = "topic-tiles";
                         topics.forEach(function (t) {
                             var a = document.createElement("a");
-                            a.className = "chip";
+                            a.className = "topic-tile";
                             a.href = "/flashcards/" + encodeURIComponent(t[0]);
-                            a.textContent = t[0] + " ";
-                            var small = document.createElement("small");
-                            small.textContent = "(" + t[1] + ")";
-                            a.appendChild(small);
-                            p.appendChild(a);
-                            p.appendChild(document.createTextNode(" "));
+                            var name = document.createElement("span");
+                            name.className = "topic-tile-name";
+                            name.textContent = t[0];
+                            var count = document.createElement("span");
+                            count.className = "topic-tile-count";
+                            count.textContent = t[1] + (t[1] === 1 ? " card" : " cards");
+                            a.appendChild(name);
+                            a.appendChild(count);
+                            grid.appendChild(a);
                         });
-                        box.appendChild(p);
+                        box.appendChild(grid);
                     })
                     .catch(function () {});
             }

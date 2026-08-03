@@ -7,6 +7,41 @@
         <div class="banner error"><strong>{{ message }}</strong></div>
     {% endif %}
 
+    {# Browsing comes first (#184): the deck is what a returning learner is
+       here for, and it used to sit below two forms they only need when adding
+       something new. #}
+    <div class="panel">
+        <h2>Browse flashcards</h2>
+        {# id used by the Mykola widget to refresh this block in place when a
+           card is added from the chat (issue #53). #}
+        <div id="browse-topics">
+        {% if topics %}
+            <div class="topic-tiles">
+                {% for topic, count in topics %}
+                    <a class="topic-tile" href="{{ url_for('flashcards', topic=topic) }}">
+                        <span class="topic-tile-name">{{ topic }}</span>
+                        <span class="topic-tile-count">{{ count }} card{{ '' if count == 1 else 's' }}</span>
+                    </a>
+                {% endfor %}
+            </div>
+        {% elif settings.individual_cards %}
+            {# Same reasoning as the topic page: with #127 on, "nothing here"
+               is far more likely to be "nothing of yours here". #}
+            <p class="hint">No topics of your own yet — <em>Use only individual
+               cards</em> is on, so other people&rsquo;s are hidden. Look up a word to
+               start your own, or turn the setting off in Settings.</p>
+        {% else %}
+            <p class="hint">No topics yet — look up a word or upload notes to create one.</p>
+        {% endif %}
+        </div>
+        <form method="GET" onsubmit="window.location='/flashcards/' + encodeURIComponent(this.topic.value); return false;">
+            <label for="browse-topic">Or type a topic name</label>
+            <input type="text" id="browse-topic" name="topic" required
+                   placeholder="Type a topic name">
+            <button type="submit">Show flashcards</button>
+        </form>
+    </div>
+
     <div class="panel">
         {# The provider name follows the Settings choice (#20). #}
         <h2>Look up a word ({{ 'Bing Translator' if settings.translator == 'bing' else 'Google Translate' }})</h2>
@@ -46,42 +81,9 @@
         </form>
     </div>
 
-    <div class="panel">
-        <h2>Browse flashcards</h2>
-        {# id used by the Mykola widget to refresh this block in place when a
-           card is added from the chat (issue #53). #}
-        <div id="browse-topics">
-        {% if topics %}
-            <p class="topic-chips">
-                {% for topic, count in topics %}
-                    <a class="chip" href="{{ url_for('flashcards', topic=topic) }}">{{ topic }} <small>({{ count }})</small></a>
-                {% endfor %}
-            </p>
-        {% elif settings.individual_cards %}
-            {# Same reasoning as the topic page: with #127 on, "nothing here"
-               is far more likely to be "nothing of yours here". #}
-            <p class="hint">No topics of your own yet — <em>Use only individual
-               cards</em> is on, so other people&rsquo;s are hidden. Look up a word to
-               start your own, or turn the setting off in Settings.</p>
-        {% else %}
-            <p class="hint">No topics yet — look up a word or upload notes to create one.</p>
-        {% endif %}
-        </div>
-        <form method="GET" onsubmit="window.location='/flashcards/' + encodeURIComponent(this.topic.value); return false;">
-            <label for="browse-topic">Or type a topic name</label>
-            <input type="text" id="browse-topic" name="topic" required
-                   placeholder="Type a topic name">
-            <button type="submit">Show flashcards</button>
-        </form>
-    </div>
-
-    <div class="panel">
-        <h2>Database</h2>
-        <form method="POST">
-            <input type="hidden" name="action" value="test_db">
-            <button type="submit">Test DB Connection</button>
-        </form>
-    </div>
+    {# The Database panel is gone (#184): testing the connection is a
+       diagnostic, not something the main page should spend a section on. The
+       button lives in the Settings popup now. #}
 
     {% if duplicate_warning %}
         {# Early duplicate warning (#145): the word already has cards, so ask
@@ -346,8 +348,7 @@
                 var btn = form.querySelector("button[type=submit]");
                 var labels = {
                     parse_word: "Looking up…",
-                    upload_notes: "Uploading…",
-                    test_db: "Testing…"
+                    upload_notes: "Uploading…"
                 };
                 var action = (form.querySelector("input[name=action]") || {}).value;
                 btn.disabled = true;
