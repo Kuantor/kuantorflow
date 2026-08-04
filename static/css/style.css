@@ -115,6 +115,7 @@ body {
 :root {
     --panel-alpha: 0.72;
     --widget-alpha: 0.88;
+    --flashcard-alpha: 0.82;
 }
 
 .panel {
@@ -167,7 +168,21 @@ button:hover { background: var(--blue-dark); }
 .error { background: var(--bad-bg); border: 1px solid var(--bad-border); color: var(--bad-ink); }
 
 /* Flashcards */
-.card { border-left: 5px solid var(--blue); position: relative; }
+
+/* A topic page is one card per panel — dozens, stacked, each carrying a word,
+   a part of speech, an explanation and two translations with their examples.
+   The alpha that reads as a tint behind the main page's three short forms
+   becomes a wall of half-transparent text here, over a background that
+   differs behind every card, so this surface gets its own number (#201).
+
+   The plain .panel on the same page — the empty-topic explanation (#127) —
+   deliberately stays on --panel-alpha: it is doing the main page's job, not
+   the card's. */
+.card {
+    background: rgba(255, 255, 255, var(--flashcard-alpha));
+    border-left: 5px solid var(--blue);
+    position: relative;
+}
 .card-delete {
     position: absolute;
     top: 0.6rem;
