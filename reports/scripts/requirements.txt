@@ -2,3 +2,7 @@
 # Install into whatever environment you run the converters from:
 #   pip install -r reports/scripts/requirements.txt
 python-docx==1.2.0
+# md_to_pdf.py reads the finished PDF back before reporting success (issue
+# #211): headless Edge will happily print its own error page, and that is a
+# structurally valid PDF, so nothing cheaper than reading the text catches it.
+pypdf==6.14.2
