@@ -1541,8 +1541,21 @@ def index():
                     proposed_topic = topic
 
             elif action == "upload_notes":
+                # Parsing costs money before it costs anything else (#200):
+                # a Reverso .mht/.docx sends its glued translations to Claude
+                # (_split_glued_translations), and that happens *before* the
+                # save this visitor may not be allowed to make. Ask the same
+                # guard the save routes ask, at the door — after this point the
+                # money is spent on cards #125 would refuse to store.
+                #
+                # Every upload, not only the expensive kinds: which file calls
+                # Claude cannot be known without parsing it, and parsing is the
+                # thing being paid for.
+                write_refusal = add_refusal()
                 file = request.files.get("notes_file")
-                if file is None or not file.filename:
+                if write_refusal:
+                    pass          # refused: the file is not even read
+                elif file is None or not file.filename:
                     message = "Please choose a .txt, .docx or .mht file."
                 else:
                     # Don't save yet: show the parsed cards next to the file
