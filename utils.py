@@ -238,6 +238,66 @@ FLASHCARD_FIELDS = (
 )
 
 
+def _get_or_create_topic(cursor, name, created_by_user_id=None):
+    """The id of the topic called `name`, creating the row if it is new (#207).
+
+    Returns `(topic_id, canonical_name, created)`. A blank or missing name gives
+    `(None, None, False)` — "no topic" is a state a card is allowed to be in, and
+    it must not become a topic *named* '', which the UNIQUE key would happily
+    keep exactly once.
+
+    The canonical name is the one **stored on the topics row**, which is not
+    always the one passed in: names match case-insensitively, so a card saved
+    under 'environment AND climate' belongs to the existing 'Environment and
+    climate'. Callers write that back into `flashcards.topic`, so the string
+    column and the row it points at never disagree about spelling — which
+    matters while ai_agent is still reading the string.
+
+    This is the only place a topic name becomes an id, and it is deliberately
+    reached from inside `save_flashcard()` and `move_flashcard()` rather than
+    from their callers. Everything upstream speaks names: `lookup_word()` and
+    all six note parsers stamp a `topic` string into the entry, the review popup
+    posts it as a form field, #177's move dialog promises that an unknown name
+    creates the topic, and Mykola's tool schema has the *model* infer one. Ids
+    would have to be threaded through all of that, and the agent would have to
+    learn about database keys it has no business knowing.
+
+    `created_by_user_id` is attribution, and comes from the caller's session id
+    — never from `entry`, for the reason `save_flashcard()` already gives about
+    `added_by_user_id`: a value read out of submitted data lets a browser
+    attribute someone else's work.
+
+    Matching a name follows the column collation, so 'Work' finds 'work': the
+    same rule the old GROUP BY applied when it displayed them as one topic.
+    """
+    name = (name or "").strip()
+    if not name:
+        return None, None, False
+    cursor.execute("SELECT id, name FROM topics WHERE name = %s", (name,))
+    row = cursor.fetchone()
+    if row is not None:
+        return row[0], row[1], False
+    # Two workers can reach this line for the same new topic at once — the
+    # notes upload and a chat save, say. LAST_INSERT_ID(id) is the same idiom
+    # upsert_user() uses: the loser of the race reads the winner's id back
+    # instead of failing on the unique key.
+    cursor.execute(
+        "INSERT INTO topics (name, created_by_user_id) VALUES (%s, %s) "
+        "ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)",
+        (name, created_by_user_id),
+    )
+    # 1 = inserted; 0 or 2 = the row was already there, so somebody else is its
+    # creator and this call did not make it. In that case the name it was
+    # created with wins, so it is read back rather than assumed.
+    created = cursor.rowcount == 1
+    if created:
+        return cursor.lastrowid, name, True
+    topic_id = cursor.lastrowid
+    cursor.execute("SELECT name FROM topics WHERE id = %s", (topic_id,))
+    row = cursor.fetchone()
+    return topic_id, (row[0] if row else name), False
+
+
 def save_flashcard(entry, added_by_user_id=None):
     """
     Insert a flashcard entry into the `flashcards` table, unless a card with
@@ -253,20 +313,21 @@ def save_flashcard(entry, added_by_user_id=None):
     FLASHCARD_FIELDS on purpose: `entry` is built from submitted form data, so
     reading the id out of it would let a browser attribute a card to another
     user. Callers must take it from the server-side session.
+
+    The same id also creates the *topic* when `entry["topic"]` names one that
+    does not exist yet (#207) — one argument serving both, so the card's owner
+    and the topic's creator cannot disagree about who was here.
+
+    `topic` and `topic_id` are both written for the duration of the transition:
+    the string is what ai_agent's cards_db still reads and the rollback if the
+    id turns out wrong.
     """
     def serialize(value):
         if isinstance(value, (list, dict)):
             return json.dumps(value, ensure_ascii=False)
         return value
 
-    columns = FLASHCARD_FIELDS + ("added_by_user_id",)
-    values = tuple(serialize(entry.get(field)) for field in FLASHCARD_FIELDS)
-    values += (added_by_user_id,)
-
-    query = f"""
-        INSERT INTO flashcards ({", ".join(columns)})
-        VALUES ({", ".join(["%s"] * len(columns))})
-    """
+    columns = FLASHCARD_FIELDS + ("added_by_user_id", "topic_id")
 
     conn = get_db_connection()
     try:
@@ -282,10 +343,33 @@ def save_flashcard(entry, added_by_user_id=None):
         if cursor.fetchone() is not None:
             cursor.close()
             return None
-        cursor.execute(query, values)
+        # After the duplicate check, never before it: a card that is not going
+        # to be written must not leave a new topic behind.
+        topic_id, topic_name, topic_created = _get_or_create_topic(
+            cursor, entry.get("topic"), added_by_user_id)
+        values = tuple(
+            # The topic column takes the canonical spelling, not the submitted
+            # one, so it always matches the row topic_id points at.
+            topic_name if field == "topic" else serialize(entry.get(field))
+            for field in FLASHCARD_FIELDS
+        )
+        values += (added_by_user_id, topic_id)
+        cursor.execute(
+            f"INSERT INTO flashcards ({', '.join(columns)}) "
+            f"VALUES ({', '.join(['%s'] * len(columns))})",
+            values,
+        )
         conn.commit()
         row_id = cursor.lastrowid
         cursor.close()
+        if topic_created:
+            # Logged here rather than by the caller, like set_user_blocked():
+            # this is a write, CLAUDE.md's rule is that a write is logged, and
+            # putting the line where the row appears is what makes an unlogged
+            # topic impossible. No source field — the card's own CREATE line
+            # follows immediately and carries it.
+            applog.topic_created(topic_name, topic_id=topic_id,
+                                 created_by=added_by_user_id)
         return row_id
     finally:
         conn.close()
@@ -434,10 +518,10 @@ def move_flashcard(card_id, to_topic, owner_id=None, admin=False):
     deduplicates on word+pos *globally*, never per topic, so moving a card
     between topics cannot create a duplicate — where renaming its word can.
 
-    Topics are not a table — `get_topics()` derives them with GROUP BY — so a
-    move to an unknown topic simply creates it, and moving the last card out
-    of a topic makes that topic cease to exist. Both fall out of the data
-    rather than needing a step.
+    A move to an unknown topic still creates it (#207 keeps that promise, which
+    the move dialog makes in so many words), and moving the last card out of a
+    topic still removes it from `get_topics()` — the topic row survives, but the
+    list is of topics that *have cards*, so the visible effect is unchanged.
 
     Ownership is the same conditional-UPDATE shape as everything else that
     changes a card: a move is treated as an edit, since a card sitting in a
@@ -446,30 +530,63 @@ def move_flashcard(card_id, to_topic, owner_id=None, admin=False):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT word, topic FROM flashcards WHERE id = %s",
-                       (card_id,))
+        cursor.execute(
+            "SELECT word, topic, topic_id, added_by_user_id "
+            "FROM flashcards WHERE id = %s",
+            (card_id,))
         row = cursor.fetchone()
         if row is None:
             cursor.close()
             return "missing", None
-        word, from_topic = row
+        word, from_topic, from_topic_id, card_owner = row
         if from_topic == to_topic:
+            cursor.close()
+            return "unchanged", None
+        # Refuse before creating the destination topic, so a move somebody is
+        # not allowed to make does not leave a new topic behind. This is *not*
+        # the permission check — the conditional UPDATE below still is, and it
+        # is what closes the gap between deciding and doing. Should ownership
+        # change in between, the UPDATE refuses anyway and the only cost is an
+        # empty topic row.
+        # `owner_id is None` is refused rather than compared: an anonymous
+        # caller owns nothing, and `added_by_user_id = NULL` never matches, so
+        # the UPDATE could only ever deny it — comparing None to an unowned
+        # card's None would agree and create a topic for a move that then fails.
+        if not admin and (owner_id is None or card_owner != owner_id):
+            cursor.close()
+            return "denied", None
+
+        # The mover is the creator, admin or not: app.py passes the acting
+        # user's own id as owner_id either way.
+        topic_id, topic_name, topic_created = _get_or_create_topic(
+            cursor, to_topic, owner_id)
+        # Identity, not spelling. The check above catches the ordinary no-op
+        # cheaply; this one catches 'emotions' → 'EMOTIONS', which names the
+        # same topic. It has to happen here because the destination is only
+        # known to be that topic once the name has been resolved — and without
+        # it the UPDATE would write the values the row already holds, report no
+        # affected rows, and be read as a refusal.
+        if topic_id == from_topic_id:
             cursor.close()
             return "unchanged", None
 
         if admin:
-            cursor.execute("UPDATE flashcards SET topic = %s WHERE id = %s",
-                           (to_topic, card_id))
+            cursor.execute(
+                "UPDATE flashcards SET topic = %s, topic_id = %s WHERE id = %s",
+                (topic_name, topic_id, card_id))
         else:
             cursor.execute(
-                "UPDATE flashcards SET topic = %s "
+                "UPDATE flashcards SET topic = %s, topic_id = %s "
                 "WHERE id = %s AND added_by_user_id = %s",
-                (to_topic, card_id, owner_id))
+                (topic_name, topic_id, card_id, owner_id))
         if cursor.rowcount == 0:
             cursor.close()
             return "denied", None
         conn.commit()
         cursor.close()
+        if topic_created:
+            applog.topic_created(topic_name, topic_id=topic_id,
+                                 created_by=owner_id)
         return "moved", (word, from_topic)
     finally:
         conn.close()
@@ -598,10 +715,14 @@ def _owner_clause(owner_id):
     Equality is also what correctly excludes the unowned cards (NULL: saved
     before #89) from an individual view. They are nobody's, so they are not
     yours.
+
+    Qualified with `f.` — both callers join `topics` now (#207), and this is
+    about who owns the *card*. A topic's own `created_by_user_id` is attribution
+    and must never end up filtering a view.
     """
     if owner_id is None:
         return "", ()
-    return " AND added_by_user_id = %s", (owner_id,)
+    return " AND f.added_by_user_id = %s", (owner_id,)
 
 
 def get_topics(owner_id=None):
@@ -612,15 +733,39 @@ def get_topics(owner_id=None):
     With `owner_id`, only that user's cards are counted (#127), so a topic
     made entirely of other people's cards disappears from the list rather
     than opening empty.
+
+    Still a list of topics that **have cards**, now by joining `topics` rather
+    than grouping strings (#207). That is a deliberate choice, and the reason
+    this change is invisible on the page: the old GROUP BY could not report an
+    empty topic, so neither does this.
+
+    Empty topic rows do occur — deleting the last card in a topic leaves one,
+    and so does deleting an account that chose to take its cards with it. They
+    are kept rather than tidied away, because the row is now where the topic's
+    name, creator and age live: file a card under that name again and it is the
+    same topic resurrected, not a new one wearing the name. What should happen
+    on a page for a topic that is currently empty — list it, hide it, show it
+    only to its creator — is a question for whichever ticket first *wants* one:
+    a seeded curriculum (#203), or an image hung on a topic before it is filled
+    (#185). Answering it here, with no way to see the answer, would be guessing.
+
+    The name comes from the `topics` row, so it is one spelling from one place,
+    where the old GROUP BY reported whichever case-variant the engine happened
+    to pick.
+
+    Returns `(name, count)` tuples, as it always has: the topic pages, the tiles
+    on the index and the move dialog's suggestions all key on the name, and
+    URLs stay readable because of it.
     """
     clause, params = _owner_clause(owner_id)
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT topic, COUNT(*) FROM flashcards "
-            "WHERE topic IS NOT NULL AND topic != ''" + clause +
-            " GROUP BY topic ORDER BY topic",
+            "SELECT t.name, COUNT(*) FROM flashcards f "
+            "JOIN topics t ON f.topic_id = t.id "
+            "WHERE f.topic_id IS NOT NULL" + clause +
+            " GROUP BY t.id, t.name ORDER BY t.name",
             params,
         )
         rows = cursor.fetchall()
@@ -661,14 +806,20 @@ def get_flashcards_by_topic(topic, owner_id=None):
 
     With `owner_id`, only that user's cards come back (#127). None means
     every card, as it always has — see _owner_clause().
+
+    Still keyed by topic **name** (#207): it arrives from the URL, and a name
+    that matches no topic returns no cards, which is what makes
+    /flashcards/<anything> render an empty page rather than a 404 — behaviour
+    the topic pages have always had and #178 will have to think about.
     """
     clause, params = _owner_clause(owner_id)
     conn = get_db_connection()
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT * FROM flashcards WHERE topic = %s" + clause +
-            " ORDER BY word",
+            "SELECT f.* FROM flashcards f JOIN topics t ON f.topic_id = t.id "
+            "WHERE t.name = %s" + clause +
+            " ORDER BY f.word",
             (topic,) + params,
         )
         rows = cursor.fetchall()
