@@ -44,6 +44,43 @@ CREATE TABLE IF NOT EXISTS users (
     INDEX idx_email (email)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- Topics (issue #207). Until now a topic was a VARCHAR on flashcards and the
+-- topic *list* was a GROUP BY: correct while a topic was a bare label, and a
+-- dead end as soon as one needs to own anything (an image, #185) or to be
+-- renamed as a thing rather than as a string (#178).
+--
+-- Defined ABOVE flashcards on purpose: apply_schema.py runs these statements in
+-- file order and flashcards' foreign key needs its target to exist first — the
+-- same reason `users` sits above it.
+--
+-- name is UNIQUE, which finally makes "the same topic" a fact instead of a
+-- coincidence of spelling. The column collation is utf8mb4_unicode_ci, so
+-- 'Work' and 'work' were already one topic everywhere it mattered; the
+-- constraint just stops the second spelling being stored as if it were another.
+CREATE TABLE IF NOT EXISTS topics (
+    id                 INT AUTO_INCREMENT PRIMARY KEY,
+    name               VARCHAR(255) NOT NULL,
+    -- Who created it, on the same terms as flashcards.added_by_user_id (#89):
+    -- NULL means nobody's — an anonymous visitor, a seeding script, or a topic
+    -- that predates the column. Attribution only; nothing reads it to decide
+    -- permissions, and #127 keeps filtering on *card* ownership.
+    created_by_user_id INT NULL,
+    created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_topics_name (name),
+    INDEX idx_topics_created_by (created_by_user_id),
+    -- ON DELETE SET NULL, where flashcards uses RESTRICT — deliberately. #165
+    -- chose RESTRICT because deleting an account asks a real question ("keep my
+    -- cards or delete them?") that a cascade would answer silently. A topic has
+    -- no such question: it may hold other people's cards, so deleting the
+    -- creator's account cannot delete it, and surviving with no creator is the
+    -- only correct outcome. RESTRICT here would make account deletion fail for
+    -- anyone who ever created a topic — _delete_account_data() ends in
+    -- delete_user(), and the user would be told "nothing was removed" with no
+    -- way to fix it.
+    CONSTRAINT fk_topics_user FOREIGN KEY (created_by_user_id)
+        REFERENCES users (id) ON DELETE SET NULL
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS flashcards (
     id INT AUTO_INCREMENT PRIMARY KEY,
     word VARCHAR(255) NOT NULL,
@@ -54,7 +91,12 @@ CREATE TABLE IF NOT EXISTS flashcards (
     examples_ukr TEXT,
     translation_rus VARCHAR(255),
     examples_rus TEXT,
+    -- The topic name, kept alongside topic_id for the transition (#207). Both
+    -- are written on every save. This column is what ai_agent's cards_db reads
+    -- today, and it is the rollback if topic_id turns out wrong; phase 3 drops
+    -- it once ai_agent joins `topics` instead. Do not read it here.
     topic VARCHAR(255),
+    topic_id INT NULL,
     -- Who added the card (issue #89). NULL for anonymous visitors and for
     -- every card saved before this column existed — NULL is what SQL already
     -- means by "references nothing", and it keeps the foreign key valid where
@@ -64,6 +106,7 @@ CREATE TABLE IF NOT EXISTS flashcards (
     added_by_user_id INT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_topic (topic),
+    INDEX idx_topic_id (topic_id),
     INDEX idx_word (word),
     INDEX idx_added_by (added_by_user_id),
     -- ON DELETE RESTRICT on purpose (settled in #165): account deletion asks
@@ -72,7 +115,12 @@ CREATE TABLE IF NOT EXISTS flashcards (
     -- someone's vocabulary, and SET NULL would silently pick "keep" even when
     -- they chose "delete". RESTRICT turns a forgotten step into a loud failure.
     CONSTRAINT fk_flashcards_user FOREIGN KEY (added_by_user_id)
-        REFERENCES users (id) ON DELETE RESTRICT
+        REFERENCES users (id) ON DELETE RESTRICT,
+    -- RESTRICT again, and here for #165's original reason: a topic holding
+    -- cards cannot simply vanish, because "move them or delete them?" is a
+    -- question for the application to put to someone.
+    CONSTRAINT fk_flashcards_topic FOREIGN KEY (topic_id)
+        REFERENCES topics (id) ON DELETE RESTRICT
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- The ALTER statements that used to be listed here as comments — pos,

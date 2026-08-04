@@ -93,6 +93,26 @@ def _card_fields(entry):
     }
 
 
+def topic_created(name, topic_id=None, created_by=None):
+    """A new topic row appeared (issue #207).
+
+    Written from utils, where the row is actually created, rather than from the
+    route — the same reasoning as set_user_blocked(): there is one place a topic
+    can come into existence, and putting the line there is what makes an
+    unlogged one impossible.
+
+    `created_by` is the user *id*, not the email the other card lines carry:
+    this is called from below the request, where the session is not in reach.
+    The CREATE line for the card that caused it follows immediately and names
+    the user and the source, so the pair reads as one event.
+    """
+    # The field is `topic=`, matching the card lines, so one grep finds the
+    # topic being created and every card later filed under it. It cannot be
+    # `name=` either way: that is _write()'s own first argument.
+    _write(CARDS, "TOPIC", topic=name, id=topic_id,
+           created_by=(created_by if created_by is not None else "anonymous"))
+
+
 def card_created(entry, source, user=None, card_id=None):
     """A new card reached the database."""
     _write(CARDS, "CREATE", **_card_fields(entry), id=card_id,

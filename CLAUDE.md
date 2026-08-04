@@ -86,7 +86,27 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   therefore two edits: the column in `schema.sql`, and a migration in the
   script. Never leave an `ALTER` in `schema.sql` as a comment — re-applying the
   file can't run it, which is how card saving broke in production on
-  2026-08-02.
+  2026-08-02. Table order in `schema.sql` is **dependency order**: a foreign key
+  needs its target created first, which is why `users` and `topics` sit above
+  `flashcards`. Most steps are idempotent because the object they create can be
+  looked up by name; a step that moves **data** carries a `Pending` probe
+  instead — SQL that still returns rows while there is work left (#207's topic
+  backfill is the first).
+- **`topics`** (#207) — topics are a table, and `flashcards.topic_id` points at
+  it. `flashcards.topic` is still written alongside, holding the **canonical**
+  spelling from the topics row: it is what `ai_agent`'s `cards_db` still reads
+  and the rollback if `topic_id` proves wrong, and a later phase drops it. A
+  topic name becomes an id in exactly one place — `_get_or_create_topic()`,
+  reached from `save_flashcard()` and `move_flashcard()` — so every producer
+  upstream (the parsers, the review popup, Mykola's tool schema) keeps speaking
+  names, and an unknown name still creates the topic (#177's promise).
+  `created_by_user_id` is **attribution only**: nothing reads it to decide
+  permissions, and #127 still filters on *card* ownership. Its foreign key is
+  `ON DELETE SET NULL`, unlike `flashcards`' `RESTRICT` — a topic may hold other
+  people's cards, so deleting its creator's account must leave it standing.
+  `get_topics()` still lists only topics that **have cards**; empty topic rows do
+  occur (delete the last card in one) and are deliberately kept, because the row
+  is where the name, creator and age live.
 
 ## Conventions
 
@@ -109,3 +129,37 @@ first), reload the web app. Note: Reverso and
 Merriam-Webster are blocked from PythonAnywhere's IPs, so those paths fall
 back (Google / Reverso alternatives); `ANTHROPIC_API_KEY` lives in
 `ai_agent/.env`.
+
+**`apply_schema.py` is the only schema step, and it is always the same two
+commands** — from a Bash console, in the `kuantorflow` directory, with the app's
+venv active:
+
+```bash
+python apply_schema.py --dry-run   # read this first
+python apply_schema.py             # then apply
+```
+
+Reload the web app afterwards. Re-running is safe and says `nothing to do`.
+
+Read the dry run before applying, and expect one line per step. A `+` line is a
+change, `=` is already in place, `~` is pending under `--dry-run`. If a step
+fails the script stops there, prints the statement that was rejected, and tells
+you that nothing after it was applied — fix the cause and re-run, rather than
+running the remaining statements by hand. Do **not** pipe `schema.sql` into
+`mysql`: it cannot alter an existing table and skips every migration, which is
+the failure #180 exists to prevent.
+
+For the #207 deploy specifically, the dry run should list `topics`,
+`flashcards.topic_id`, `flashcards.topic_id backfill`, `flashcards.idx_topic_id`
+and `flashcards.fk_flashcards_topic`. The backfill rewrites `flashcards.topic`
+to the canonical spelling of the topic it links to, which can change the **case**
+of a topic name where two spellings existed ('Work' and 'work' were already one
+topic to every query, but only one row survives). Worth a look before applying:
+
+```bash
+python -c "from utils import get_db_connection; c=get_db_connection(); u=c.cursor(); u.execute('SELECT COUNT(DISTINCT CAST(topic AS BINARY)), COUNT(DISTINCT topic) FROM flashcards WHERE topic IS NOT NULL'); print('exact spellings / distinct topics:', u.fetchone())"
+```
+
+Equal numbers mean no topic differs only by case and nothing will be renamed.
+If they differ, the surviving spelling is whichever the engine groups to, so
+decide deliberately rather than after the fact.
