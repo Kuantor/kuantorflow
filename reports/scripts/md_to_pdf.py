@@ -6,13 +6,32 @@ Usage:
     python md_to_pdf.py <report.md> [output.pdf]
 
 Requires: md_to_docx.py next to this script (shares its Markdown parser);
-Microsoft Edge installed (checked in the standard locations).
+Microsoft Edge installed (checked in the standard locations); pypdf, which is
+used to read the finished PDF back (see below).
+
+**Edge exits before it has rendered anything** (issue #211). It hands the work
+to a browser process and returns, so `subprocess.run` coming back says nothing
+about whether a PDF was written. Two consequences shape this script:
+
+* The HTML goes to a path that outlives the call. It used to be written into a
+  `tempfile.TemporaryDirectory()`, which was then deleted while the browser was
+  still getting round to loading it — so Edge loaded nothing, rendered its own
+  "File not found" page, and printed *that* to the PDF. On 2026-08-04 a report
+  was committed in that state: one page, 92 characters, exit code 0.
+* The result is read back before this script claims success. Nothing cheaper
+  works: that error page is a structurally valid PDF with a correct header, a
+  correct trailer and a plausible size, because it still embeds the fonts the
+  stylesheet asks for.
+
+Whether Edge hands off depends on another Edge or Chromium process already
+running, so the failure is intermittent — which is why the check is not
+optional and there is no flag to skip it.
 """
 
 import html
 import subprocess
 import sys
-import tempfile
+import time
 from pathlib import Path
 
 from md_to_docx import parse_markdown  # shared parser — one dialect, two emitters
@@ -107,23 +126,88 @@ def find_edge():
     sys.exit("Microsoft Edge not found in the standard locations.")
 
 
+# Extracted text is not the source text: the embedded fonts use typographic
+# ligatures, so 'backfill' reads back as 'back<fi>ll' and 'differ' as
+# 'di<ff>er'. Folded before comparing, or four sound headings look missing.
+LIGATURES = {"ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl", "ﬃ": "ffi", "ﬄ": "ffl",
+             "ﬅ": "st", "ﬆ": "st"}
+
+SETTLE_SECONDS = 90
+
+
+def _settle(out):
+    """Wait for Edge to finish writing, since it exited long ago (#211)."""
+    size = -1
+    for _ in range(SETTLE_SECONDS):
+        time.sleep(1)
+        if out.exists():
+            current = out.stat().st_size
+            if current and current == size:
+                return
+            size = current
+    sys.exit(f"error: {out.name} was never written — Edge rendered nothing.")
+
+
+def _read_back(out):
+    """The PDF's page count and its text, with ligatures folded."""
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        sys.exit("error: pypdf is required to check the rendered PDF — "
+                 "pip install -r reports/scripts/requirements.txt")
+    pages = PdfReader(str(out)).pages
+    text = "".join((page.extract_text() or "") for page in pages)
+    for char, plain in LIGATURES.items():
+        text = text.replace(char, plain)
+    return len(pages), text
+
+
+def verify(src_text, out):
+    """Read the PDF back. Exits non-zero rather than reporting a bad render."""
+    pages, text = _read_back(out)
+    if "ERR_FILE_NOT_FOUND" in text or "File not found" in text:
+        sys.exit(f"error: {out.name} is Edge's error page, not the report.")
+    if len(text) < 1000:
+        sys.exit(f"error: {out.name} holds only {len(text)} characters of text "
+                 f"— it did not render.")
+
+    # Headings are a cheap whole-document check: they are spread through the
+    # file, so a truncated or partly-rendered PDF loses some of them.
+    flat = " ".join(text.split())
+    missing = [line.lstrip("# ").strip()
+               for line in src_text.splitlines() if line.startswith("#")
+               if " ".join(line.lstrip("# ").replace("**", "").split()) not in flat]
+    if missing:
+        sys.exit(f"error: {out.name} is missing {len(missing)} heading(s): "
+                 f"{missing[:3]}")
+    return pages, len(text)
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
     src = Path(sys.argv[1])
     out = (Path(sys.argv[2]) if len(sys.argv) > 2 else src.with_suffix(".pdf")).resolve()
-    page = blocks_to_html(parse_markdown(src.read_text(encoding="utf-8")))
+    src_text = src.read_text(encoding="utf-8")
 
-    with tempfile.TemporaryDirectory() as tmp:
-        html_path = Path(tmp) / "report.html"
-        html_path.write_text(page, encoding="utf-8")
-        subprocess.run(
-            [find_edge(), "--headless", "--disable-gpu",
-             "--no-pdf-header-footer",
-             f"--print-to-pdf={out}", html_path.as_uri()],
-            check=True, timeout=120,
-        )
+    # Beside the output, not in a temp directory that gets deleted while the
+    # browser is still opening it (#211). Kept if anything fails, so the HTML
+    # that produced a bad PDF can be looked at.
+    html_path = out.with_suffix(".render.html")
+    html_path.write_text(blocks_to_html(parse_markdown(src_text)), encoding="utf-8")
+    if out.exists():
+        out.unlink()        # so a stale PDF cannot be mistaken for a new one
+
+    subprocess.run(
+        [find_edge(), "--headless", "--disable-gpu", "--no-pdf-header-footer",
+         f"--print-to-pdf={out}", html_path.as_uri()],
+        check=True, timeout=120,
+    )
+    _settle(out)
+    pages, characters = verify(src_text, out)
+    html_path.unlink()
     print(f"written: {out}")
+    print(f"  verified: {pages} page(s), {characters} characters of text")
 
 
 if __name__ == "__main__":

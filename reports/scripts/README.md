@@ -7,7 +7,7 @@ branded table headers).
 ## Usage
 
 ```bash
-pip install -r reports/scripts/requirements.txt   # python-docx, the only dependency
+pip install -r reports/scripts/requirements.txt   # python-docx, pypdf
 
 python reports/scripts/md_to_docx.py reports/2026-07-13-weekly-report.md
 python reports/scripts/md_to_pdf.py  reports/2026-07-13-weekly-report.md
@@ -23,7 +23,12 @@ argument names the output file.
   document with python-docx. The parser is importable (`parse_markdown`).
 - `md_to_pdf.py` — reuses that same parser, emits styled HTML, and prints it
   to PDF with **headless Microsoft Edge** (present on every Windows 10/11
-  machine — no LibreOffice or Word required).
+  machine — no LibreOffice or Word required). It then **reads the PDF back**
+  and fails if the text is not the report (issue #211): Edge exits before it
+  has rendered anything, and given half a chance will print its own "File not
+  found" page — a structurally valid PDF that passes every cheaper check. It
+  prints the page and character count on success, so a silent bad render is
+  not a thing that can happen.
 
 One parser, two emitters: if the Markdown dialect grows, extend
 `parse_markdown` once and both formats pick it up.
