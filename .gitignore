@@ -16,6 +16,8 @@ ENV/
 .vscode/
 .idea/
 *.swp
+.obsidian/
+.claude/
 
 # OS files
 .DS_Store
