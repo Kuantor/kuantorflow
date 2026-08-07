@@ -807,6 +807,79 @@ def get_topics(owner_id=None):
     return rows
 
 
+def get_topics_by_section(owner_id=None):
+    """The browse page's topics, grouped under their section (#218).
+
+    Returns `[(section_name, [(topic_name, count), ...]), ...]` ordered by
+    `(section.position, topic.position, topic.name)` — #215's rule. The inner
+    pairs are exactly what `get_topics()` returns, so a template can render
+    either shape with the same tile.
+
+    `get_topics()` is deliberately left alone rather than grown a grouping
+    argument: it still answers "which topics are there", which is what
+    /topics.json's callers, the move dialog's suggestions and #178 will keep
+    asking. Grouping is a different question and gets its own function.
+
+    **Every section is returned, including one with nothing to show.** The
+    B2–C1 shelf is empty until #203 fills it, and a heading that appeared only
+    once it had content could not do the one job it has — saying what the deck
+    is going to be. A caller that wants "nothing here at all" to read
+    differently checks for it; the index page shows its existing hint instead.
+
+    A *topic* with no cards is still omitted, exactly as `get_topics()` omits
+    it (#207): an empty topic row is kept for its name and creator, not offered
+    as somewhere to browse. That is the asymmetry — an empty section is
+    structure, an empty topic is a leftover.
+
+    The owner filter (#127) rides in the LEFT JOIN's ON clause, not a WHERE.
+    In a WHERE it would discard the very rows the outer join exists to keep,
+    turning every section with no cards *of yours* into no section at all.
+
+    Topics join their section with an inner join: #215 documented section_id as
+    never NULL in a settled database. A topic that somehow had none is missing
+    from this page while still reachable by URL and still in `get_topics()`,
+    and the next `apply_schema.py` adopts it.
+    """
+    clause, params = _owner_clause(owner_id)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        # The sections, first and on their own. One query cannot do both jobs:
+        # the row that would carry an empty section is a (section, no topic)
+        # row, and it is indistinguishable from the (section, topic with no
+        # cards) rows that have to be discarded. Asked separately, "which
+        # sections are there" has an unambiguous answer.
+        cursor.execute(
+            "SELECT id, name FROM topic_sections ORDER BY position, name")
+        sections = cursor.fetchall()
+
+        # Then the topics worth showing, with their counts. The owner filter
+        # sits in the ON clause so that a topic holding only other people's
+        # cards comes back with a count of 0 and is dropped by the HAVING,
+        # rather than vanishing before it can be counted.
+        cursor.execute(
+            "SELECT t.section_id, t.name, COUNT(f.id) "
+            "FROM topics t "
+            "LEFT JOIN flashcards f ON f.topic_id = t.id" + clause +
+            " GROUP BY t.id, t.section_id, t.name, t.position "
+            "HAVING COUNT(f.id) > 0 "
+            "ORDER BY t.position, t.name",
+            params,
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+    finally:
+        conn.close()
+
+    by_section = {}
+    for section_id, name, count in rows:
+        by_section.setdefault(section_id, []).append((name, int(count)))
+    # A topic whose section_id matches nothing — the NULL case above — is left
+    # out here rather than tested for.
+    return [(name, by_section.get(section_id, []))
+            for section_id, name in sections]
+
+
 LIST_FIELDS = ("examples_en", "examples_ukr", "examples_rus")
 
 

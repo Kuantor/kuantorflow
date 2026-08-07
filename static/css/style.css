@@ -322,10 +322,39 @@ button:hover { background: var(--blue-dark); }
 .crumbs a:hover { color: var(--yellow); }
 
 /* Topic chips */
-/* Topic tiles (#184). Squares with rounded corners rather than pills: #185
-   will give each topic a picture, and a picture needs a shape to sit in. The
-   text is bottom-aligned and the tile clips its contents, so an image can be
-   dropped in behind it without the layout moving.
+/* Section headings (#218). The rule runs from the end of the words to the far
+   edge, so a section reads as a band across the panel even when it has no
+   tiles under it — which the B2–C1 shelf does not until #203 fills it, and an
+   unadorned line of text there would look like a mistake rather than a
+   promise.
+
+   Drawn with a flex child rather than a border-bottom on the heading: a border
+   would underline the text too, and the design wants the rule beside it. */
+.topic-section {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin: 1.1rem 0 0.5rem;
+    font-size: 1.02rem;
+    color: var(--blue-dark);
+}
+.topic-section:first-child { margin-top: 0.4rem; }
+.topic-section::after {
+    content: "";
+    flex: 1;
+    height: 2px;
+    background: var(--blue);
+    opacity: 0.55;
+}
+
+/* Topic tiles (#184). Rounded rectangles rather than pills: #185 will give
+   each topic a picture, and a picture needs a shape to sit in. The text is
+   bottom-aligned and the tile clips its contents, so an image can be dropped
+   in behind it without the layout moving.
+
+   Portrait rather than square (#218): a caption sitting on top of a picture
+   needs room below the image's subject, and a 3:4 tile gives the two or three
+   lines a topic name can run to without the count being squeezed out.
 
    auto-fill rather than a fixed column count: the number of topics is the
    user's, not the design's, and this gives two tiles across on a phone and as
@@ -338,7 +367,7 @@ button:hover { background: var(--blue-dark); }
 }
 .topic-tile {
     position: relative;
-    aspect-ratio: 1 / 1;
+    aspect-ratio: 3 / 4;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
