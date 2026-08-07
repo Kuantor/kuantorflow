@@ -191,6 +191,84 @@ MIGRATIONS = (
             "ON DELETE RESTRICT",
         ),
     ),
+    # Topic sections (#215). Same shape as #207 one level up: the
+    # `topic_sections` table is a CREATE TABLE in schema.sql, and what is left
+    # here is teaching `topics` to point at it — columns, then the rows to point
+    # at, then the data, then the index, then the key.
+    #
+    # Two columns in one ALTER, as users.blocked_at does: they are one feature,
+    # they arrive together or not at all, and checking section_id is then enough
+    # to know both are there.
+    Step(
+        "topics.section_id",
+        Column("topics", "section_id"),
+        (
+            "ALTER TABLE topics "
+            "ADD COLUMN section_id INT NULL AFTER name, "
+            "ADD COLUMN position INT NOT NULL DEFAULT 0 AFTER section_id",
+        ),
+    ),
+    # The two starting sections. Data, not an object, so a Pending probe asks
+    # the question — and it asks for *both* rows, not for the table, because a
+    # run interrupted between the two inserts has work left to do.
+    #
+    # 'Other' is positioned far past its neighbour so later sections can be
+    # slotted in front of it without renumbering; see schema.sql. The B2-C1
+    # section is created **empty** on purpose: filling it is #203, and a section
+    # with no topics is a perfectly good row — the same way an empty topic is
+    # (#207), because the row is where the name and the order live.
+    Step(
+        "topic_sections rows",
+        Pending(
+            "SELECT 1 FROM topic_sections "
+            "WHERE name IN ('Other', 'B2–C1 Conversational Topics') "
+            "HAVING COUNT(*) < 2"
+        ),
+        (
+            # ON DUPLICATE KEY UPDATE id = id for the reason #207's backfill
+            # gives: a re-run after a half-finished attempt inserts the missing
+            # row and leaves the existing one exactly as it is, including a
+            # position an admin may have changed by hand.
+            "INSERT INTO topic_sections (name, position) VALUES "
+            "('B2–C1 Conversational Topics', 1), ('Other', 100) "
+            "ON DUPLICATE KEY UPDATE id = id",
+        ),
+    ),
+    # Every topic that predates sections goes to 'Other' — the honest place for
+    # a topic whose curriculum position nobody has decided. `position` keeps its
+    # default of 0 across the whole bucket, so they stay in the alphabetical
+    # order the index page already shows (see schema.sql on the name tiebreak):
+    # this migration is deliberately invisible on the page.
+    #
+    # The probe is "a topic with no section", not "does 'Other' have rows" —
+    # it has to describe the work, so that a topic created between this step and
+    # the next deploy is still seen as unfinished business.
+    Step(
+        "topics.section_id backfill",
+        Pending("SELECT 1 FROM topics WHERE section_id IS NULL LIMIT 1"),
+        (
+            "UPDATE topics t JOIN topic_sections s ON s.name = 'Other' "
+            "   SET t.section_id = s.id "
+            " WHERE t.section_id IS NULL",
+        ),
+    ),
+    Step(
+        "topics.idx_topics_section",
+        Index("topics", "idx_topics_section"),
+        ("ALTER TABLE topics ADD INDEX idx_topics_section (section_id)",),
+    ),
+    # Last, so it meets data that already satisfies it — #207's reason, and here
+    # it also means a skipped or failed backfill fails loudly right here rather
+    # than leaving a key that does not describe the table.
+    Step(
+        "topics.fk_topics_section",
+        Constraint("topics", "fk_topics_section"),
+        (
+            "ALTER TABLE topics ADD CONSTRAINT fk_topics_section "
+            "FOREIGN KEY (section_id) REFERENCES topic_sections (id) "
+            "ON DELETE RESTRICT",
+        ),
+    ),
 )
 
 
