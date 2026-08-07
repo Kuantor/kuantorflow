@@ -238,6 +238,32 @@ FLASHCARD_FIELDS = (
 )
 
 
+# Where a brand-new topic goes (#215). 'Other' is the bucket the migration put
+# every pre-existing topic in, and a topic invented by a lookup, an import or
+# Mykola belongs there for the same reason: nobody has decided its place in a
+# curriculum. Keeping this true at the point of creation is what lets readers
+# treat topics.section_id as always set.
+DEFAULT_SECTION = "Other"
+
+
+def _default_section_id(cursor):
+    """The id of the section a new topic is filed under, or None (#215).
+
+    None only on a database where #215's `topic_sections rows` step has not run
+    — a deploy caught between applying the schema and reloading, in practice.
+    Saving a card must not fail for that, so the topic is created with no
+    section and the backfill adopts it on the next `apply_schema.py`.
+
+    A missing *table*, unlike a missing row, is left to raise: that is the same
+    half-deployed database a missing column would fail on, and #180's whole
+    point is that it should be loud.
+    """
+    cursor.execute(
+        "SELECT id FROM topic_sections WHERE name = %s", (DEFAULT_SECTION,))
+    row = cursor.fetchone()
+    return row[0] if row is not None else None
+
+
 def _get_or_create_topic(cursor, name, created_by_user_id=None):
     """The id of the topic called `name`, creating the row if it is new (#207).
 
@@ -281,10 +307,16 @@ def _get_or_create_topic(cursor, name, created_by_user_id=None):
     # notes upload and a chat save, say. LAST_INSERT_ID(id) is the same idiom
     # upsert_user() uses: the loser of the race reads the winner's id back
     # instead of failing on the unique key.
+    # Resolved here rather than at import: the section rows are data, so a
+    # long-lived worker started before the migration would otherwise cache a
+    # None it never re-checks. `position` takes its column default of 0, which
+    # is what puts a new topic in 'Other' in alphabetical order (#215).
+    section_id = _default_section_id(cursor)
     cursor.execute(
-        "INSERT INTO topics (name, created_by_user_id) VALUES (%s, %s) "
+        "INSERT INTO topics (name, created_by_user_id, section_id) "
+        "VALUES (%s, %s, %s) "
         "ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)",
-        (name, created_by_user_id),
+        (name, created_by_user_id, section_id),
     )
     # 1 = inserted; 0 or 2 = the row was already there, so somebody else is its
     # creator and this call did not make it. In that case the name it was

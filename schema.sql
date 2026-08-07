@@ -44,6 +44,34 @@ CREATE TABLE IF NOT EXISTS users (
     INDEX idx_email (email)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- Topic sections (issue #215). A section groups topics into something a
+-- learner reads as a curriculum instead of one flat alphabetical list. Two
+-- exist to begin with: 'B2–C1 Conversational Topics', which #203's seeded deck
+-- will fill, and 'Other', the bucket every topic that predates this table was
+-- moved into.
+--
+-- The section *rows* are not here, because this file holds CREATE TABLE only
+-- (#180) and apply_schema.py enforces it. They are inserted by a data step in
+-- MIGRATIONS, which runs on a fresh database and an existing one alike — so a
+-- new database still ends up with both sections.
+--
+-- Above `topics` for the usual reason: apply_schema.py runs these in file
+-- order and topics' foreign key needs its target first.
+--
+-- `position` orders the sections themselves. The values are spaced rather than
+-- consecutive ('Other' is 100) so a section can be slotted in front of it
+-- later without renumbering the ones that already exist.
+CREATE TABLE IF NOT EXISTS topic_sections (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(255) NOT NULL,
+    position   INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- UNIQUE for the same reason topics.name is: under utf8mb4_unicode_ci
+    -- 'other' and 'Other' are one section, and the key stops the second
+    -- spelling being stored as though it were a different one.
+    UNIQUE KEY uq_topic_sections_name (name)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- Topics (issue #207). Until now a topic was a VARCHAR on flashcards and the
 -- topic *list* was a GROUP BY: correct while a topic was a bare label, and a
 -- dead end as soon as one needs to own anything (an image, #185) or to be
@@ -60,6 +88,21 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS topics (
     id                 INT AUTO_INCREMENT PRIMARY KEY,
     name               VARCHAR(255) NOT NULL,
+    -- Which section the topic sits in (#215). Nullable only because a column
+    -- added to an existing table has to be, and because a topic saved during a
+    -- deploy — after the column, before the backfill — has nowhere to point
+    -- yet. In a settled database it is never NULL: the backfill adopts every
+    -- topic that predates it and _get_or_create_topic() files new ones under
+    -- 'Other', so nothing reading this needs a "no section" branch.
+    section_id         INT NULL,
+    -- The topic's index within its section (#215). Ordering is
+    -- (section.position, topic.position, topic.name): the name is the final
+    -- tiebreak, which is what makes 0 a usable default. Every topic in 'Other'
+    -- holds 0 and therefore sorts alphabetically — the order get_topics() has
+    -- always produced — and 0 means "no order decided here", honestly, rather
+    -- than pretending a bucket is a curriculum. A section that *is* ordered
+    -- (#203's sixteen) numbers its topics from 1.
+    position           INT NOT NULL DEFAULT 0,
     -- Who created it, on the same terms as flashcards.added_by_user_id (#89):
     -- NULL means nobody's — an anonymous visitor, a seeding script, or a topic
     -- that predates the column. Attribution only; nothing reads it to decide
@@ -68,6 +111,7 @@ CREATE TABLE IF NOT EXISTS topics (
     created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_topics_name (name),
     INDEX idx_topics_created_by (created_by_user_id),
+    INDEX idx_topics_section (section_id),
     -- ON DELETE SET NULL, where flashcards uses RESTRICT — deliberately. #165
     -- chose RESTRICT because deleting an account asks a real question ("keep my
     -- cards or delete them?") that a cascade would answer silently. A topic has
@@ -78,7 +122,17 @@ CREATE TABLE IF NOT EXISTS topics (
     -- delete_user(), and the user would be told "nothing was removed" with no
     -- way to fix it.
     CONSTRAINT fk_topics_user FOREIGN KEY (created_by_user_id)
-        REFERENCES users (id) ON DELETE SET NULL
+        REFERENCES users (id) ON DELETE SET NULL,
+    -- ON DELETE RESTRICT, unlike fk_topics_user just above (#215). The two
+    -- foreign keys on this table answer different questions. A creator is
+    -- attribution, so losing one leaves a topic that is simply nobody's. A
+    -- section is where the topic *lives*, and deleting one asks "move these
+    -- topics or delete them?" — the same question flashcards.topic_id has
+    -- about a topic, settled the same way in #165. RESTRICT makes deleting a
+    -- non-empty section fail loudly instead of quietly emptying it into NULL,
+    -- which is the state the section_id comment above promises cannot happen.
+    CONSTRAINT fk_topics_section FOREIGN KEY (section_id)
+        REFERENCES topic_sections (id) ON DELETE RESTRICT
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS flashcards (

@@ -107,6 +107,23 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   `get_topics()` still lists only topics that **have cards**; empty topic rows do
   occur (delete the last card in one) and are deliberately kept, because the row
   is where the name, creator and age live.
+- **`topic_sections`** (#215) — topics are grouped, and `topics.section_id`
+  points at the section. Two sections exist: **`Other`**, holding every topic
+  that predates the table and every topic created since, and **`B2–C1
+  Conversational Topics`**, deliberately **empty** until #203 seeds it.
+  `topics.section_id` is nullable only so the column could be added and so a
+  topic saved mid-deploy has somewhere to be; in a settled database it is never
+  NULL, because the backfill adopted the old topics and `_get_or_create_topic()`
+  files new ones under `Other` — so **don't write a "no section" branch**.
+  Ordering is `(section.position, topic.position, topic.name)`, and the name
+  tiebreak is what makes `position` default to 0: every topic in `Other` holds 0
+  and therefore sorts alphabetically, exactly as `get_topics()` always did. A
+  section that really is ordered numbers its topics from 1. `fk_topics_section`
+  is `ON DELETE RESTRICT`, unlike `fk_topics_user` on the same table — a creator
+  is attribution, but a section is *where the topic lives*, so deleting a
+  non-empty one has to fail rather than quietly empty it into NULL. Nothing
+  renders sections yet: `get_topics()` is untouched and the index page still
+  shows one flat alphabetical list.
 
 ## Conventions
 
@@ -163,3 +180,15 @@ python -c "from utils import get_db_connection; c=get_db_connection(); u=c.curso
 Equal numbers mean no topic differs only by case and nothing will be renamed.
 If they differ, the surviving spelling is whichever the engine groups to, so
 decide deliberately rather than after the fact.
+
+For the #215 deploy, the dry run should list `topic_sections`,
+`topics.section_id`, `topic_sections rows`, `topics.section_id backfill`,
+`topics.idx_topics_section` and `topics.fk_topics_section` — six steps, and no
+`~` against anything from #207. It changes no card and nothing the page renders:
+every existing topic moves into `Other` at position 0, which is the alphabetical
+order already on screen. Worth confirming afterwards that nothing was left
+behind, since the foreign key is what a later section feature will rely on:
+
+```bash
+python -c "from utils import get_db_connection; c=get_db_connection(); u=c.cursor(); u.execute('SELECT COUNT(*) FROM topics WHERE section_id IS NULL'); print('topics with no section (want 0):', u.fetchone()[0])"
+```
