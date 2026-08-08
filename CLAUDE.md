@@ -109,6 +109,13 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   suite points it at a temp dir). A writer with no request behind it —
   `set_user_blocked()`, `place_topic()`, `seed_topics.py` — logs *beside the
   write* instead, because `_save_and_log()` reads the session and `g`.
+  `cards.log` is the **action** log rather than only a card log: `TOPIC`,
+  `USER-BLOCK`, `ACCOUNT-DELETE`, `PREFERRED-NAME`, and since #161 `MOVE` and
+  `SETTINGS`. A move is its own action, not an `EDIT changed=topic`, because the
+  *previous* topic is the whole point and an edit line can only name the
+  destination. `SETTINGS` records `set=`, `rejected=` and `unknown=` separately:
+  the store silently replaces an invalid value with the default, so what was
+  asked for and what stuck are different questions.
 - **Mykola widget** lives in `templates/base.html`; endpoints `/mykola/chat`,
   `/mykola/recap`. Its intelligence comes from the `ai_agent` package.
   **Agent tools are hosted here**: the agent defines them, this app injects the

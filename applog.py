@@ -1,9 +1,18 @@
 """
 Action logs (issue #30) — a plain-text trail of what the app did, in `logs/`:
 
-    logs/cards.log         cards created, skipped as duplicates, edited, deleted
+    logs/cards.log         what someone did: cards created, skipped, edited,
+                           moved and deleted, and the account-level actions
+                           beside them — topics appearing, blocks, settings
+                           changes, an account removing itself
     logs/dict.log          which translation / dictionary sites were used
     logs/parsed_files.log  .txt / .docx / .mht notes uploads
+
+`cards.log` is the **action** log rather than strictly a card log: it has carried
+`USER-BLOCK`, `ACCOUNT-DELETE`, `PREFERRED-NAME` and `TOPIC` lines for a while,
+and #161 adds `MOVE` and `SETTINGS`. One file is deliberate — the question these
+answer is "what happened to this person's deck, and in what order", and that
+reads badly split across three files by category.
 
 Each line is `<timestamp> ACTION key=value …`, so the logs stay greppable
 (`grep "word='fount'" logs/*.log`). Values containing spaces are quoted.
@@ -142,15 +151,71 @@ def card_skipped(entry, source, user=None, reason="duplicate"):
 
 
 def card_edited(entry, source, user=None, card_id=None, changed=None):
-    """An existing card's content was changed.
+    """An existing card's content was changed (#176's editor).
 
-    Nothing calls this yet: the app can only edit a card *before* it is saved
-    (in the review popup, which is logged as CREATE). It is here so that an
-    edit feature logs from day one.
+    `changed` names the fields, not their values. Which field was touched is what
+    answers "when did this card's explanation change?"; storing the old text as
+    well would put a copy of the deck in the log, and the card itself is where
+    the current value lives.
     """
     _write(CARDS, "EDIT", **_card_fields(entry), id=card_id,
            changed=",".join(changed) if changed else None,
            source=source, user=_user(user))
+
+
+def card_moved(card_id, word, from_topic, to_topic, user=None):
+    """A card changed topic (#177), with **both** ends of the move (#161).
+
+    Its own action rather than an `EDIT changed=topic`, which is what this was
+    until #161. Two reasons. A move is the one card change whose *previous* value
+    matters — "which topic did this come out of" is the whole question, and an
+    EDIT line could only ever name the destination, so `from_topic` was computed
+    by the route and thrown away. And `grep MOVE` is how you find them; they were
+    otherwise mixed in with every explanation someone retyped.
+
+    `topic=` stays the destination, matching every other card line, so a grep for
+    a topic still finds the cards that are in it now. `from=` is the addition,
+    and it is absent rather than empty when the card had no topic at all — the
+    same way `_write()` drops any None, and "no topic" is a real state (#207).
+
+    The fields are ordered like the other card lines — word, id, then the topics —
+    which is why `from` arrives as a `**` dict mid-call: it is a Python keyword
+    and cannot be written as `from=`.
+    """
+    _write(CARDS, "MOVE", word=word, id=card_id, **{"from": from_topic},
+           topic=to_topic, source="topic move", user=_user(user))
+
+
+def settings_changed(requested, stored, user=None):
+    """Someone changed their settings (#161).
+
+    Unlogged until now, and the omission cost real diagnosis time: with
+    `individual_cards` on (#127) a learner sees none of the shared deck and is
+    told a word is "already in the database" that they cannot find (#186). That
+    reads as a broken app, and nothing recorded the setting being switched on.
+
+    Both sides are logged because they can differ. `settings_store.update()`
+    drops unknown keys and silently replaces invalid values with the default, so
+    "I set the translator to Bong" is a real support question whose answer is
+    only visible by comparing what arrived with what stuck.
+
+    Values, unlike a card edit's, *are* logged: they are booleans, provider names
+    and a number, so there is no deck content and no personal data in them.
+    """
+    applied = {key: stored[key] for key in sorted(requested) if key in stored}
+    # Asked for and not stored at all: a key the store does not know.
+    unknown = sorted(key for key in requested if key not in stored)
+    # Asked for and stored as something else: the store replaced an invalid value
+    # with the default. Recorded as what was *sent*, since the stored value is
+    # already in `set=` — without this the log could not answer "I chose Bong and
+    # it went back to Google", which is the whole reason both sides are compared.
+    rejected = {key: requested[key] for key in sorted(requested)
+                if key in stored and requested[key] != stored[key]}
+    _write(CARDS, "SETTINGS",
+           set=",".join(f"{k}={v}" for k, v in applied.items()) or None,
+           rejected=",".join(f"{k}={v}" for k, v in rejected.items()) or None,
+           unknown=",".join(unknown) or None,
+           user=_user(user))
 
 
 def card_edit_denied(card_id, topic=None, user=None, reason=None):
