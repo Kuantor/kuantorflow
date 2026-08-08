@@ -284,11 +284,33 @@ OXFORD_MAX_PAGES = 3
 
 
 def _oxford_page_definitions(soup):
-    """(pos, definitions) of one Oxford Learner's entry page."""
+    """(pos, definitions) of one Oxford Learner's entry page.
+
+    A **descendant** selector, not `.sense > .def`. Oxford wraps a sense's
+    definition in a `span.sensetop` whenever that sense carries extra furniture
+    at the top of it — always on a single-sense entry, and on the first sense of
+    many multi-sense ones. The definition is then a *grandchild* of `.sense`, and
+    a direct-child selector walks straight past it:
+
+        punctual   li.sense > span.sensetop > span.def   <- missed by `>`
+        incentive  li.sense > span.def                   <- found by `>`
+
+    Two failures came out of that, and the second is the worse one. A
+    single-sense word returned no definition at all — 143 of the 360 words in
+    `seed_words.py`, including `punctual`, `resign` and `algorithm`. And a
+    multi-sense word could lose its *primary* sense while keeping a later one:
+    `hedge` was defined only as a financial instrument, never as a row of
+    bushes, which is a confidently wrong card rather than an empty one.
+
+    It stayed hidden because `lookup_word()` falls back to Reverso's dictionary
+    when this one returns nothing, and Reverso answers from a developer's
+    machine. Only PythonAnywhere, where Reverso is IP-blocked, showed the words
+    arriving with no explanation.
+    """
     pos_el = soup.select_one(".webtop .pos")
     pos = pos_el.get_text(strip=True).lower() if pos_el else "other"
     defs = []
-    for el in soup.select(".sense > .def"):
+    for el in soup.select(".sense .def"):
         text = el.get_text(" ", strip=True)
         if text and text not in defs:
             defs.append(text)
