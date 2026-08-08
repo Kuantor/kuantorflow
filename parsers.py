@@ -284,7 +284,13 @@ OXFORD_MAX_PAGES = 3
 
 
 def _oxford_page_definitions(soup):
-    """(pos, definitions) of one Oxford Learner's entry page.
+    """(pos, definitions, examples) of one Oxford Learner's entry page.
+
+    Examples come from the same walk as the definitions (#225), because they live
+    in the same place: every `ul.examples` sits inside an `li.sense`, never
+    outside one, so a sense's sentences belong to it exactly as its definition
+    does. Collecting them separately would mean a second pass over a page — or
+    worse, a second fetch of it.
 
     A **descendant** selector, not `.sense > .def`. Oxford wraps a sense's
     definition in a `span.sensetop` whenever that sense carries extra furniture
@@ -309,36 +315,83 @@ def _oxford_page_definitions(soup):
     """
     pos_el = soup.select_one(".webtop .pos")
     pos = pos_el.get_text(strip=True).lower() if pos_el else "other"
-    defs = []
-    for el in soup.select(".sense .def"):
-        text = el.get_text(" ", strip=True)
-        if text and text not in defs:
-            defs.append(text)
-        if len(defs) >= MAX_DEFINITIONS:
-            break
-    return pos, defs
+    defs = _capped(soup.select(".sense .def"), MAX_DEFINITIONS)
+    # Oxford gives a popular word dozens of sentences — 41 for one of #203's
+    # words — so this is trimming, not scraping. Its order is kept: the first
+    # examples belong to the first sense, which is the one most likely wanted.
+    examples = _capped(soup.select(".sense ul.examples > li"), MAX_EXAMPLES,
+                       text=_oxford_example_text)
+    return pos, defs, examples
 
 
-def _fetch_oxford_definitions(word):
+def _oxford_example_text(item):
+    """One Oxford example, without its grammar-pattern label.
+
+    An example may carry a `span.cf` before the sentence — the pattern being
+    illustrated, e.g. `be hedged (with something)`. Beside a dictionary heading
+    that is useful; on a flashcard it reads as a broken sentence:
+
+        be hedged (with something) His religious belief was always hedged...
+
+    So only the `span.x` is taken. It falls back to the whole item when there is
+    no `.x`, because an example is still worth having if Oxford changes how it
+    wraps one.
     """
-    English definitions from Oxford Learner's Dictionaries (issue #21), by
-    part of speech — same contract as the Reverso _fetch_definitions().
+    sentence = item.select_one(".x")
+    return (sentence or item).get_text(" ", strip=True)
+
+
+def _capped(elements, limit, text=None):
+    """The text of `elements`, de-duplicated, in order, at most `limit` of them.
+
+    `text` extracts one element's string; the default takes all of it.
+    """
+    read = text or (lambda el: el.get_text(" ", strip=True))
+    out = []
+    for el in elements:
+        value = read(el)
+        if value and value not in out:
+            out.append(value)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _fetch_oxford_entry(word):
+    """
+    `(definitions, examples)` from Oxford Learner's Dictionaries, each
+    `{pos: [text, ...]}` — issue #21 for the definitions, #225 for the examples.
 
     The base URL redirects to the word's first entry; entries for its other
     parts of speech are sibling pages (run_2, ...) linked from the page's
     'Other results' box, so up to OXFORD_MAX_PAGES pages are fetched.
+
+    Both halves come from **one** pass over those pages. Definitions and
+    examples live in the same `li.sense`, and an Oxford lookup is already up to
+    three HTTP requests — asking twice, once for each, would double that to
+    collect text we had in hand the first time.
+
+    A part of speech with examples but no definition is still recorded. That is
+    rare, but the two are independent and there is no reason to throw away
+    sentences because the definition did not parse.
     """
     slug = quote(word.strip().lower().replace(" ", "-"))
     resp = requests.get(OXFORD_URL.format(slug=slug), headers=HEADERS, timeout=10)
     if resp.status_code == 404:
-        return {}  # word not in this dictionary
+        return {}, {}  # word not in this dictionary
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "lxml")
 
-    definitions = {}
-    pos, defs = _oxford_page_definitions(soup)
-    if defs:
-        definitions[pos] = defs
+    definitions, examples = {}, {}
+
+    def collect(page):
+        pos, defs, exs = _oxford_page_definitions(page)
+        if defs:
+            definitions.setdefault(pos, defs)
+        if exs:
+            examples.setdefault(pos, exs)
+
+    collect(soup)
 
     entry_href = re.compile(rf"/definition/english/{re.escape(slug)}_\d+$")
     fetched = {resp.url.split("?")[0]}
@@ -354,10 +407,21 @@ def _fetch_oxford_definitions(word):
             sibling.raise_for_status()
         except requests.RequestException:
             continue  # the entries already collected are still useful
-        pos, defs = _oxford_page_definitions(BeautifulSoup(sibling.text, "lxml"))
-        if defs:
-            definitions.setdefault(pos, defs)
-    return definitions
+        collect(BeautifulSoup(sibling.text, "lxml"))
+    return definitions, examples
+
+
+def _fetch_oxford_definitions(word):
+    """English definitions from Oxford, by part of speech (issue #21).
+
+    The **shared dictionary-backend contract**: the same `{pos: [defs]}` shape
+    `_fetch_definitions()` (Reverso) and `_fetch_merriam_webster_definitions()`
+    return, which is what lets `_dictionary_backend()` treat every provider the
+    same way. Kept as its own function for that reason — `lookup_word()` reaches
+    past it to `_fetch_oxford_entry()` when Oxford is the chosen dictionary,
+    because Oxford is the only one of the three that also has examples (#225).
+    """
+    return _fetch_oxford_entry(word)[0]
 
 
 MERRIAM_WEBSTER_URL = "https://www.merriam-webster.com/dictionary/{word}"
@@ -404,11 +468,31 @@ def _translator_backend(translator):
     }.get(translator, _google_dictionary)
 
 
+def _merriam_webster_entry(word):
+    """Merriam-Webster in the entry shape — definitions, and no examples (#225).
+
+    It does have examples on the page; extracting them is not this ticket's, and
+    it is unreachable from PythonAnywhere anyway. Returning an empty second half
+    keeps every dictionary backend the same shape, which is what lets
+    `lookup_word()` have one seam instead of a branch per provider.
+    """
+    return _fetch_merriam_webster_definitions(word), {}
+
+
 def _dictionary_backend(explanatory_dictionary):
+    """The chosen dictionary, as a function returning `(definitions, examples)`.
+
+    Entry-shaped rather than definitions-only since #225. That matters beyond
+    tidiness: whatever this returns is the *only* thing `lookup_word()` calls, so
+    it is also the seam the test suite stubs. An earlier attempt kept this
+    returning `_fetch_oxford_definitions` and had `lookup_word()` reach past it to
+    the richer fetcher — which meant a stubbed backend was bypassed and the
+    offline tests silently made live requests to Oxford.
+    """
     return {
-        "oxford": _fetch_oxford_definitions,
-        "merriam-webster": _fetch_merriam_webster_definitions,
-    }.get(explanatory_dictionary, _fetch_oxford_definitions)
+        "oxford": _fetch_oxford_entry,
+        "merriam-webster": _merriam_webster_entry,
+    }.get(explanatory_dictionary, _fetch_oxford_entry)
 
 
 def _provider_name(backend):
@@ -418,6 +502,10 @@ def _provider_name(backend):
     return {
         _google_dictionary: "google",
         _bing_dictionary: "bing",
+        _fetch_oxford_entry: "oxford",
+        _merriam_webster_entry: "merriam-webster",
+        # The definitions-only fetchers, still reached directly: Reverso as
+        # lookup_word()'s fallback, Oxford by seed_topics.py --check-oxford.
         _fetch_oxford_definitions: "oxford",
         _fetch_merriam_webster_definitions: "merriam-webster",
         _fetch_definitions: "reverso",
@@ -478,11 +566,15 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     fetch_defs = _dictionary_backend(explanatory_dictionary)
     dictionary = _provider_name(fetch_defs)
     error = None
+    examples = {}
     with applog.Timer() as timer:
         try:
-            definitions = fetch_defs(word)
+            # One call, both halves (#225): a dictionary's examples come out of
+            # the pages its definitions do, and Oxford already costs up to three
+            # requests, so asking twice would double that for text we had.
+            definitions, examples = fetch_defs(word)
         except (requests.RequestException, ValueError) as e:
-            definitions = {}
+            definitions, examples = {}, {}
             error = e
     applog.definitions_fetched(word, dictionary, len(definitions), timer.ms,
                                error=error)
@@ -499,6 +591,13 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     for pos, defs in definitions.items():
         if pos in cards:
             cards[pos]["explanation_en"] = "; ".join(defs)
+    # A list, not a joined string: `examples_en` is one of utils.LIST_FIELDS and
+    # is stored as JSON, so the card page can show them as separate sentences.
+    # Only where the translator found the same part of speech — the same rule the
+    # definitions follow, and why a card can have a translation and neither.
+    for pos, sentences in examples.items():
+        if pos in cards:
+            cards[pos]["examples_en"] = sentences
 
     applog.lookup_finished(word, len(cards), overall.ms)
     return list(cards.values())
