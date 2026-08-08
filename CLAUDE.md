@@ -43,7 +43,17 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   context processor expose settings to templates.
 - **`parsers.py`** — `lookup_word(word, translator, explanatory_dictionary)`
   dispatches to Google/Bing translators + Oxford/Merriam-Webster dictionaries
-  (call-time resolution so it's mockable). Also the **notes-upload parsers**
+  (call-time resolution so it's mockable). A dictionary backend returns
+  **`(definitions, examples)`** (#225): Oxford supplies both from one pass over
+  its pages, Merriam-Webster wraps to `(defs, {})`. That tuple is the **only
+  seam** — whatever `_dictionary_backend()` returns is all `lookup_word()` calls,
+  and it is what the tests stub. Stubbing the definitions-only fetchers
+  underneath it instead leaves the real ones in the call path and the offline
+  tests silently hit Oxford. `_fetch_oxford_definitions()` is kept for the
+  definitions-only contract and for `seed_topics.py --check-oxford`.
+  Examples are **English only**: `examples_ukr`/`examples_rus` come from Reverso
+  Context, which is IP-blocked from PythonAnywhere. Also the **notes-upload
+  parsers**
   (`parse_notes_preview` dispatches on the extension: `.txt`, `.docx`, `.mht`)
   and the **Reverso copy-paste parser** they share — one state machine fed by
   a per-format line classifier (colours for `.mht`/`.docx`, layout for plain
