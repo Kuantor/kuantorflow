@@ -381,6 +381,47 @@ button:hover { background: var(--blue-dark); }
     transition: background 0.12s ease, transform 0.12s ease;
 }
 .topic-tile:hover { background: var(--blue-dark); transform: translateY(-2px); }
+
+/* The topic's picture (#223), behind its own caption. #184 built the tile for
+   this: it is already `position: relative` and `overflow: hidden`, so the image
+   drops in without the layout moving.
+
+   A tile with no icon has no <img> at all and simply keeps the flat colour —
+   which is most of them, since only the eighteen seeded topics have pictures. */
+.topic-tile-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* The icons are square and the tile is 3:4, so `cover` crops the sides.
+       Their compositions are centred, so centre is the right thing to keep. */
+    object-position: center;
+    z-index: 0;
+}
+/* A scrim, not a flat overlay: the icons are darkest at the top and busiest at
+   the bottom (the smoke), which is exactly where the caption sits. Fading from
+   opaque at the baseline to clear by two thirds up keeps white text legible
+   without dulling the picture that is the point of the tile. */
+.topic-tile--image::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(to top,
+        rgba(12, 28, 48, 0.92) 0%,
+        rgba(12, 28, 48, 0.72) 30%,
+        rgba(12, 28, 48, 0.18) 62%,
+        rgba(12, 28, 48, 0) 78%);
+}
+/* Above the image and the scrim. Without this the caption would be painted
+   under both and vanish. */
+.topic-tile-name,
+.topic-tile-count { position: relative; z-index: 2; }
+.topic-tile--image .topic-tile-name { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55); }
+/* The hover tint is on the tile's own background, which an image now covers, so
+   an image tile brightens its picture instead. */
+.topic-tile--image:hover .topic-tile-img { filter: brightness(1.12); }
 /* A long topic name must not push the count out of a fixed-height tile. */
 .topic-tile-name {
     font-size: 1rem;

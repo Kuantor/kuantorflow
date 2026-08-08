@@ -1234,6 +1234,72 @@ def inject_settings():
     return {"settings": current_settings()}
 
 
+# --- topic icons (#223) -----------------------------------------------------
+# A topic's picture is found by **name**, not stored against the row: the file
+# is `static/img/topics/<slug of the name>.webp`. That keeps the whole feature
+# to a convention plus a directory listing, with no column, no migration and
+# nothing to keep in step with the topics table.
+#
+# Deliberately *not* under a per-section folder. A topic can be moved between
+# sections (#215) and renamed as a thing rather than a string (#178), so a path
+# that encoded the section it happens to sit in today would go stale the first
+# time either happened.
+#
+# When a topic owns an uploaded image of its own (#185) this becomes the
+# fallback rather than the only answer, and the template does not change.
+
+TOPIC_ICON_DIR = Path(app.static_folder) / "img" / "topics"
+TOPIC_ICON_SUFFIX = ".webp"
+
+
+def topic_slug(name):
+    """The filename stem a topic's icon would have. '' for a nameless topic."""
+    return re.sub(r"[^a-z0-9]+", "_", (name or "").lower()).strip("_")
+
+
+def _topic_icon_slugs():
+    """Which slugs actually have a file, listed once per process.
+
+    Cached because icons ship with the code: they change on deploy, and a
+    deploy reloads. The cost of getting that wrong is small and one-directional
+    — a file added while the app is running is not seen until a reload, which
+    is exactly when static assets appear anyway.
+
+    A missing directory is not an error. It means nobody has added icons to
+    this checkout, and every tile falls back to the plain colour.
+    """
+    if _topic_icon_slugs.cache is None:
+        try:
+            _topic_icon_slugs.cache = {
+                path.stem for path in TOPIC_ICON_DIR.glob("*" + TOPIC_ICON_SUFFIX)}
+        except OSError:
+            _topic_icon_slugs.cache = set()
+    return _topic_icon_slugs.cache
+
+
+_topic_icon_slugs.cache = None
+
+
+def topic_icon(name):
+    """The static URL of this topic's icon, or **None** when it has none.
+
+    None rather than a placeholder path, so the caller decides: the tile keeps
+    its plain background instead of rendering a broken image. Most topics have
+    no icon — everything in `Other`, and anything a learner invents by looking a
+    word up — so the no-icon case is the common one, not the exception.
+    """
+    slug = topic_slug(name)
+    if slug and slug in _topic_icon_slugs():
+        return url_for("static",
+                       filename=f"img/topics/{slug}{TOPIC_ICON_SUFFIX}")
+    return None
+
+
+# A filter, so a template asks for it per topic rather than every route having
+# to thread a parallel structure through render_template().
+app.jinja_env.filters["topic_icon"] = topic_icon
+
+
 def delete_account(user_id, keep_cards=True) -> dict:
     """Delete an account and everything belonging to it (issue #165).
 
@@ -1470,7 +1536,14 @@ def topics_json():
         sections = get_topics_by_section(owner)
     except Exception:
         topics, sections = [], []
-    return jsonify({"topics": topics, "sections": sections})
+    # Icons ride alongside as a name -> URL map rather than as a third element
+    # in each pair (#223). The pair is what `get_topics_by_section()` returns and
+    # what the move dialog reads; widening it would push a presentation concern
+    # into the database layer and into every existing reader.
+    icons = {name: topic_icon(name)
+             for _, pairs in sections for name, _ in pairs
+             if topic_icon(name)}
+    return jsonify({"topics": topics, "sections": sections, "icons": icons})
 
 
 @app.route("/", methods=["GET", "POST"])

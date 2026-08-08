@@ -1017,6 +1017,20 @@
                                 var a = document.createElement("a");
                                 a.className = "topic-tile";
                                 a.href = "/flashcards/" + encodeURIComponent(t[0]);
+                                // The topic's picture (#223), from the icons map
+                                // rather than guessed from the name: the slug rule
+                                // lives in Python, and duplicating it here is how
+                                // the two would drift apart.
+                                var iconUrl = (data.icons || {})[t[0]];
+                                if (iconUrl) {
+                                    a.className += " topic-tile--image";
+                                    var img = document.createElement("img");
+                                    img.className = "topic-tile-img";
+                                    img.src = iconUrl;
+                                    img.alt = "";          // decorative
+                                    img.loading = "lazy";
+                                    a.appendChild(img);
+                                }
                                 var name = document.createElement("span");
                                 name.className = "topic-tile-name";
                                 name.textContent = t[0];

@@ -26,7 +26,18 @@
                 {% if topics %}
                     <div class="topic-tiles">
                         {% for topic, count in topics %}
-                            <a class="topic-tile" href="{{ url_for('flashcards', topic=topic) }}">
+                            {% set icon = topic | topic_icon %}
+                            {# The image is decorative (#223): the topic's name is
+                               already on the tile as text, so an alt describing
+                               the picture would only repeat it to a screen
+                               reader. A topic with no icon keeps the plain
+                               colour rather than rendering a broken image. #}
+                            <a class="topic-tile{% if icon %} topic-tile--image{% endif %}"
+                               href="{{ url_for('flashcards', topic=topic) }}">
+                                {% if icon %}
+                                    <img class="topic-tile-img" src="{{ icon }}"
+                                         alt="" loading="lazy" decoding="async">
+                                {% endif %}
                                 <span class="topic-tile-name">{{ topic }}</span>
                                 <span class="topic-tile-count">{{ count }} card{{ '' if count == 1 else 's' }}</span>
                             </a>
