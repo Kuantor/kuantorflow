@@ -314,7 +314,7 @@ def _oxford_page_definitions(soup):
     arriving with no explanation.
     """
     pos_el = soup.select_one(".webtop .pos")
-    pos = pos_el.get_text(strip=True).lower() if pos_el else "other"
+    pos = _oxford_poses(pos_el.get_text(strip=True).lower()) if pos_el else ["other"]
     defs = _capped(soup.select(".sense .def"), MAX_DEFINITIONS)
     # Oxford gives a popular word dozens of sentences — 41 for one of #203's
     # words — so this is trimming, not scraping. Its order is kept: the first
@@ -322,6 +322,22 @@ def _oxford_page_definitions(soup):
     examples = _capped(soup.select(".sense ul.examples > li"), MAX_EXAMPLES,
                        text=_oxford_example_text)
     return pos, defs, examples
+
+
+def _oxford_poses(text):
+    """The parts of speech one Oxford entry covers (#228).
+
+    Usually one, but an entry can carry several: `both` is headed
+    "determiner, pronoun" and `hello` "exclamation, noun", and its definitions
+    belong to all of them. Splitting on the comma is what makes those entries
+    matchable at all — the whole label was previously used as a single key, and
+    `determiner,pronoun` matches nothing any translator ever reports.
+
+    (`strip=True` with no separator is why the comma has no space after it here:
+    BeautifulSoup joins the stripped strings directly. Splitting is robust to
+    either, so the mangling is left alone rather than papered over.)
+    """
+    return [part.strip() for part in text.split(",") if part.strip()] or ["other"]
 
 
 def _oxford_example_text(item):
@@ -385,11 +401,14 @@ def _fetch_oxford_entry(word):
     definitions, examples = {}, {}
 
     def collect(page):
-        pos, defs, exs = _oxford_page_definitions(page)
-        if defs:
-            definitions.setdefault(pos, defs)
-        if exs:
-            examples.setdefault(pos, exs)
+        # One entry can head several parts of speech (#228), and its text belongs
+        # to each of them — the page does not separate which sense is which.
+        poses, defs, exs = _oxford_page_definitions(page)
+        for pos in poses:
+            if defs:
+                definitions.setdefault(pos, defs)
+            if exs:
+                examples.setdefault(pos, exs)
 
     collect(soup)
 
@@ -477,6 +496,80 @@ def _merriam_webster_entry(word):
     `lookup_word()` have one seam instead of a branch per provider.
     """
     return _fetch_merriam_webster_definitions(word), {}
+
+
+# Two providers, two names for the same part of speech (#228). Applied to
+# **both** sides, so it does not matter which one uses which word — and only for
+# matching: a card keeps the label its translator gave it, because that is what
+# the learner sees on it.
+#
+# Built from what the providers actually emit over a 28-word survey covering
+# content words, modals and function words:
+#
+#   Google  noun adjective verb adverb "auxiliary verb" pronoun preposition
+#           conjunction particle interjection
+#   Oxford  noun verb adjective adverb preposition pronoun conjunction
+#           determiner exclamation "modal verb" other abbreviation
+#
+# Seven labels already agreed. These are the two pairs that did not, and each is
+# one provider's word for the other's:
+POS_SYNONYMS = {
+    # Google's name for `must`, `can`, `should`. Oxford says "modal verb" and
+    # calls `be` and `have` plain verbs, so nothing collides here.
+    "auxiliary verb": "modal verb",
+    # Google's name for `hello`, `ouch`. Oxford says "exclamation".
+    "interjection": "exclamation",
+}
+
+
+def _pos_key(label):
+    """The label to match a part of speech on, which is not what it is called."""
+    return POS_SYNONYMS.get(label, label)
+
+
+def _attach_dictionary_text(cards, definitions, examples):
+    """Put each dictionary entry's explanation and examples on the right card.
+
+    Matching used to be `if pos in cards` — exact string equality — which threw
+    away text that had already been fetched whenever the two providers named the
+    same part of speech differently. `must` was the demonstration: Google reports
+    an *auxiliary verb*, Oxford a *modal verb*, so Oxford's definition was
+    discarded **and** Google's card was left blank. One mismatch, two losses.
+
+    **No card is created or removed here** (#228). A translation is enough to
+    keep a card, so a part of speech the dictionary has nothing for keeps its
+    translations and simply carries no English text.
+    """
+    # canonical label -> the card to put that text on. First wins, so a card
+    # whose own label matches exactly is never displaced by a synonym.
+    index = {}
+    for pos in cards:
+        index.setdefault(_pos_key(pos), pos)
+
+    unplaced = []
+    for pos in sorted(set(definitions) | set(examples)):
+        target = index.get(_pos_key(pos))
+        if target is None:
+            unplaced.append(pos)
+            continue
+        if pos in definitions:
+            cards[target]["explanation_en"] = "; ".join(definitions[pos])
+        # A list, not a joined string: `examples_en` is one of utils.LIST_FIELDS
+        # and is stored as JSON, so the card page shows separate sentences.
+        if pos in examples:
+            cards[target]["examples_en"] = examples[pos]
+
+    # The `other` card can never match anything, by construction: it is what
+    # _google_dictionary() falls back to when Google has no dictionary entry, so
+    # it is not a part of speech at all. One unplaced dictionary entry is
+    # therefore unambiguously its text — `overbook` is the case. More than one
+    # and there is no way to tell which, so it keeps its translations only.
+    if "other" in cards and len(unplaced) == 1:
+        pos = unplaced[0]
+        if pos in definitions:
+            cards["other"]["explanation_en"] = "; ".join(definitions[pos])
+        if pos in examples:
+            cards["other"]["examples_en"] = examples[pos]
 
 
 def _dictionary_backend(explanatory_dictionary):
@@ -588,16 +681,7 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
                 error = e
         applog.definitions_fetched(word, "reverso", len(definitions), timer.ms,
                                    fallback_from=dictionary, error=error)
-    for pos, defs in definitions.items():
-        if pos in cards:
-            cards[pos]["explanation_en"] = "; ".join(defs)
-    # A list, not a joined string: `examples_en` is one of utils.LIST_FIELDS and
-    # is stored as JSON, so the card page can show them as separate sentences.
-    # Only where the translator found the same part of speech — the same rule the
-    # definitions follow, and why a card can have a translation and neither.
-    for pos, sentences in examples.items():
-        if pos in cards:
-            cards[pos]["examples_en"] = sentences
+    _attach_dictionary_text(cards, definitions, examples)
 
     applog.lookup_finished(word, len(cards), overall.ms)
     return list(cards.values())

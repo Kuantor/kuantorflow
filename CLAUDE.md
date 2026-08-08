@@ -52,8 +52,14 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   tests silently hit Oxford. `_fetch_oxford_definitions()` is kept for the
   definitions-only contract and for `seed_topics.py --check-oxford`.
   Examples are **English only**: `examples_ukr`/`examples_rus` come from Reverso
-  Context, which is IP-blocked from PythonAnywhere. Also the **notes-upload
-  parsers**
+  Context, which is IP-blocked from PythonAnywhere. A card is created per part of
+  speech the **translator** found and gets its text from the part of speech the
+  **dictionary** found, matched through `POS_SYNONYMS` (#228) — the two providers
+  use different words for the same thing (`auxiliary verb` / `modal verb`). The
+  map is applied to **both** sides and only for matching: a card keeps the label
+  its translator gave it, because that is what the learner sees. A card the
+  dictionary cannot explain is **kept** — a translation is enough to keep one.
+  Also the **notes-upload parsers**
   (`parse_notes_preview` dispatches on the extension: `.txt`, `.docx`, `.mht`)
   and the **Reverso copy-paste parser** they share — one state machine fed by
   a per-format line classifier (colours for `.mht`/`.docx`, layout for plain
