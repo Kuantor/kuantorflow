@@ -49,8 +49,27 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   a per-format line classifier (colours for `.mht`/`.docx`, layout for plain
   text); glued translation terms are split by Claude with a graceful no-key
   fallback.
+- **`seed_topics.py` + `seed_words.py`** (#203) — the starting deck: 18 B2–C1
+  topics × 20 words, turned into cards by the app's own `lookup_word()` and
+  `save_flashcard()`. **Optional and idempotent**; not part of a deploy.
+  `seed_words.py` is **content in version control**, never generated at run
+  time — a list from a model each run would give local and production
+  *different* decks and could not be reviewed in a diff. Its **order is
+  load-bearing twice**: it is the lookup order, so an interrupted run leaves the
+  useful half, and it becomes `topics.position` in the section. The script runs
+  in **two passes** — `place_topic()` files the eighteen into `B2–C1
+  Conversational Topics` numbered from 1 *first*, then the cards are saved;
+  reversed, `save_flashcard()` would put every one of them in `Other` at 0.
+  Output stays **ASCII** (a Ukrainian translation on a cp1252 console raises,
+  which would end a run that was saving fine).
 - **`utils.py`** — `save_flashcard()` is the **single DB write path** (every
   save route funnels through it), and it skips duplicate `word`+`pos` (#101).
+  `place_topic()` (#203) is the *only other* way a topic row is born: where
+  `_get_or_create_topic()` files a topic somebody invented under `Other`, this
+  places a topic declared in advance in a named section at a given position, and
+  **moves** an existing topic of the same name rather than duplicating it —
+  logged as `TOPIC-PLACED`, because it is the one thing the seed does to data
+  someone else made.
   `update_flashcard()` is its edit counterpart (#176): ownership is part of the
   `UPDATE`, not a check before it, and only the keys **present** in `entry` are
   touched — a missing key means "leave it", which is what keeps an editor that
@@ -71,7 +90,9 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   `parsed_files.log`, #30). Card writes go through `app._save_and_log()`;
   **a new save or delete path must log too**. Helpers never raise, so logging
   can't break a request. `KF_LOGS_DIR` redirects the directory (the test
-  suite points it at a temp dir).
+  suite points it at a temp dir). A writer with no request behind it —
+  `set_user_blocked()`, `place_topic()`, `seed_topics.py` — logs *beside the
+  write* instead, because `_save_and_log()` reads the session and `g`.
 - **Mykola widget** lives in `templates/base.html`; endpoints `/mykola/chat`,
   `/mykola/recap`. Its intelligence comes from the `ai_agent` package.
   **Agent tools are hosted here**: the agent defines them, this app injects the
@@ -172,6 +193,31 @@ you that nothing after it was applied — fix the cause and re-run, rather than
 running the remaining statements by hand. Do **not** pipe `schema.sql` into
 `mysql`: it cannot alter an existing table and skips every migration, which is
 the failure #180 exists to prevent.
+
+`apply_schema.py` is the only thing a deploy *must* run. **`seed_topics.py` is
+not part of a deploy** (#203) — it is a one-off that fills an empty deck, safe to
+re-run and safe to skip forever on a database that already has cards. When you do
+want it, from `~/kuantorflow` with the app's venv:
+
+```bash
+venv/bin/python seed_topics.py --dry-run
+```
+
+Read that first: it names any topic it would **move** out of `Other`, which is
+the only thing it does to data somebody else made. Then:
+
+```bash
+venv/bin/python seed_topics.py
+```
+
+Expect it to take a while — 360 words × (two translations + a dictionary), with a
+deliberate pause between them. It is resumable: interrupt it and run it again,
+and `#101`'s duplicate rule means only what is missing is added. `--topic "Crime
+and justice"` does one, `--owner <email>` attributes the deck to an account
+instead of leaving it unowned (an unowned deck is invisible to anyone with
+`individual_cards` on, #127). Reverso and Merriam-Webster are blocked from
+PythonAnywhere, so a run there falls back to Google/Oxford — which is what the
+defaults already are.
 
 For the #207 deploy specifically, the dry run should list `topics`,
 `flashcards.topic_id`, `flashcards.topic_id backfill`, `flashcards.idx_topic_id`

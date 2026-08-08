@@ -330,6 +330,86 @@ def _get_or_create_topic(cursor, name, created_by_user_id=None):
     return topic_id, (row[0] if row else name), False
 
 
+def place_topic(name, section, position, created_by_user_id=None):
+    """Put the topic called `name` in `section` at `position` (#203).
+
+    Returns `("created" | "moved" | "unchanged", topic_id)`.
+
+    The counterpart to `_get_or_create_topic()`, and the only other way a topic
+    row comes into existence. That one is reached from a *card* save and
+    therefore knows nothing about curricula: it files a new topic under 'Other'
+    at position 0, which is right for a topic somebody invented by looking a word
+    up. This one is for a topic that is declared in advance — #203's eighteen,
+    which belong in 'B2–C1 Conversational Topics', numbered from 1, before any
+    of their cards exist. #215 built that section empty for exactly this.
+
+    An existing topic of the same name is **moved**, not duplicated — the UNIQUE
+    key means "the same name" is "the same topic", so a 'Work and careers'
+    somebody had already started in 'Other' is that curriculum topic, and its
+    cards come with it. Reported as `moved` rather than done quietly, because it
+    is the one thing here that changes data somebody else created.
+
+    A missing section raises: the section rows are a migration step, so their
+    absence means `apply_schema.py` has not run, and a seed that silently filed
+    eighteen topics under nothing would be worse than a stopped script.
+    """
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("a topic needs a name")
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM topic_sections WHERE name = %s", (section,))
+        row = cursor.fetchone()
+        if row is None:
+            raise LookupError(
+                f"no section called {section!r} — run apply_schema.py first")
+        section_id = row[0]
+
+        cursor.execute(
+            "SELECT id, section_id, position FROM topics WHERE name = %s",
+            (name,))
+        existing = cursor.fetchone()
+        if existing is not None:
+            topic_id, current_section, current_position = existing
+            if (current_section, current_position) == (section_id, position):
+                cursor.close()
+                return "unchanged", topic_id
+            cursor.execute(
+                "UPDATE topics SET section_id = %s, position = %s WHERE id = %s",
+                (section_id, position, topic_id))
+            conn.commit()
+            cursor.close()
+            applog.topic_placed(name, section, position, topic_id=topic_id)
+            return "moved", topic_id
+
+        # Same race as _get_or_create_topic: a card save can create this very
+        # topic between the SELECT and here, and LAST_INSERT_ID(id) lets the
+        # loser read the winner's id back instead of failing on the unique key.
+        cursor.execute(
+            "INSERT INTO topics (name, created_by_user_id, section_id, position) "
+            "VALUES (%s, %s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE "
+            "id = LAST_INSERT_ID(id), section_id = VALUES(section_id), "
+            "position = VALUES(position)",
+            (name, created_by_user_id, section_id, position))
+        created = cursor.rowcount == 1
+        topic_id = cursor.lastrowid
+        conn.commit()
+        cursor.close()
+    finally:
+        conn.close()
+
+    if created:
+        applog.topic_created(name, topic_id=topic_id,
+                             created_by=created_by_user_id)
+        return "created", topic_id
+    # The race's loser: the row is somebody else's, but the section and position
+    # were applied by the upsert, so the outcome is the same as a move.
+    applog.topic_placed(name, section, position, topic_id=topic_id)
+    return "moved", topic_id
+
+
 def save_flashcard(entry, added_by_user_id=None):
     """
     Insert a flashcard entry into the `flashcards` table, unless a card with

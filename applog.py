@@ -113,6 +113,21 @@ def topic_created(name, topic_id=None, created_by=None):
            created_by=(created_by if created_by is not None else "anonymous"))
 
 
+def topic_placed(name, section, position, topic_id=None):
+    """An existing topic was moved into a section (issue #203).
+
+    Only the seed script does this, and only to a topic it did not create — a
+    name somebody had already started filing cards under, which the curriculum
+    then claims. That is the one thing the seed does to other people's data, so
+    it does not get to happen without a line saying so.
+
+    `topic=` and `id=`, matching topic_created() and the card lines, so one grep
+    still finds a topic's whole history.
+    """
+    _write(CARDS, "TOPIC-PLACED", topic=name, id=topic_id,
+           section=section, position=position)
+
+
 def card_created(entry, source, user=None, card_id=None):
     """A new card reached the database."""
     _write(CARDS, "CREATE", **_card_fields(entry), id=card_id,
