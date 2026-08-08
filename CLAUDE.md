@@ -121,9 +121,16 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   section that really is ordered numbers its topics from 1. `fk_topics_section`
   is `ON DELETE RESTRICT`, unlike `fk_topics_user` on the same table — a creator
   is attribution, but a section is *where the topic lives*, so deleting a
-  non-empty one has to fail rather than quietly empty it into NULL. Nothing
-  renders sections yet: `get_topics()` is untouched and the index page still
-  shows one flat alphabetical list.
+  non-empty one has to fail rather than quietly empty it into NULL.
+  `get_topics_by_section()` (#218) is what the browse page reads —
+  `[(section, [(topic, count), …]), …]`, **every** section including empty ones,
+  because a heading is structure. `get_topics()` is deliberately untouched
+  beside it: it still answers "which topics are there" for `/topics.json`'s
+  move-dialog half, and #178 will keep asking that. `/topics.json` returns
+  **both** shapes, and the Mykola widget's `refreshBrowseTopics()` in
+  `base.html` renders the grouped one — that JS and `index.html` build the same
+  block, so a change to one is a change to both or a chat save silently
+  flattens the page.
 
 ## Conventions
 

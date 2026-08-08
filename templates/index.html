@@ -15,15 +15,25 @@
         {# id used by the Mykola widget to refresh this block in place when a
            card is added from the chat (issue #53). #}
         <div id="browse-topics">
-        {% if topics %}
-            <div class="topic-tiles">
-                {% for topic, count in topics %}
-                    <a class="topic-tile" href="{{ url_for('flashcards', topic=topic) }}">
-                        <span class="topic-tile-name">{{ topic }}</span>
-                        <span class="topic-tile-count">{{ count }} card{{ '' if count == 1 else 's' }}</span>
-                    </a>
-                {% endfor %}
-            </div>
+        {# Grouped under section headings (#218). A section with no topics still
+           gets its heading — the B2–C1 shelf is empty until #203 fills it, and
+           saying what the deck is going to be is the heading's whole job. An
+           empty deck is the exception, handled by the hints below: two bare
+           headings above nothing is a worse first run than one sentence. #}
+        {% if sections | map(attribute=1) | map('length') | sum %}
+            {% for section, topics in sections %}
+                <h3 class="topic-section">{{ section }}</h3>
+                {% if topics %}
+                    <div class="topic-tiles">
+                        {% for topic, count in topics %}
+                            <a class="topic-tile" href="{{ url_for('flashcards', topic=topic) }}">
+                                <span class="topic-tile-name">{{ topic }}</span>
+                                <span class="topic-tile-count">{{ count }} card{{ '' if count == 1 else 's' }}</span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endfor %}
         {% elif settings.individual_cards %}
             {# Same reasoning as the topic page: with #127 on, "nothing here"
                is far more likely to be "nothing of yours here". #}

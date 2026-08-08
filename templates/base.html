@@ -991,34 +991,44 @@
                 fetch("{{ url_for('topics_json') }}")
                     .then(function (resp) { return resp.json(); })
                     .then(function (data) {
-                        var topics = data.topics || [];
+                        var sections = data.sections || [];
+                        var anyTopics = sections.some(function (s) { return s[1].length; });
                         while (box.firstChild) box.removeChild(box.firstChild);
-                        if (!topics.length) {
+                        if (!anyTopics) {
                             var hint = document.createElement("p");
                             hint.className = "hint";
                             hint.textContent = "No topics yet — look up a word or upload notes to create one.";
                             box.appendChild(hint);
                             return;
                         }
-                        // Same markup the template renders (#184), or a chat
-                        // save would rebuild the section as the old pills.
-                        var grid = document.createElement("div");
-                        grid.className = "topic-tiles";
-                        topics.forEach(function (t) {
-                            var a = document.createElement("a");
-                            a.className = "topic-tile";
-                            a.href = "/flashcards/" + encodeURIComponent(t[0]);
-                            var name = document.createElement("span");
-                            name.className = "topic-tile-name";
-                            name.textContent = t[0];
-                            var count = document.createElement("span");
-                            count.className = "topic-tile-count";
-                            count.textContent = t[1] + (t[1] === 1 ? " card" : " cards");
-                            a.appendChild(name);
-                            a.appendChild(count);
-                            grid.appendChild(a);
+                        // Same markup the template renders (#184, grouped in
+                        // #218), or a chat save would rebuild the section as
+                        // the old flat list — headings and all lost until the
+                        // next full page load.
+                        sections.forEach(function (section) {
+                            var heading = document.createElement("h3");
+                            heading.className = "topic-section";
+                            heading.textContent = section[0];
+                            box.appendChild(heading);
+                            if (!section[1].length) return;
+                            var grid = document.createElement("div");
+                            grid.className = "topic-tiles";
+                            section[1].forEach(function (t) {
+                                var a = document.createElement("a");
+                                a.className = "topic-tile";
+                                a.href = "/flashcards/" + encodeURIComponent(t[0]);
+                                var name = document.createElement("span");
+                                name.className = "topic-tile-name";
+                                name.textContent = t[0];
+                                var count = document.createElement("span");
+                                count.className = "topic-tile-count";
+                                count.textContent = t[1] + (t[1] === 1 ? " card" : " cards");
+                                a.appendChild(name);
+                                a.appendChild(count);
+                                grid.appendChild(a);
+                            });
+                            box.appendChild(grid);
                         });
-                        box.appendChild(grid);
                     })
                     .catch(function () {});
             }

@@ -38,6 +38,7 @@ from utils import (
     get_db_connection,
     get_flashcards_by_topic,
     get_topics,
+    get_topics_by_section,
     get_user_block,
     find_duplicate,
     move_flashcard,
@@ -1456,12 +1457,20 @@ def test_db_connection():
 def topics_json():
     """Topic tile data for the Browse flashcards section — fetched by the
     Mykola widget to refresh the tiles after a card is added from chat
-    (issue #53). Same DB-unreachable fallback as the index page."""
+    (issue #53). Same DB-unreachable fallback as the index page.
+
+    Two shapes, and both are load-bearing (#218). `sections` groups the topics
+    the way the index page renders them; `topics` is the flat list, still what
+    the move dialog offers as suggestions (#177). Adding the first without
+    keeping the second would have emptied that dialog's datalist.
+    """
+    owner = cards_owner_filter()
     try:
-        topics = get_topics(cards_owner_filter())
+        topics = get_topics(owner)
+        sections = get_topics_by_section(owner)
     except Exception:
-        topics = []
-    return jsonify({"topics": topics})
+        topics, sections = [], []
+    return jsonify({"topics": topics, "sections": sections})
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -1583,12 +1592,12 @@ def index():
             message = f"Error: {e}"
 
     try:
-        topics = get_topics(cards_owner_filter())
+        sections = get_topics_by_section(cards_owner_filter())
     except Exception:
-        topics = []  # DB unreachable (e.g. locally) — page still works
+        sections = []  # DB unreachable (e.g. locally) — page still works
 
     return render_template(
-        "index.html", message=message, topics=topics,
+        "index.html", message=message, sections=sections,
         proposed=proposed, proposed_topic=proposed_topic,
         source_content=source_content, duplicate_warning=duplicate_warning,
         write_refusal=write_refusal,
