@@ -1392,6 +1392,11 @@ def save_settings():
     changes = request.get_json(silent=True) or {}
     stored = settings_store.update(changes, _current_user_id(),
                                    _current_email())
+    # Logged here rather than in settings_store (#161): the store is also read
+    # on every request and writes a file when one does not exist yet, so logging
+    # from inside it would record a *visit* as a change. This is the one place a
+    # person deliberately changes something.
+    applog.settings_changed(changes, stored, user=_current_email())
     return jsonify({"ok": True, "settings": stored})
 
 
@@ -1885,10 +1890,11 @@ def move_card(topic, card_id):
         return redirect(url_for("flashcards", topic=topic))
 
     word, from_topic = detail
-    # A move is an edit of one field, so it needs no log helper of its own.
-    applog.card_edited({"word": word, "topic": to_topic}, source="topic move",
-                       user=_current_email(), card_id=card_id,
-                       changed=["topic"])
+    # Both ends of the move (#161). `from_topic` was already being unpacked here
+    # and then dropped, so the log could say where a card had landed but never
+    # where it came from — the one thing a move is actually about.
+    applog.card_moved(card_id, word, from_topic, to_topic,
+                      user=_current_email())
     flash((f"Moved '{word}' to '{to_topic}'.", to_topic))
 
     # Moving the last card out of a topic makes that topic cease to exist —
