@@ -55,7 +55,7 @@ import time
 
 import applog
 import seed_words
-from parsers import lookup_word
+from parsers import _fetch_oxford_definitions, lookup_word
 from utils import get_db_connection, place_topic, save_flashcard
 
 # The section #215 created empty for this. Not a flag: putting the curriculum
@@ -88,6 +88,36 @@ class Counts:
     @property
     def looked_up(self):
         return self.added + self.present + len(self.failed)
+
+
+def oxford_misses(words, pause=0.3, out=None):
+    """The words Oxford has no entry for, as `[(word, reason)]` (#221).
+
+    Asked of the dictionary directly rather than through `lookup_word()`: one
+    request per word instead of three, and no translation noise in the answer.
+
+    Worth having as a command rather than a one-off script, because the rule it
+    checks is easy to break by accident. Oxford is the **only** explanatory
+    dictionary reachable from PythonAnywhere, so a word it does not have reaches
+    production with translations and no explanation — and locally you would never
+    notice, since Reverso covers the gap from a developer's machine. #221 was
+    exactly that failure, hidden for months.
+    """
+    out = out if out is not None else sys.stdout
+    misses = []
+    for index, word in enumerate(words, 1):
+        try:
+            definitions = _fetch_oxford_definitions(word)
+        except Exception as exc:      # noqa: BLE001 - reported, never fatal
+            definitions, reason = {}, f"{type(exc).__name__}: {exc}"
+        else:
+            reason = "no entry"
+        if not definitions:
+            misses.append((word, reason))
+        print(f"  {index:>3}/{len(words)} {'MISS' if not definitions else 'ok  '} "
+              f"{word}", file=out, flush=True)
+        time.sleep(pause)
+    return misses
 
 
 def owner_id_for(email):
@@ -258,6 +288,9 @@ def main(argv=None):
                         help="say what would be added, look nothing up")
     parser.add_argument("--check", action="store_true",
                         help="validate seed_words.py and exit; touches nothing")
+    parser.add_argument("--check-oxford", action="store_true",
+                        help="ask Oxford about every word and name the ones it "
+                             "cannot define; writes nothing to the database")
     parser.add_argument("--topic", metavar="NAME",
                         help="seed one topic instead of all of them")
     parser.add_argument("--owner", metavar="EMAIL",
@@ -302,6 +335,25 @@ def main(argv=None):
         topics = chosen_topics(args.topic)
     except LookupError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    if args.check_oxford:
+        # After --topic is resolved, so one topic can be re-checked on its own
+        # rather than paying 360 requests to look at twenty words.
+        words = [w for ws in topics.values() for w in ws]
+        print(f"asking Oxford about {len(words)} word(s)")
+        misses = oxford_misses(words, pause=args.pause)
+        if not misses:
+            print(f"\nall {len(words)} word(s) have an Oxford definition")
+            return 0
+        print(f"\n{len(misses)} word(s) Oxford cannot define:")
+        for word, reason in misses:
+            print(f"  - {word}: {reason}")
+        # Non-zero: on PythonAnywhere these words would be saved with
+        # translations and no English explanation, which is a content bug worth
+        # failing a check over.
+        print("Oxford is the only dictionary reachable from PythonAnywhere, so "
+              "these would be saved with no explanation.", file=sys.stderr)
         return 1
 
     owner_id = None

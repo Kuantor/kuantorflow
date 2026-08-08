@@ -31,6 +31,23 @@ translator and a dictionary, and a multi-word phrase is not what either is for.
 No word appears under two topics — deduplication is global by word + part of
 speech (#101), so a repeat would simply be skipped under the second topic and
 the count would silently not add up. `python seed_topics.py --check` proves it.
+
+**Every word has an Oxford entry, and that is checked, not assumed.** Oxford is
+the only explanatory dictionary reachable from PythonAnywhere — Merriam-Webster
+and Reverso are both IP-blocked there — so a word Oxford does not have arrives in
+production with translations and no English explanation. `python seed_topics.py
+--check-oxford` asks the dictionary about all 360 and names any it cannot answer.
+Run it when adding or changing a word.
+
+Two rules fall out of that, both learned the hard way (#221):
+
+* **Use the dictionary's headword, not an inflection.** Oxford answers for
+  `tactic`, `finding`, `statistic`, `overbook`; it does not for `tactics`,
+  `findings`, `statistics`, `overbooked`. Nine words were swapped for this.
+* **Avoid a word whose only Oxford headword is hyphenated or American.**
+  `wellbeing` is `well-being` there and `memorise` is `memorize`; rather than
+  loosen the single-token rule or mix spelling conventions, those two slots took
+  different words (`remedy`, `rote`).
 """
 
 # Topic name -> its twenty words. See the module docstring before reordering.
@@ -49,7 +66,7 @@ SEED_WORDS = {
     ],
     "Education and study": [
         "coursework", "cram", "curriculum", "dissertation", "enrol",
-        "expel", "grasp", "invigilate", "literacy", "memorise",
+        "expel", "grasp", "invigilate", "literacy", "rote",
         "plagiarism", "quotation", "recite", "revision", "scholarship",
         "seminar", "syllabus", "truancy", "tuition", "undergraduate",
     ],
@@ -57,7 +74,7 @@ SEED_WORDS = {
         "ailment", "chronic", "contagious", "diagnosis", "dosage",
         "fatigue", "immunity", "inflammation", "nausea", "outbreak",
         "prescription", "prognosis", "recuperate", "referral", "relapse",
-        "sedentary", "symptom", "therapy", "vaccination", "wellbeing",
+        "sedentary", "symptom", "therapy", "vaccination", "remedy",
     ],
     "Social interaction and small talk": [
         "acquaintance", "banter", "blunt", "chatty", "condescending",
@@ -78,22 +95,22 @@ SEED_WORDS = {
         "revenue", "splurge", "surplus", "taxation", "thrifty",
     ],
     "Travel and tourism": [
-        "accommodation", "backpacking", "transit", "onward", "customs",
+        "accommodation", "hitchhike", "transit", "onward", "customs",
         "diversion", "excursion", "expedition", "itinerary", "disembark",
-        "layover", "secluded", "overbooked", "embassy", "picturesque",
+        "layover", "secluded", "overbook", "embassy", "picturesque",
         "sightseeing", "souvenir", "stopover", "turbulence", "voyage",
     ],
     "Food and lifestyle": [
         "additive", "appetite", "bland", "cuisine", "palatable",
         "edible", "ferment", "garnish", "leftover", "marinate",
-        "nourishing", "nutrition", "organic", "portion", "processed",
+        "nourishing", "nutrition", "organic", "portion", "condiment",
         "savoury", "seasoning", "simmer", "stale", "vegetarian",
     ],
     "City life and housing": [
         "affordability", "amenity", "commuter", "congestion", "deposit",
         "gentrify", "landlord", "lease", "mortgage", "neighbourhood",
         "outskirts", "pavement", "pedestrian", "renovate", "residential",
-        "sprawl", "suburb", "tenant", "utilities", "zoning",
+        "sprawl", "suburb", "tenant", "utility", "zoning",
     ],
     "Relationships and emotions": [
         "affection", "apprehensive", "bicker", "compassion", "confide",
@@ -115,9 +132,9 @@ SEED_WORDS = {
     ],
     "Science and research": [
         "analysis", "correlation", "empirical", "inference", "experiment",
-        "findings", "hypothesis", "laboratory", "methodology", "observation",
+        "finding", "hypothesis", "laboratory", "methodology", "observation",
         "anomaly", "plausible", "quantify", "replicate", "sample",
-        "specimen", "statistics", "theory", "validate", "variable",
+        "specimen", "statistic", "theory", "validate", "variable",
     ],
     "Crime and justice": [
         "acquit", "alibi", "arson", "bail", "burglary",
@@ -141,7 +158,7 @@ SEED_WORDS = {
         "amateur", "prowess", "doping", "endurance", "fixture",
         "forfeit", "handicap", "sideline", "knockout", "opponent",
         "penalty", "qualifier", "referee", "contender", "stamina",
-        "substitute", "tactics", "tournament", "underdog", "gruelling",
+        "substitute", "tactic", "tournament", "underdog", "gruelling",
     ],
 }
 

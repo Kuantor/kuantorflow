@@ -61,7 +61,13 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   Conversational Topics` numbered from 1 *first*, then the cards are saved;
   reversed, `save_flashcard()` would put every one of them in `Other` at 0.
   Output stays **ASCII** (a Ukrainian translation on a cp1252 console raises,
-  which would end a run that was saving fine).
+  which would end a run that was saving fine). **Every word has a verified
+  Oxford entry** — Oxford is the only explanatory dictionary reachable from
+  PythonAnywhere, so a word it lacks reaches production with translations and no
+  explanation, and locally you would never notice because Reverso covers the gap
+  (that was #221). `--check-oxford` re-asks the dictionary about all 360 and
+  exits non-zero naming any it cannot define; run it when changing a word, and
+  use Oxford's **headword** (`tactic`, not `tactics`).
 - **`utils.py`** — `save_flashcard()` is the **single DB write path** (every
   save route funnels through it), and it skips duplicate `word`+`pos` (#101).
   `place_topic()` (#203) is the *only other* way a topic row is born: where
