@@ -108,7 +108,7 @@
        Hidden entirely without an API key, exactly as MYKOLA_AVAILABLE=False
        removes the chat widget: hide what the learner cannot act on. #}
     {% if generation_available %}
-    <div class="panel">
+    <div class="panel panel--fit">
         <h2>Read a text from your own words</h2>
         {% set banner = reader_activity.slug | game_icon %}
         <a class="reader-banner{% if banner %} reader-banner--image{% endif %}"

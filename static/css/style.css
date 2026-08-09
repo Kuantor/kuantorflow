@@ -1640,6 +1640,16 @@ button:disabled:hover { background: #9db4c7; }
     font-size: 0.85rem;
 }
 
+/* A panel that hugs its contents rather than the column (#253). The reader's
+   button is capped at 24rem, so a full-width panel around it left half its
+   width empty. `fit-content` sizes to the wider of the heading and the button;
+   `max-width: 100%` keeps it fluid on a phone, where the column is narrower
+   than either. */
+.panel--fit {
+    width: fit-content;
+    max-width: 100%;
+}
+
 /* A panel holding one line. .panel's 1.3rem of vertical padding is built for a
    form or a stack of cards; around a single sentence it reads as an empty box
    with some text lost in the middle. Same width, same background, same corner
@@ -1666,13 +1676,19 @@ button:disabled:hover { background: #9db4c7; }
     display: flex;
     align-items: flex-end;
     aspect-ratio: 1600 / 679;
-    width: 100%;
-    /* Half the height it had at full panel width, which at this ratio is a cap
-       on the width rather than on the height: capping the height would crop the
-       picture, and #234 composed it to be shown whole. Below this the banner is
-       still fluid, so a phone is unaffected — 360px leaves less than 24rem
-       inside the panel anyway. */
-    max-width: 24rem;
+    /* Half the height it had at full panel width, expressed on the **width**:
+       the two are tied by the ratio, and capping the height would have made the
+       box shorter than the picture and cropped it — the one thing #234 composed
+       this banner to avoid.
+
+       A fixed width rather than `width: 100%; max-width: 24rem`, because the
+       panel around it is `fit-content` (#253): a percentage width would have
+       taken its size *from* the panel while the panel was taking its size from
+       the contents, and the pair settled on the wrapped heading — dragging the
+       button down to 289px. Stated outright, it is the floor the panel sizes
+       to. `max-width` keeps a phone fluid, where the column is narrower. */
+    width: 24rem;
+    max-width: 100%;
     padding: 0.9rem 1.2rem;
     border-radius: 14px;
     overflow: hidden;
