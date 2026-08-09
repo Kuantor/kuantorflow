@@ -780,9 +780,38 @@
                     // signed-in transcript on screen for the anonymous visitor
                     // the sign-out just created, which is the whole bug.
                     var stamped = Object.prototype.hasOwnProperty.call(state, "identity");
-                    if (!stamped || state.identity !== MYKOLA_IDENTITY) {
+                    if (!stamped) {
                         localStorage.removeItem(WIDGET_STORAGE_KEY);
                         return null;
+                    }
+                    if (state.identity !== MYKOLA_IDENTITY) {
+                        // Exactly one identity change keeps its thread (#240):
+                        // an anonymous conversation adopted by whoever just
+                        // signed in on this browser. That is the same human
+                        // continuing, and it is the transition Mykola himself
+                        // invites — losing the thread there punishes the
+                        // visitor for taking the offer, at the moment they
+                        // were most engaged.
+                        //
+                        // Nothing is exposed that was not already on screen:
+                        // an anonymous thread is visible to anyone using this
+                        // browser, unauthenticated. The reverse — a signed-in
+                        // thread surviving into an anonymous visitor, or into
+                        // a different account — stays forbidden, which is
+                        // #170's whole purpose.
+                        var adopting = state.identity === null && MYKOLA_IDENTITY !== null;
+                        if (!adopting) {
+                            localStorage.removeItem(WIDGET_STORAGE_KEY);
+                            return null;
+                        }
+                        // Re-stamp now rather than waiting for the next save,
+                        // so a reload before the visitor says anything else
+                        // does not put the thread back in front of this check.
+                        state.identity = MYKOLA_IDENTITY;
+                        try {
+                            localStorage.setItem(WIDGET_STORAGE_KEY,
+                                                 JSON.stringify(state));
+                        } catch (e) {}
                     }
                     return state;
                 } catch (e) {
