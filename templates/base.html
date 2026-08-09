@@ -926,8 +926,21 @@
                     var btn = document.createElement("button");
                     btn.type = "button";
                     btn.className = "mykola-copy";
-                    btn.textContent = "Copy";
+                    // The two-sheets glyph everything else uses for "copy", so
+                    // it needs no label to be understood. Inline rather than a
+                    // font or an image: one icon is not worth a request, and
+                    // `currentColor` lets it dim and darken with the button.
+                    btn.innerHTML =
+                        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" ' +
+                        'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+                        'stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+                        '<rect x="9" y="9" width="13" height="13" rx="2"></rect>' +
+                        '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1">' +
+                        '</path></svg>';
+                    // Icon-only, so the accessible name has to come from here,
+                    // and the tooltip is what a mouse user reads.
                     btn.setAttribute("aria-label", "Copy this reply");
+                    btn.title = "Copy this reply";
                     btn.addEventListener("click", function (e) {
                         e.stopPropagation();
                         copyText(text);

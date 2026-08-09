@@ -1152,25 +1152,38 @@ button:disabled:hover { background: #9db4c7; }
 /* Copying one of Mykola's replies (#245).
    Only his: the learner's own messages, errors and the typing placeholder
    carry no copy affordance, so .mykola-msg.mykola is the anchor. */
-.mykola-msg.mykola { position: relative; }
+/* Room along the bottom edge for the copy control, reserved on his replies
+   whether or not it is showing — the button appears and disappears with the
+   pointer, and text that reflowed each time would be worse than a little
+   standing space. */
+.mykola-msg.mykola {
+    position: relative;
+    padding-bottom: 1.55rem;
+}
 .mykola-copy {
     position: absolute;
-    top: 0.2rem;
-    right: 0.2rem;
-    padding: 0.1rem 0.4rem;
+    bottom: 0.2rem;
+    right: 0.35rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.55rem;
+    height: 1.35rem;
+    padding: 0;
     border: 1px solid #dce3ea;
     border-radius: 6px;
     background: #fff;
     color: var(--muted);
-    font-size: 0.72rem;
-    line-height: 1.5;
     cursor: pointer;
-    /* Hidden rather than absent, so it never reflows the text underneath it
-       when it appears. */
+    /* Hidden rather than absent, so it never reflows anything when it
+       appears. */
     opacity: 0;
-    transition: opacity 0.12s ease;
+    transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
-.mykola-copy:hover { color: var(--ink); border-color: var(--blue); }
+.mykola-copy:hover { color: var(--blue); border-color: var(--blue); }
+/* The sources line shares the bottom edge with the button, so it stops short
+   of it rather than running underneath. */
+.mykola-sources { padding-right: 1.9rem; }
 
 /* `hover`, not a width breakpoint: a narrow desktop window still has a mouse
    and should keep the button, while a tablet has neither hover nor any use
