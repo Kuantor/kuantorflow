@@ -1607,6 +1607,11 @@ button:disabled:hover { background: #9db4c7; }
 /* The total takes the slack so the box and the button stay together on the
    right, and the row still wraps cleanly on a phone. */
 .picker-actions-row .picker-total { flex: 1 1 auto; }
+/* Buttons carry `margin-top: 0.9rem` globally, for the forms they usually end.
+   In a centred flex row that margin is part of the item being centred, so the
+   button lands about half of it below the word box's centre line. `.modal-actions
+   button` zeroes it for the same reason. */
+.picker-actions-row .picker-start { margin-top: 0; }
 
 /* The topics a several-topic quiz is running over (#250), under the title that
    counts them. Pulled up close so the two read as one heading block.
