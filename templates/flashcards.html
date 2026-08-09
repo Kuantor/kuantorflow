@@ -3,13 +3,33 @@
 {% block title %}Flashcards — {{ topic }} | KuantorFlow{% endblock %}
 
 {% block content %}
+    {# The activity row (#253). Every activity, each going **straight** into
+       this topic rather than to the picker: the topic is already chosen, and
+       sending somebody to a topic picker from inside the topic they are
+       standing in is a step backwards.
+
+       No link redirects. A topic too thin for a game is explained on the game
+       page, which offers the picker with this topic already ticked — a
+       redirect would punish a click that looked perfectly reasonable.
+
+       The one thing that hides is **Take quiz**, and the difference is the
+       rule for every future case: hide a link the learner cannot act on, show
+       one they can. No visible language is not fixable from this page; a thin
+       topic is fixable by adding another topic. #}
     <p class="crumbs">
         <a href="{{ url_for('index') }}">&larr; Home</a>
-        {# Card-deck activity with flip animation (#78). #}
-        | <a href="{{ url_for('card_deck', topic=topic) }}">Card deck</a>
-        {# A quiz needs at least one visible translation language (#46/#79). #}
+        {# Card-deck activity with flip animation (#78). Not in the panel on
+           the front page — it is a way of *reading* the deck rather than being
+           tested by it — but it belongs here, on the topic it reads. #}
+        <a href="{{ url_for('card_deck', topic=topic) }}">Card deck</a>
         {% if settings.show_ukrainian or settings.show_russian %}
-        | <a href="{{ url_for('quiz', topic=topic) }}">Take quiz</a>
+        <a href="{{ activity_play_url(quiz_activity, topic) }}">Take quiz</a>
+        {% endif %}
+        {% for activity in game_activities %}
+        <a href="{{ activity_play_url(activity, topic) }}">{{ activity.name }}</a>
+        {% endfor %}
+        {% if generation_available %}
+        <a href="{{ activity_play_url(reader_activity, topic) }}">{{ reader_activity.name }}</a>
         {% endif %}
     </p>
     <h1 class="page-title">Flashcards: {{ topic }}</h1>

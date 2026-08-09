@@ -1312,6 +1312,44 @@ def topic_slug(name):
     return re.sub(r"[^a-z0-9]+", "_", (name or "").lower()).strip("_")
 
 
+GAME_ICON_DIR = Path(app.static_folder) / "img" / "games"
+
+
+def _icon_slugs(directory):
+    """Which slugs have a file in `directory`, listed once per process.
+
+    The cache is the reusable half of #223's `topic_icon()`; what was
+    topic-specific is slugging a name somebody typed. A game slug is fixed and
+    known at write time, so it needs no slugging — but it wants the same cheap
+    lookup, so the listing is keyed by directory rather than copied (#253).
+    """
+    key = str(directory)
+    if key not in _icon_slugs.cache:
+        try:
+            _icon_slugs.cache[key] = {
+                path.stem for path in directory.glob("*" + TOPIC_ICON_SUFFIX)}
+        except OSError:
+            # Not an error: it means nobody has added icons to this checkout.
+            _icon_slugs.cache[key] = set()
+    return _icon_slugs.cache[key]
+
+
+_icon_slugs.cache = {}
+
+
+def game_icon(slug):
+    """The static URL of an activity's icon, or None.
+
+    Unlike topics, the set of activities is closed and known, so every one
+    ships with an icon and the None case is a safety net rather than, as it is
+    for topics, the normal case.
+    """
+    if slug and slug in _icon_slugs(GAME_ICON_DIR):
+        return url_for("static",
+                       filename=f"img/games/{slug}{TOPIC_ICON_SUFFIX}")
+    return None
+
+
 def _topic_icon_slugs():
     """Which slugs actually have a file, listed once per process.
 
@@ -1323,16 +1361,7 @@ def _topic_icon_slugs():
     A missing directory is not an error. It means nobody has added icons to
     this checkout, and every tile falls back to the plain colour.
     """
-    if _topic_icon_slugs.cache is None:
-        try:
-            _topic_icon_slugs.cache = {
-                path.stem for path in TOPIC_ICON_DIR.glob("*" + TOPIC_ICON_SUFFIX)}
-        except OSError:
-            _topic_icon_slugs.cache = set()
-    return _topic_icon_slugs.cache
-
-
-_topic_icon_slugs.cache = None
+    return _icon_slugs(TOPIC_ICON_DIR)
 
 
 def topic_icon(name):
@@ -1353,6 +1382,7 @@ def topic_icon(name):
 # A filter, so a template asks for it per topic rather than every route having
 # to thread a parallel structure through render_template().
 app.jinja_env.filters["topic_icon"] = topic_icon
+app.jinja_env.filters["game_icon"] = game_icon
 
 
 def delete_account(user_id, keep_cards=True) -> dict:
@@ -2129,6 +2159,43 @@ def _render_picker(activity, start_url):
     )
 
 
+def activity_picker_url(activity):
+    """Where an activity's tile points: its picker, never a round (#233).
+
+    The quiz keeps its own URLs, so the fork lives here rather than in each
+    template — the panel exists to hide exactly this seam.
+    """
+    if activity.kind == "quiz":
+        return url_for("quiz_topics")
+    return url_for("game_picker", game=activity.slug)
+
+
+def activity_play_url(activity, topic):
+    """Straight into an activity for one topic — the topic page's links (#253).
+
+    No picker: the topic is already chosen, and that is the whole context the
+    page is in. A topic too thin for the activity is explained *there*, which
+    is why this never redirects.
+    """
+    if activity.kind == "quiz":
+        return url_for("quiz", topic=topic)
+    return url_for("game_play", game=activity.slug, topic=topic)
+
+
+@app.context_processor
+def inject_activities():
+    """The one declaration, reachable from every template that renders it
+    (#233): the front-page panels and the topic page's activity row."""
+    return {
+        "game_activities": games.panel("game"),
+        "quiz_activity": games.ACTIVITIES["quiz"],
+        "reader_activity": games.ACTIVITIES["read_a_text"],
+        "generation_available": _generation_available(),
+        "activity_picker_url": activity_picker_url,
+        "activity_play_url": activity_play_url,
+    }
+
+
 @app.route("/games/<game>")
 def game_picker(game):
     """The picker for one game (#250).
@@ -2138,18 +2205,49 @@ def game_picker(game):
     a tile that opened a picker whose start button led nowhere would be worse
     than no tile at all.
     """
-    activity = games.activity(game, kind="game")
+    activity = games.activity(game, kind=games.GAMES_URL_KINDS)
     if activity is None:
         abort(404)
     return _render_picker(
         activity, url_for("game_play", game=activity.slug))
 
 
-# slug -> the view that renders one round, as `f(activity, topics)`. Empty
-# until the first game ticket lands; the picker's start button already points
-# at the route below, so a game becomes one entry here, one in
-# `games.ACTIVITIES`, and no change to any of this.
-GAME_ROUNDS = {}
+def _generation_available():
+    """Whether text generation can run — #237's "no key, no panel" (#253).
+
+    Read at **request time**, never at import. `ANTHROPIC_API_KEY` reaches this
+    process only as a side effect of importing `ai_agent`, which loads its own
+    `.env` (see AI_AGENT_PATH above), and that import happens after this
+    module's constants would have been evaluated. A module-level constant would
+    therefore read None on a perfectly working deployment.
+    """
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
+def _round_stub(activity, topics):
+    """The round an activity will have, before it has one (#253).
+
+    Every activity registers now, so its tile, its picker and its Start button
+    are all real. Only the round is missing, and this says so — naming the
+    ticket that owns it and the selection it would have played, with the picker
+    a click away. A tile whose Start led to a 404 would be worse than no tile.
+    """
+    # Truncated, because "no ?topic=" resolves to *every* visible topic
+    # (#248), and naming all twenty-six of them is a wall of text where one
+    # line was wanted. Same three-then-ellipsis rule the quiz's title uses.
+    shown = ", ".join(topics[:NAMED_TOPICS])
+    if len(topics) > NAMED_TOPICS:
+        shown += " …"
+    return render_template("game_stub.html", activity=activity,
+                           topics=topics, topic_summary=shown)
+
+
+# slug -> the view that renders one round, as `f(activity, topics)`. Every
+# registered activity has an entry; a game ticket replaces its stub with the
+# real round and touches nothing else.
+GAME_ROUNDS = {activity.slug: _round_stub
+               for activity in games.ACTIVITIES.values()
+               if activity.kind in games.GAMES_URL_KINDS}
 
 
 @app.route("/games/<game>/play")
@@ -2164,7 +2262,7 @@ def game_play(game):
 
     Playing also remembers the selection, so the picker opens on it next time.
     """
-    activity = games.activity(game, kind="game")
+    activity = games.activity(game, kind=games.GAMES_URL_KINDS)
     round_view = GAME_ROUNDS.get(game)
     if activity is None or round_view is None:
         abort(404)

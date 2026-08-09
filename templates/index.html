@@ -63,6 +63,65 @@
         </form>
     </div>
 
+    {# The ways in (#253). Deliberately **outside `#browse-topics`** above:
+       that element is rebuilt from /topics.json by refreshBrowseTopics() in
+       base.html whenever Mykola saves a card from the chat, so a panel inside
+       it would be wiped on the first chat save.
+
+       The tiles reuse `.topic-tiles` / `.topic-tile` rather than a parallel
+       `.game-tile` block — a second set of numbers beside the first drifts the
+       moment either is tuned (#233).
+
+       This panel always renders, and every tile is always clickable, even on
+       an empty deck: the same argument #218 made for an empty section heading.
+       Whether a selection can actually play the game is the picker's question,
+       and it is asked there and nowhere else — a tile has no selection to
+       reason about, so a second copy of the rule could only guess. #}
+    <div class="panel">
+        <h2>Practise your words</h2>
+        <div class="topic-tiles">
+            {# The quiz first: it is the oldest activity here and the one a
+               returning learner is most likely to want, and until now it was
+               reachable only from inside a topic page. #}
+            {% for activity in [quiz_activity] + game_activities %}
+                {% set icon = activity.slug | game_icon %}
+                <a class="topic-tile{% if icon %} topic-tile--image{% endif %}"
+                   href="{{ activity_picker_url(activity) }}">
+                    {% if icon %}
+                        {# Decorative, as on a topic tile (#223): the name is
+                           already on the tile as text. #}
+                        <img class="topic-tile-img" src="{{ icon }}"
+                             alt="" loading="lazy" decoding="async">
+                    {% endif %}
+                    <span class="topic-tile-name">{{ activity.name }}</span>
+                    <span class="topic-tile-count">{{ activity.tagline }}</span>
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# #237 is not a game — nothing is scored, nothing is guessed, and there is
+       no round to finish. It is the only activity that *produces* language, so
+       filing it among the game tiles would make it one more thing to be tested
+       by. Its own panel, and its own wide button.
+
+       Hidden entirely without an API key, exactly as MYKOLA_AVAILABLE=False
+       removes the chat widget: hide what the learner cannot act on. #}
+    {% if generation_available %}
+    <div class="panel">
+        <h2>Read a text from your own words</h2>
+        {% set banner = reader_activity.slug | game_icon %}
+        <a class="reader-banner{% if banner %} reader-banner--image{% endif %}"
+           href="{{ activity_picker_url(reader_activity) }}">
+            {% if banner %}
+                <img class="reader-banner-img" src="{{ banner }}"
+                     alt="" loading="lazy" decoding="async">
+            {% endif %}
+            <span class="reader-banner-label">Generate a text</span>
+        </a>
+    </div>
+    {% endif %}
+
     <div class="panel">
         {# The provider name follows the Settings choice (#20). #}
         <h2>Look up a word ({{ 'Bing Translator' if settings.translator == 'bing' else 'Google Translate' }})</h2>
