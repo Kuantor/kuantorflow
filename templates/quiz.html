@@ -1,13 +1,33 @@
 {% extends "base.html" %}
 
-{% block title %}Quiz — {{ topic }} | KuantorFlow{% endblock %}
+{% block title %}Quiz — {{ heading }} | KuantorFlow{% endblock %}
 
+{#
+   One template for both quiz shapes (#250): `/quiz/<topic>`, which every topic
+   page still links to, and `/quiz?topic=A&topic=B` from the picker.
+
+   The difference is confined to two values the route supplies. `self_url(lang)`
+   builds this quiz's own address — needed by the language switch, the form
+   action and "Try again", and only the route knows which of the two shapes it
+   is. `back` is the crumb: the topic page for one topic, the picker for a
+   selection. Everything else is the quiz exactly as it was.
+#}
 {% block content %}
     <p class="crumbs">
         <a href="{{ url_for('index') }}">&larr; Home</a> |
-        <a href="{{ url_for('flashcards', topic=topic) }}">Flashcards: {{ topic }}</a>
+        <a href="{{ back[0] }}">{{ back[1] }}</a>
     </p>
-    <h1 class="page-title">Quiz: {{ topic }}</h1>
+    <h1 class="page-title">Quiz: {{ heading }}</h1>
+    {# Which topics, under the count that says how many. Absent for a single
+       topic, whose name is already the title.
+
+       In a panel rather than loose on the page: the background photograph is
+       nearly white along its top edge, and pale text on it was unreadable. #}
+    {% if topic_summary %}
+        <div class="panel panel--tight">
+            <p class="quiz-topics">{{ topic_summary }}</p>
+        </div>
+    {% endif %}
 
     {% if not langs %}
         {# Both translation languages hidden in Settings (#46/#79/#111). #}
@@ -22,27 +42,41 @@
             {% if code == lang %}
                 <span>{{ name }}</span>
             {% else %}
-                <a href="{{ url_for('quiz', topic=topic, lang=code) }}">{{ name }}</a>
+                {# The name rides along so the confirmation below can say which
+                   language is being switched to, in either direction, without
+                   either one being named in the script. #}
+                <a href="{{ self_url(code) }}" data-lang-name="{{ name }}">{{ name }}</a>
             {% endif %}
         {% endfor %}
     </p>
 
     {% if not cards %}
         <div class="panel">
-            <p>No flashcards with {{ lang_name }} translations in this topic yet — nothing to quiz on.</p>
+            <p>No flashcards with {{ lang_name }} translations here yet — nothing to quiz on.</p>
             {# The quiz has two reasons to be empty — no translations, or the
                #127 filter — and the first message alone would mislead. #}
             {% if settings.individual_cards %}
             <p class="hint"><em>Use only individual cards</em> is on, so anyone
-               else&rsquo;s cards in this topic are hidden.</p>
+               else&rsquo;s cards are hidden.</p>
             {% endif %}
         </div>
 
     {% elif results is none %}
-        <div class="panel">
-            <p>Type the {{ lang_name }} translation for each English word ({{ cards|length }} questions):</p>
+        <div class="panel panel--tight">
+            <p>Type the {{ lang_name }} translation for each English word ({{ cards|length }} question{{ '' if cards|length == 1 else 's' }}):
+            {# Why the round is shorter than the picker's card count implied.
+               The picker counts cards; a card with no translation in this
+               language cannot be asked, and without this the difference looks
+               like the word limit or a bug. #}
+            {% if untranslated %}
+                <span class="hint">{{ untranslated }}
+                {{- ' card in this selection has' if untranslated == 1 else ' cards in this selection have' }}
+                no {{ lang_name }} translation, so
+                {{ 'it is' if untranslated == 1 else 'they are' }} not asked.</span>
+            {% endif %}
+            </p>
         </div>
-        <form method="POST" action="{{ url_for('quiz', topic=topic, lang=lang) }}">
+        <form method="POST" action="{{ self_url(lang) }}">
             {% for card in cards %}
                 <div class="panel question">
                     <div class="word">{{ loop.index }}. {{ card.word }}{% if card.pos %} ({{ card.pos }}){% endif %}</div>
@@ -63,8 +97,63 @@
                 {% endif %}
             </div>
         {% endfor %}
-        <p class="crumbs"><a href="{{ url_for('quiz', topic=topic, lang=lang) }}">Try again</a></p>
+        <p class="crumbs"><a href="{{ self_url(lang) }}">Try again</a></p>
     {% endif %}
+
+    {# Switching language re-draws the round (#250): the words are a random
+       sample, and the other language does not have the same ones available
+       anyway. Cheap to confirm, and expensive to discover halfway through a
+       set of typed answers.
+
+       Page-specific, so it lives here rather than in base.html — nothing else
+       raises it. Asked in both directions by the same dialog, which takes the
+       language's name from the link it intercepted. #}
+    <div class="modal-overlay" id="lang-switch-modal" hidden>
+        <div class="modal modal-dialog" role="dialog" aria-modal="true">
+            <p id="lang-switch-text"></p>
+            <div class="modal-actions">
+                <button type="button" class="secondary" id="lang-switch-cancel">Cancel</button>
+                <button type="button" id="lang-switch-go">Switch</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var links = document.querySelectorAll(".lang-switch a[data-lang-name]");
+            if (!links.length) return;   // only one language visible (#46/#79)
+
+            var overlay = document.getElementById("lang-switch-modal");
+            var text = document.getElementById("lang-switch-text");
+            var go = document.getElementById("lang-switch-go");
+            var target = null;
+
+            function close() { overlay.hidden = true; target = null; }
+
+            links.forEach(function (link) {
+                link.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    target = link.href;
+                    text.textContent = "Do you want to switch to " +
+                        link.dataset.langName + " translations? The words " +
+                        "will be chosen again at random, so this round starts over.";
+                    overlay.hidden = false;
+                    go.focus();
+                });
+            });
+
+            go.addEventListener("click", function () {
+                if (target) window.location.href = target;
+            });
+            document.getElementById("lang-switch-cancel").addEventListener("click", close);
+            overlay.addEventListener("click", function (event) {
+                if (event.target === overlay) close();
+            });
+            document.addEventListener("keydown", function (event) {
+                if (event.key === "Escape" && !overlay.hidden) close();
+            });
+        })();
+    </script>
 
     {% endif %}{# langs #}
 {% endblock %}
