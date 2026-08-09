@@ -77,8 +77,8 @@
            page has one, but a learner reading their score is at the bottom of
            ten answers and should not have to scroll back up to leave. #}
         <p class="crumbs">
-            <a href="{{ url_for('game_play', game=activity.slug, topic=topics) }}">Play again</a>
             <a href="{{ url_for('index') }}">&larr; Home</a>
+            <a href="{{ url_for('game_play', game=activity.slug, topic=topics) }}">Play again</a>
         </p>
     {% endif %}
 {% endblock %}
