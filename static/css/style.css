@@ -1667,6 +1667,12 @@ button:disabled:hover { background: #9db4c7; }
     align-items: flex-end;
     aspect-ratio: 1600 / 679;
     width: 100%;
+    /* Half the height it had at full panel width, which at this ratio is a cap
+       on the width rather than on the height: capping the height would crop the
+       picture, and #234 composed it to be shown whole. Below this the banner is
+       still fluid, so a phone is unaffected — 360px leaves less than 24rem
+       inside the panel anyway. */
+    max-width: 24rem;
     padding: 0.9rem 1.2rem;
     border-radius: 14px;
     overflow: hidden;
