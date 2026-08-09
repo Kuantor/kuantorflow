@@ -1083,6 +1083,11 @@ def _topics_for_chat():
             for name, count in topics]
 
 
+# The translation column each hideable language lives in (#46/#79).
+_TRANSLATION_COLUMNS = {"Ukrainian": "translation_ukr",
+                        "Russian": "translation_rus"}
+
+
 def _cards_for_chat(topic, limit):
     """One topic's cards, filtered exactly as the browse page filters them.
 
@@ -1090,8 +1095,21 @@ def _cards_for_chat(topic, limit):
     holds here too: a learner who has hidden other people's cards must not
     have Mykola read them out. Anything else would make the chat a way around
     a setting the rest of the site honours.
+
+    A hidden language is **removed from the row**, not merely left unmentioned
+    (#46/#79). The agent is already told in its system prompt not to show one,
+    but an instruction is not an enforcement: everywhere else on the site the
+    hidden language is absent from what the page can render, and the chat
+    should be no weaker. Deleting it here means the only copy the model ever
+    sees is one the learner has agreed to see.
     """
-    return get_flashcards_by_topic(topic, cards_owner_filter())[:limit]
+    hidden = [_TRANSLATION_COLUMNS[name] for name in _hidden_languages()
+              if name in _TRANSLATION_COLUMNS]
+    cards = get_flashcards_by_topic(topic, cards_owner_filter())[:limit]
+    if not hidden:
+        return cards
+    return [{k: v for k, v in card.items() if k not in hidden}
+            for card in cards]
 
 
 @app.context_processor
