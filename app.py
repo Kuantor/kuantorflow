@@ -2102,10 +2102,24 @@ def _render_picker(activity, start_url):
     """
     sections = _visible_sections()
     visible = games.visible_topic_names(sections)
+    # The translation language, chosen before the words are drawn rather than
+    # after (#113). Offered only when there is a choice to make: with one
+    # language hidden in Settings (#46/#79) a lone radio is a control that
+    # cannot do anything, and the round says which language it is using anyway.
+    quiz_langs = {}
+    quiz_lang = None
+    if activity.picks_language:
+        prefs = current_settings()
+        visible_langs = _visible_quiz_langs(prefs)
+        if len(visible_langs) > 1:
+            quiz_langs = visible_langs
+            quiz_lang = _quiz_lang(prefs, visible_langs)
     return render_template(
         "picker.html",
         activity=activity,
         start_url=start_url,
+        quiz_langs=quiz_langs,
+        quiz_lang=quiz_lang,
         sections=[(name, topics) for name, topics in sections if topics],
         selected=set(games.remembered_selection(session, visible)),
         total_cards=sum(count for _, topics in sections for _, count in topics),

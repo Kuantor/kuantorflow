@@ -1540,13 +1540,49 @@ button:disabled:hover { background: #9db4c7; }
 /* Indented under their section's "Select section" row, so the scope of that
    box is visible rather than something to work out. */
 .picker-topics { margin-left: 1.5rem; }
+/* Two stacked rows: the total, the word box and Start, then the translation
+   language under them. A column rather than more items in one flex line — the
+   language row is a choice about the round, not another control beside Start,
+   and on a phone it would otherwise wrap into the middle of that line. */
 .picker-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+.picker-actions-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.8rem;
     flex-wrap: wrap;
 }
+/* The language choice, made here rather than inside the round: switching it
+   there re-draws the words, and this is the moment before they are drawn. */
+.picker-langs {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    /* Tight enough that the caption and both languages hold one line at
+       360px, where they need 275 of the 280px a phone leaves inside the
+       panel. `flex-wrap` above is the safety net for anything narrower or any
+       future third language — it wraps rather than overflowing. */
+    gap: 0.35rem 0.5rem;
+    font-size: 0.92rem;
+    color: var(--muted);
+}
+.picker-langs-label { flex: none; }
+/* `label` is a block with its own margins by default, which would put each
+   language on a line of its own under its caption. */
+.picker-lang {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin: 0;
+    font-size: 0.92rem;
+    color: var(--ink);
+    cursor: pointer;
+}
+.picker-lang input { width: 1rem; height: 1rem; }
 .picker-total { margin: 0; color: var(--muted); font-size: 0.92rem; }
 /* The word box sits between the running total and Start, reading as part of
    the same sentence: this many topics, this many words, go. `label` is a block
@@ -1570,7 +1606,7 @@ button:disabled:hover { background: #9db4c7; }
 }
 /* The total takes the slack so the box and the button stay together on the
    right, and the row still wraps cleanly on a phone. */
-.picker-actions .picker-total { flex: 1 1 auto; }
+.picker-actions-row .picker-total { flex: 1 1 auto; }
 
 /* The topics a several-topic quiz is running over (#250), under the title that
    counts them. Pulled up close so the two read as one heading block.

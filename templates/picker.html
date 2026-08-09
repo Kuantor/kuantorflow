@@ -43,19 +43,44 @@
        Both word boxes carry name="words", and the script keeps them equal. The
        server reads the first, which is correct whether or not the script ran:
        with no JavaScript they are both still whatever was rendered. #}
-    {% macro actions() %}
+    {% macro actions(with_language=false) %}
         <div class="panel panel--tight picker-actions">
-            <p class="picker-total"></p>
-            <label class="picker-words">
-                Words
-                <input type="number" name="words" class="picker-words-box"
-                       min="{{ words_min }}" max="{{ words_max }}"
-                       value="{{ words }}" inputmode="numeric">
-            </label>
-            {# Enabled by the script once the selection is big enough. It starts
-               disabled so a browser with JavaScript off cannot submit an
-               unplayable selection — the round would only have to refuse it. #}
-            <button type="submit" class="picker-start" disabled>Start</button>
+            <div class="picker-actions-row">
+                <p class="picker-total"></p>
+                <label class="picker-words">
+                    Words
+                    <input type="number" name="words" class="picker-words-box"
+                           min="{{ words_min }}" max="{{ words_max }}"
+                           value="{{ words }}" inputmode="numeric">
+                </label>
+                {# Enabled by the script once the selection is big enough. It
+                   starts disabled so a browser with JavaScript off cannot
+                   submit an unplayable selection — the round would only have to
+                   refuse it. #}
+                <button type="submit" class="picker-start" disabled>Start</button>
+            </div>
+
+            {# Chosen here rather than inside the round, because switching
+               language there re-draws the words — this is the moment before
+               they are drawn, so no confirmation is needed.
+
+               Rendered on the upper panel only, and that is a constraint rather
+               than a preference: radios sharing a name are **one group** across
+               the whole form, so a second copy could not show the same choice
+               as the first — checking one would visibly clear the other. The
+               word box above can be duplicated precisely because it cannot. #}
+            {% if with_language and quiz_langs %}
+                <div class="picker-langs">
+                    <span class="picker-langs-label">Translation to:</span>
+                    {% for code, name in quiz_langs.items() %}
+                        <label class="picker-lang">
+                            <input type="radio" name="lang" value="{{ code }}"
+                                   {% if code == quiz_lang %}checked{% endif %}>
+                            {{ name }}
+                        </label>
+                    {% endfor %}
+                </div>
+            {% endif %}
         </div>
     {% endmacro %}
 
@@ -63,7 +88,7 @@
           data-min-cards="{{ activity.min_cards }}"
           data-too-small="{{ activity.too_small }}">
 
-        {{ actions() }}
+        {{ actions(with_language=true) }}
 
         <div class="panel">
             <h2>{{ activity.picker_heading }}</h2>

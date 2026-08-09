@@ -155,6 +155,13 @@ class Activity:
     picker_heading: str
     min_cards: int
     too_small: str
+    # Whether the picker offers a translation language (#113's quiz_lang).
+    # The quiz asks for a translation, so which one is a choice worth making
+    # *before* the words are drawn -- switching afterwards re-draws the round.
+    # Nothing else has that question yet: a game that shows a word and asks
+    # about its spelling has no translation in it at all. False by default so a
+    # new game inherits no control it cannot explain.
+    picks_language: bool = False
 
 
 # The quiz is the only entry today, and it is the loosest of the five: one card
@@ -170,6 +177,7 @@ ACTIVITIES = {
             picker_heading="Choose the topics to be quizzed on",
             min_cards=1,
             too_small="Tick at least one topic to start the quiz.",
+            picks_language=True,
         ),
     )
 }
