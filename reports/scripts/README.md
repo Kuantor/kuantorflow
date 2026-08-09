@@ -1,13 +1,18 @@
-# Report tooling
+# Build-time tooling
 
-Reusable converters that turn a Markdown report from `reports/` into styled
-DOCX and PDF renders (KuantorFlow palette: blue headings, yellow rules,
-branded table headers).
+Converters that are run by hand when preparing something for the repo, rather
+than by the app at runtime. Two jobs live here:
+
+- **Reports** — turn a Markdown report from `reports/` into styled DOCX and PDF
+  renders (KuantorFlow palette: blue headings, yellow rules, branded table
+  headers).
+- **Images** — turn source artwork into the WebP files the site's tiles and
+  banners expect (`to_webp.py`, added for the game icons in #234).
 
 ## Usage
 
 ```bash
-pip install -r reports/scripts/requirements.txt   # python-docx, pypdf
+pip install -r reports/scripts/requirements.txt   # python-docx, pypdf, Pillow
 
 python reports/scripts/md_to_docx.py reports/2026-07-13-weekly-report.md
 python reports/scripts/md_to_pdf.py  reports/2026-07-13-weekly-report.md
@@ -15,6 +20,13 @@ python reports/scripts/md_to_pdf.py  reports/2026-07-13-weekly-report.md
 
 Output lands next to the input (same name, `.docx` / `.pdf`) unless a second
 argument names the output file.
+
+Image conversion takes a file or a whole directory:
+
+```bash
+python reports/scripts/to_webp.py --tile    src/ static/img/games
+python reports/scripts/to_webp.py --width 1600 src/wide.png static/img/games/wide.webp
+```
 
 ## How it works
 
@@ -32,6 +44,13 @@ argument names the output file.
 
 One parser, two emitters: if the Markdown dialect grows, extend
 `parse_markdown` once and both formats pick it up.
+
+- `to_webp.py` — resizes to `--tile` (400×400), `--banner` (1600×400) or
+  `--width N`, and writes WebP at quality 82 / method 6. Those numbers are
+  measured, not chosen: the eighteen topic icons from #223 are 400×400 RGB at
+  20.9–36.1 KB, and that setting reproduces the band. `--width` derives the
+  height from the source so **nothing is cropped** — the other two centre-crop
+  to their ratio first, in preference to stretching.
 
 ## Notes
 
