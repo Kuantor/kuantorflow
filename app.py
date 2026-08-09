@@ -27,6 +27,7 @@ from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import applog
+import games
 import settings_store
 from parsers import lookup_word, parse_notes_preview
 from utils import (
@@ -37,6 +38,7 @@ from utils import (
     flashcard_word_exists,
     get_db_connection,
     get_flashcards_by_topic,
+    get_flashcards_by_topics,
     get_topics,
     get_topics_by_section,
     get_user_block,
@@ -2073,34 +2075,132 @@ def _visible_quiz_langs(prefs):
     }
 
 
-@app.route("/quiz/<topic>", methods=["GET", "POST"])
-def quiz(topic):
+def _visible_sections():
+    """`get_topics_by_section()` for this visitor, or [] if the DB is down.
+
+    Same tolerance the index page has: a dead database leaves the picker with
+    nothing to offer rather than a 500.
     """
-    Quiz on the given topic: show each English word, the user types the
-    translation in the chosen language (?lang=rus or ?lang=ukr, Russian
-    by default). Cards without that translation are skipped.
-    On POST, grade the answers and show the results.
+    try:
+        return get_topics_by_section(cards_owner_filter())
+    except Exception:
+        app.logger.exception("Could not list topics for the picker")
+        return []
+
+
+def _render_picker(activity, start_url):
+    """The topic picker (#250), shared by every activity in #233.
+
+    `start_url` is where the form submits. It carries no topics of its own —
+    the ticked boxes are the query string, which is why this is a plain GET
+    form: the resulting URL is the shareable, bookmarkable one #233 asked for,
+    and no JavaScript is needed to build it.
+
+    The remembered selection (#248) is re-checked against what is visible now,
+    so a topic deleted, renamed, or hidden by #127 since the last round simply
+    is not ticked.
     """
-    prefs = current_settings()
-    langs = _visible_quiz_langs(prefs)
-    if not langs:
-        # Both languages hidden in Settings (#46/#79) — nothing to quiz on.
-        return render_template(
-            "quiz.html", topic=topic, cards=[],
-            lang=None, lang_name=None, langs={}, results=None,
-        )
-    # Without an explicit ?lang=, open in the identity's preferred quiz
-    # language (#113); the in-page switch links still override it. A
-    # preference for a hidden language falls back to a visible one.
+    sections = _visible_sections()
+    visible = games.visible_topic_names(sections)
+    return render_template(
+        "picker.html",
+        activity=activity,
+        start_url=start_url,
+        sections=[(name, topics) for name, topics in sections if topics],
+        selected=set(games.remembered_selection(session, visible)),
+        total_cards=sum(count for _, topics in sections for _, count in topics),
+    )
+
+
+@app.route("/games/<game>")
+def game_picker(game):
+    """The picker for one game (#250).
+
+    Every game slug 404s until its own ticket registers it in
+    `games.ACTIVITIES` and adds a /games/<slug>/play route. That is deliberate:
+    a tile that opened a picker whose start button led nowhere would be worse
+    than no tile at all.
+    """
+    activity = games.activity(game, kind="game")
+    if activity is None:
+        abort(404)
+    return _render_picker(
+        activity, url_for("game_play", game=activity.slug))
+
+
+# slug -> the view that renders one round, as `f(activity, topics)`. Empty
+# until the first game ticket lands; the picker's start button already points
+# at the route below, so a game becomes one entry here, one in
+# `games.ACTIVITIES`, and no change to any of this.
+GAME_ROUNDS = {}
+
+
+@app.route("/games/<game>/play")
+def game_play(game):
+    """A round of one game over the selected topics (#250).
+
+    The selection is resolved here rather than in each game, so every game
+    inherits #233's rules for free: page order, topics that have since gone
+    dropped in silence, and **no `topic` parameter meaning the whole visible
+    deck** — which is what keeps a bare link to this URL, the kind the topic
+    page's activity row will build, meaningful.
+
+    Playing also remembers the selection, so the picker opens on it next time.
+    """
+    activity = games.activity(game, kind="game")
+    round_view = GAME_ROUNDS.get(game)
+    if activity is None or round_view is None:
+        abort(404)
+    topics = games.resolve_selection(
+        request.args.getlist("topic"),
+        games.visible_topic_names(_visible_sections()))
+    games.remember_selection(session, topics)
+    return round_view(activity, topics)
+
+
+def _quiz_lang(prefs, langs):
+    """Which language this quiz runs in (#113).
+
+    Without an explicit ?lang=, the identity's preference; the in-page switch
+    still overrides it, and a preference for a language hidden in Settings
+    (#46/#79) falls back to a visible one.
+    """
     default_lang = QUIZ_LANG_CODES.get(prefs["quiz_lang"], "ukr")
     lang = request.args.get("lang") or default_lang
     if lang not in langs:
         lang = default_lang if default_lang in langs else next(iter(langs))
-    field = f"translation_{lang}"
+    return lang
 
-    cards = [c for c in get_flashcards_by_topic(topic, cards_owner_filter())
+
+def _run_quiz(topics, heading, self_url, back):
+    """Render or grade a quiz over `topics` — one of them or several (#250).
+
+    `self_url(lang=...)` builds this quiz's own URL, because the language
+    switch, the form action and "Try again" all need it and only the caller
+    knows which of the two route shapes it is. `back` is the crumb link, which
+    is the topic page for one topic and the picker for a selection.
+
+    Everything about the quiz itself is unchanged (#233 asked for exactly one
+    change): typed answers, the same grading, `quiz_lang`, and skipping cards
+    with no translation in the chosen language. Several topics grade as one run
+    because they are one list of cards by the time they get here.
+    """
+    prefs = current_settings()
+    langs = _visible_quiz_langs(prefs)
+    common = {"heading": heading, "self_url": self_url, "back": back,
+              "langs": langs}
+    if not langs:
+        # Both languages hidden in Settings (#46/#79) — nothing to quiz on.
+        return render_template(
+            "quiz.html", cards=[], lang=None, lang_name=None,
+            results=None, **dict(common, langs={}))
+
+    lang = _quiz_lang(prefs, langs)
+    field = f"translation_{lang}"
+    cards = [c for c in get_flashcards_by_topics(topics, cards_owner_filter())
              if c.get(field)]
 
+    results = score = None
     if request.method == "POST":
         results = []
         for card in cards:
@@ -2115,16 +2215,57 @@ def quiz(topic):
                 "correct": correct,
             })
         score = sum(1 for r in results if r["correct"])
-        return render_template(
-            "quiz.html", topic=topic, cards=cards,
-            lang=lang, lang_name=QUIZ_LANGS[lang], langs=langs,
-            results=results, score=score,
-        )
 
     return render_template(
-        "quiz.html", topic=topic, cards=cards,
-        lang=lang, lang_name=QUIZ_LANGS[lang], langs=langs,
-        results=None,
+        "quiz.html", cards=cards, lang=lang, lang_name=QUIZ_LANGS[lang],
+        results=results, score=score, **common)
+
+
+@app.route("/quiz/<topic>", methods=["GET", "POST"])
+def quiz(topic):
+    """Quiz on one topic — the original route, unchanged and still linked.
+
+    Three templates build `url_for('quiz', topic=...)`, and #233 requires that
+    none of them break. Which is why the several-topic quiz is a **separate
+    endpoint** rather than a second rule on this one: with both shapes on one
+    endpoint, `url_for` has to choose between the path converter and a repeated
+    query parameter, and it picks the converter — making the multi-topic URL
+    unbuildable.
+    """
+    return _run_quiz(
+        [topic],
+        heading=topic,
+        self_url=lambda lang: url_for("quiz", topic=topic, lang=lang),
+        back=(url_for("flashcards", topic=topic), f"Flashcards: {topic}"),
+    )
+
+
+@app.route("/quiz", methods=["GET", "POST"])
+def quiz_topics():
+    """The picker, or a quiz over the topics it submitted (#250).
+
+    One URL doing both, because #233 specified `/quiz` for the picker and
+    `/quiz?topic=A&topic=B` for the run. **No `topic` parameter means the
+    picker**, which is the one place this differs from a game: a game's round
+    has its own `/play` URL, so there an absent parameter can safely mean the
+    whole deck. Here the two would be the same URL, and a picker nobody can
+    reach is worse than a shortcut nobody has asked for — ticking "Select all"
+    is the way to quiz on everything.
+    """
+    requested = request.args.getlist("topic")
+    if not requested:
+        return _render_picker(
+            games.ACTIVITIES["quiz"], url_for("quiz_topics"))
+
+    topics = games.resolve_selection(
+        requested, games.visible_topic_names(_visible_sections()))
+    games.remember_selection(session, topics)
+    heading = topics[0] if len(topics) == 1 else f"{len(topics)} topics"
+    return _run_quiz(
+        topics,
+        heading=heading,
+        self_url=lambda lang: url_for("quiz_topics", topic=topics, lang=lang),
+        back=(url_for("quiz_topics"), "Choose topics"),
     )
 
 

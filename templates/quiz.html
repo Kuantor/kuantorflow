@@ -1,13 +1,23 @@
 {% extends "base.html" %}
 
-{% block title %}Quiz — {{ topic }} | KuantorFlow{% endblock %}
+{% block title %}Quiz — {{ heading }} | KuantorFlow{% endblock %}
 
+{#
+   One template for both quiz shapes (#250): `/quiz/<topic>`, which every topic
+   page still links to, and `/quiz?topic=A&topic=B` from the picker.
+
+   The difference is confined to two values the route supplies. `self_url(lang)`
+   builds this quiz's own address — needed by the language switch, the form
+   action and "Try again", and only the route knows which of the two shapes it
+   is. `back` is the crumb: the topic page for one topic, the picker for a
+   selection. Everything else is the quiz exactly as it was.
+#}
 {% block content %}
     <p class="crumbs">
         <a href="{{ url_for('index') }}">&larr; Home</a> |
-        <a href="{{ url_for('flashcards', topic=topic) }}">Flashcards: {{ topic }}</a>
+        <a href="{{ back[0] }}">{{ back[1] }}</a>
     </p>
-    <h1 class="page-title">Quiz: {{ topic }}</h1>
+    <h1 class="page-title">Quiz: {{ heading }}</h1>
 
     {% if not langs %}
         {# Both translation languages hidden in Settings (#46/#79/#111). #}
@@ -22,19 +32,19 @@
             {% if code == lang %}
                 <span>{{ name }}</span>
             {% else %}
-                <a href="{{ url_for('quiz', topic=topic, lang=code) }}">{{ name }}</a>
+                <a href="{{ self_url(code) }}">{{ name }}</a>
             {% endif %}
         {% endfor %}
     </p>
 
     {% if not cards %}
         <div class="panel">
-            <p>No flashcards with {{ lang_name }} translations in this topic yet — nothing to quiz on.</p>
+            <p>No flashcards with {{ lang_name }} translations here yet — nothing to quiz on.</p>
             {# The quiz has two reasons to be empty — no translations, or the
                #127 filter — and the first message alone would mislead. #}
             {% if settings.individual_cards %}
             <p class="hint"><em>Use only individual cards</em> is on, so anyone
-               else&rsquo;s cards in this topic are hidden.</p>
+               else&rsquo;s cards are hidden.</p>
             {% endif %}
         </div>
 
@@ -42,7 +52,7 @@
         <div class="panel">
             <p>Type the {{ lang_name }} translation for each English word ({{ cards|length }} questions):</p>
         </div>
-        <form method="POST" action="{{ url_for('quiz', topic=topic, lang=lang) }}">
+        <form method="POST" action="{{ self_url(lang) }}">
             {% for card in cards %}
                 <div class="panel question">
                     <div class="word">{{ loop.index }}. {{ card.word }}{% if card.pos %} ({{ card.pos }}){% endif %}</div>
@@ -63,7 +73,7 @@
                 {% endif %}
             </div>
         {% endfor %}
-        <p class="crumbs"><a href="{{ url_for('quiz', topic=topic, lang=lang) }}">Try again</a></p>
+        <p class="crumbs"><a href="{{ self_url(lang) }}">Try again</a></p>
     {% endif %}
 
     {% endif %}{# langs #}

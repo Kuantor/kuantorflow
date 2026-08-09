@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} — choose topics | KuantorFlow{% endblock %}
+
+{#
+   The topic picker (#250), between a button and a round. Shared by every
+   activity in #233 — the quiz today, the four games as they land.
+
+   A plain GET form. The ticked boxes are named `topic`, so submitting builds
+   `?topic=A&topic=B` on its own: repeated parameters rather than one joined
+   string, so a topic containing a comma or a slash needs no escaping scheme,
+   and the resulting URL is shareable and bookmarkable in a way a POST would
+   not be. Nothing below needs JavaScript to submit — the script only adds the
+   tri-state boxes and the running total.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+    </p>
+    <h1 class="page-title">{{ activity.name }}</h1>
+
+    {% if not sections %}
+        <div class="panel">
+            {# The empty deck, explained here and nowhere else (#233): the tile
+               that sent the learner here has no selection to reason about, so
+               it could only have guessed. #}
+            {% if settings.individual_cards %}
+                <p>There is nothing to play on yet. <em>Use only individual
+                   cards</em> is on, so other people&rsquo;s topics are hidden —
+                   turn it off in Settings, or look up a word to start your own.</p>
+            {% else %}
+                <p>There is nothing to play on yet — look up a word or upload
+                   notes to create a topic first.</p>
+            {% endif %}
+        </div>
+    {% else %}
+    <form method="GET" action="{{ start_url }}" id="topic-picker"
+          data-min-cards="{{ activity.min_cards }}"
+          data-too-small="{{ activity.too_small }}">
+        <div class="panel">
+            <h2>{{ activity.picker_heading }}</h2>
+
+            <label class="picker-row picker-all">
+                <input type="checkbox" id="picker-select-all">
+                <span class="picker-name">Select all</span>
+                <span class="picker-count">{{ total_cards }} card{{ '' if total_cards == 1 else 's' }}</span>
+            </label>
+
+            {% for section, topics in sections %}
+                {% set section_cards = topics | map(attribute=1) | sum %}
+                {# Captured because Jinja's inner `loop` shadows this one and
+                   has no way back up to it. #}
+                {% set section_index = loop.index %}
+                <h3 class="topic-section">{{ section }}</h3>
+                <label class="picker-row picker-section">
+                    {# Reflects its section as well as driving it — the script
+                       makes it indeterminate when only some below are ticked.
+                       A box that stayed checked after one was cleared would be
+                       lying about what is going to be played. #}
+                    <input type="checkbox" class="picker-section-box"
+                           data-section="{{ loop.index }}">
+                    <span class="picker-name">Select section</span>
+                    <span class="picker-count">{{ section_cards }} card{{ '' if section_cards == 1 else 's' }}</span>
+                </label>
+                <div class="picker-topics">
+                    {% for topic, count in topics %}
+                        <label class="picker-row">
+                            <input type="checkbox" name="topic" value="{{ topic }}"
+                                   class="picker-topic-box"
+                                   data-section="{{ section_index }}"
+                                   data-count="{{ count }}"
+                                   {% if topic in selected %}checked{% endif %}>
+                            <span class="picker-name">{{ topic }}</span>
+                            <span class="picker-count">{{ count }} card{{ '' if count == 1 else 's' }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="panel picker-actions">
+            <p class="picker-total" id="picker-total"></p>
+            {# Enabled by the script once the selection is big enough. It starts
+               disabled so that a browser with JavaScript off cannot submit an
+               unplayable selection — the round would only have to refuse it. #}
+            <button type="submit" id="picker-start" disabled>Start</button>
+        </div>
+    </form>
+
+    <script>
+        (function () {
+            var form = document.getElementById("topic-picker");
+            if (!form) return;
+
+            var minCards = parseInt(form.dataset.minCards, 10) || 1;
+            var tooSmall = form.dataset.tooSmall;
+            var start = document.getElementById("picker-start");
+            var totalLine = document.getElementById("picker-total");
+            var topics = Array.prototype.slice.call(
+                form.querySelectorAll(".picker-topic-box"));
+
+            // "Select all" and every "Select section" are the *same control at
+            // different scopes* (#233), so they are one implementation over a
+            // list of members rather than two that have to agree.
+            var groups = [{
+                box: document.getElementById("picker-select-all"),
+                members: topics
+            }];
+            form.querySelectorAll(".picker-section-box").forEach(function (box) {
+                groups.push({
+                    box: box,
+                    members: topics.filter(function (t) {
+                        return t.dataset.section === box.dataset.section;
+                    })
+                });
+            });
+
+            function refresh() {
+                groups.forEach(function (group) {
+                    var ticked = group.members.filter(function (m) {
+                        return m.checked;
+                    }).length;
+                    group.box.checked = ticked > 0 && ticked === group.members.length;
+                    group.box.indeterminate = ticked > 0 && ticked < group.members.length;
+                });
+
+                var chosen = topics.filter(function (t) { return t.checked; });
+                var cards = chosen.reduce(function (sum, t) {
+                    return sum + (parseInt(t.dataset.count, 10) || 0);
+                }, 0);
+
+                if (!chosen.length) {
+                    totalLine.textContent = tooSmall;
+                } else {
+                    totalLine.textContent =
+                        chosen.length + (chosen.length === 1 ? " topic, " : " topics, ") +
+                        cards + (cards === 1 ? " card" : " cards") +
+                        (cards < minCards ? " — " + tooSmall : "");
+                }
+                start.disabled = cards < minCards;
+            }
+
+            groups.forEach(function (group) {
+                group.box.addEventListener("change", function () {
+                    // Clicking an indeterminate box checks it, which is the
+                    // toggle #233 asked for: click to take everything in scope,
+                    // click again to drop it.
+                    group.members.forEach(function (m) {
+                        m.checked = group.box.checked;
+                    });
+                    refresh();
+                });
+            });
+            topics.forEach(function (t) {
+                t.addEventListener("change", refresh);
+            });
+
+            refresh();   // reflect whatever the remembered selection ticked
+        })();
+    </script>
+    {% endif %}
+{% endblock %}

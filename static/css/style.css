@@ -1513,3 +1513,38 @@ button:disabled:hover { background: #9db4c7; }
     color: #6b5626;
     border: 1px solid #e0d0a8;
 }
+
+/* Topic picker (#250) — the step between an activity button and a round.
+   A list rather than a grid: these are checkboxes to scan and tick, where the
+   tiles on the front page are pictures to choose between. Reusing .topic-tile
+   here would mean a 3:4 portrait card carrying a checkbox, which is neither. */
+.picker-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.picker-row:hover { background: rgba(21, 101, 192, 0.08); }
+.picker-row input { flex: none; width: 1.05rem; height: 1.05rem; }
+/* The name takes the slack so every count lines up on the right edge, which is
+   what makes a column of them scannable. */
+.picker-name { flex: 1; overflow-wrap: anywhere; }
+.picker-count { flex: none; color: var(--muted); font-size: 0.85rem; }
+/* The two group rows read as controls over the list rather than members of it. */
+.picker-all,
+.picker-section { font-weight: 600; }
+.picker-all { margin-bottom: 0.3rem; }
+.picker-section { margin: 0.1rem 0 0.2rem; }
+/* Indented under their section's "Select section" row, so the scope of that
+   box is visible rather than something to work out. */
+.picker-topics { margin-left: 1.5rem; }
+.picker-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+.picker-total { margin: 0; color: var(--muted); font-size: 0.92rem; }

@@ -115,3 +115,76 @@ def remember_selection(store, names):
     it, which the next read handles.
     """
     store[SELECTION_KEY] = list(names)
+
+
+# --- the activities themselves -------------------------------------------
+#
+# #233 asks for **one declaration** of the activities, rendered by the
+# front-page panel and by the topic page's activity row. This is the third of
+# it the picker needs (#250): what an activity is called, what its picker says,
+# and how big a selection it needs before it can start.
+#
+# The icon and the tile's sub-line are deliberately absent. They are the
+# panel's and the row's, they arrive with them, and adding them here before
+# anything renders them would be guessing at fields nobody has asked of yet --
+# the same reason this declaration did not exist at all in #248.
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Activity:
+    """One thing a learner can do with a selection of topics.
+
+    `kind` separates the quiz from the games because their URLs differ, and
+    they differ for a reason worth keeping: `/quiz/<topic>` predates all of
+    this and is linked from three templates, so the quiz keeps its own routes
+    while every game shares `/games/<slug>`.
+
+    `min_cards` is the **cheap** check, the one answerable from the card counts
+    the picker has. A game whose real rule needs to look at the cards -- #130
+    wanting four distinct answers, #235 wanting an example that contains its own
+    word -- asks that question on its own page, where it has them. Both messages
+    are real; neither is a copy of the other.
+    """
+
+    slug: str
+    name: str
+    kind: str            # "quiz" or "game"
+    picker_heading: str
+    min_cards: int
+    too_small: str
+
+
+# The quiz is the only entry today, and it is the loosest of the five: one card
+# carrying a translation in the quiz language. Each game ticket adds its own
+# line here plus a /games/<slug>/play route, and the picker needs no change.
+ACTIVITIES = {
+    activity.slug: activity
+    for activity in (
+        Activity(
+            slug="quiz",
+            name="Quiz",
+            kind="quiz",
+            picker_heading="Choose the topics to be quizzed on",
+            min_cards=1,
+            too_small="Tick at least one topic to start the quiz.",
+        ),
+    )
+}
+
+
+def activity(slug, kind=None):
+    """The declared activity for `slug`, or **None** if there is no such thing.
+
+    With `kind`, an activity of the wrong kind is also None: `/games/quiz` is
+    not a way to reach the quiz, because the quiz has its own URL and two ways
+    in would be two things to keep working.
+
+    None rather than an exception, so a route turns an unknown slug into a 404
+    -- which is what every game slug is until its ticket lands.
+    """
+    found = ACTIVITIES.get(slug)
+    if found is None or (kind is not None and found.kind != kind):
+        return None
+    return found
