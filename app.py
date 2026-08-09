@@ -2242,15 +2242,67 @@ def _round_stub(activity, topics):
                            topics=topics, topic_summary=shown)
 
 
+def _scrambled_round(activity, topics):
+    """A round of #133: the middle letters shuffled, the learner rebuilds it.
+
+    Typed and graded rather than self-marked, because unlike #235's meanings
+    there is exactly one right answer and the page can check it.
+
+    A card whose word cannot be scrambled is **skipped**, not shown unchanged:
+    `cat` has no middle, `noon` shuffles to itself, and either would put the
+    answer on screen as the question. How many were dropped is said out loud,
+    for the same reason the quiz says how many cards lack a translation — the
+    picker counts cards, and a round shorter than the count looks like a bug.
+    """
+    words = games.word_count(request.args.get("words"),
+                             games.remembered_word_count(session))
+    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+
+    if request.method == "POST":
+        # Grade what was asked, in the order it was asked — the same rule the
+        # quiz follows, and for the same reason: the round is a random sample.
+        by_id = {str(card["id"]): card for card in cards}
+        results = []
+        for key in request.form:
+            if not key.startswith("answer_"):
+                continue
+            card = by_id.pop(key[len("answer_"):], None)
+            if card is None:
+                continue
+            given = (request.form.get(key) or "").strip()
+            results.append({
+                "word": card["word"],
+                "scrambled": request.form.get(f"scrambled_{card['id']}", ""),
+                "user_answer": given,
+                "correct": given.casefold() == card["word"].casefold(),
+            })
+        return render_template(
+            "game_scrambled.html", activity=activity, topics=topics,
+            questions=None, results=results,
+            score=sum(1 for r in results if r["correct"]), skipped=0)
+
+    playable = []
+    for card in cards:
+        puzzle = games.scramble_entry(card["word"])
+        if puzzle:
+            playable.append({"id": card["id"], "word": card["word"],
+                             "scrambled": puzzle})
+    return render_template(
+        "game_scrambled.html", activity=activity, topics=topics,
+        questions=games.sample(playable, words), results=None, score=None,
+        skipped=len(cards) - len(playable))
+
+
 # slug -> the view that renders one round, as `f(activity, topics)`. Every
 # registered activity has an entry; a game ticket replaces its stub with the
 # real round and touches nothing else.
 GAME_ROUNDS = {activity.slug: _round_stub
                for activity in games.ACTIVITIES.values()
                if activity.kind in games.GAMES_URL_KINDS}
+GAME_ROUNDS["scrambled"] = _scrambled_round
 
 
-@app.route("/games/<game>/play")
+@app.route("/games/<game>/play", methods=["GET", "POST"])
 def game_play(game):
     """A round of one game over the selected topics (#250).
 
