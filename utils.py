@@ -996,16 +996,54 @@ def get_flashcards_by_topic(topic, owner_id=None):
     that matches no topic returns no cards, which is what makes
     /flashcards/<anything> render an empty page rather than a 404 — behaviour
     the topic pages have always had and #178 will have to think about.
+
+    One topic is the common case and keeps its own name, but not its own query
+    (#248): it is `get_flashcards_by_topics()` with a list of one. Ordering is
+    unchanged — that function's `t.name, f.word` is `f.word` when there is only
+    one topic to order by.
     """
+    return get_flashcards_by_topics([topic], owner_id)
+
+
+def get_flashcards_by_topics(topics, owner_id=None):
+    """Fetch the flashcards of **several** topics in one query (#248).
+
+    Every activity in #233 draws from a selection of topics rather than one, so
+    the alternative is `get_flashcards_by_topic()` in a loop — a connection and
+    a round trip per ticked topic, eighteen of them for a learner who selects
+    the whole B2–C1 curriculum.
+
+    `topics` is a sequence of names; duplicates are harmless, since `IN` matches
+    a row once however many times its topic was asked for. The owner filter
+    (#127) applies exactly as it does to one topic: this is about who owns the
+    *card*, not who created the topic.
+
+    **An empty sequence returns no cards, and never every card.** That is the
+    same trap `_owner_clause()` documents for `owner_id` — a value meaning "no
+    filter" and a value meaning "nothing" look alike, and guessing wrong here
+    would quietly play a round over the entire deck. #233's rule that a missing
+    `?topic=` means the whole visible deck is a *routing* decision, resolved
+    into an explicit list of names before this is called; see
+    `games.resolve_selection()`.
+
+    Ordered by `(topic name, word)` so a result is deterministic and a caller
+    that wants to group by topic can. Games shuffle what they get, so the order
+    is for tests and for the quiz rather than for play.
+    """
+    names = [name for name in (topics or []) if name]
+    if not names:
+        return []
+
     clause, params = _owner_clause(owner_id)
+    placeholders = ", ".join(["%s"] * len(names))
     conn = get_db_connection()
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             "SELECT f.* FROM flashcards f JOIN topics t ON f.topic_id = t.id "
-            "WHERE t.name = %s" + clause +
-            " ORDER BY f.word",
-            (topic,) + params,
+            f"WHERE t.name IN ({placeholders})" + clause +
+            " ORDER BY t.name, f.word",
+            tuple(names) + params,
         )
         rows = cursor.fetchall()
         cursor.close()
