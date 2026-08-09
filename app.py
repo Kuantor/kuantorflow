@@ -1060,8 +1060,56 @@ def get_mykola():
             kwargs["card_saver"] = _save_card_from_chat
         if "name_saver" in accepted:                      # ai_agent#62
             kwargs["name_saver"] = _save_preferred_name_from_chat
+        if "topic_reader" in accepted:                    # ai_agent#68
+            kwargs["topic_reader"] = _topics_for_chat
+        if "card_reader" in accepted:                     # ai_agent#68
+            kwargs["card_reader"] = _cards_for_chat
         _mykola_agent = MykolaAgent(**kwargs)
     return _mykola_agent
+
+
+# --- what Mykola may read (ai_agent#68) ----------------------------------
+# The agent is a process-wide singleton, but these run *inside* a request —
+# the model calls a tool, we answer it, all within /mykola/chat. So visibility
+# is resolved here, at call time, not captured when the agent was built. Doing
+# it the other way round would freeze the first visitor's view of the deck and
+# serve it to everybody afterwards.
+
+def _topics_for_chat():
+    """Topics and card counts, as this visitor is allowed to see them."""
+    owner = cards_owner_filter()
+    return [{"topic": name, "cards": count}
+            for _section, topics in get_topics_by_section(owner)
+            for name, count in topics]
+
+
+# The translation column each hideable language lives in (#46/#79).
+_TRANSLATION_COLUMNS = {"Ukrainian": "translation_ukr",
+                        "Russian": "translation_rus"}
+
+
+def _cards_for_chat(topic, limit):
+    """One topic's cards, filtered exactly as the browse page filters them.
+
+    Through `get_flashcards_by_topic()` with `cards_owner_filter()`, so #127
+    holds here too: a learner who has hidden other people's cards must not
+    have Mykola read them out. Anything else would make the chat a way around
+    a setting the rest of the site honours.
+
+    A hidden language is **removed from the row**, not merely left unmentioned
+    (#46/#79). The agent is already told in its system prompt not to show one,
+    but an instruction is not an enforcement: everywhere else on the site the
+    hidden language is absent from what the page can render, and the chat
+    should be no weaker. Deleting it here means the only copy the model ever
+    sees is one the learner has agreed to see.
+    """
+    hidden = [_TRANSLATION_COLUMNS[name] for name in _hidden_languages()
+              if name in _TRANSLATION_COLUMNS]
+    cards = get_flashcards_by_topic(topic, cards_owner_filter())[:limit]
+    if not hidden:
+        return cards
+    return [{k: v for k, v in card.items() if k not in hidden}
+            for card in cards]
 
 
 @app.context_processor
