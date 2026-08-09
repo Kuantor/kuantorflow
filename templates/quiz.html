@@ -18,6 +18,11 @@
         <a href="{{ back[0] }}">{{ back[1] }}</a>
     </p>
     <h1 class="page-title">Quiz: {{ heading }}</h1>
+    {# Which topics, under the count that says how many. Absent for a single
+       topic, whose name is already the title. #}
+    {% if topic_summary %}
+        <p class="quiz-topics">{{ topic_summary }}</p>
+    {% endif %}
 
     {% if not langs %}
         {# Both translation languages hidden in Settings (#46/#79/#111). #}

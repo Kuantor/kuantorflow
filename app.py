@@ -2172,6 +2172,27 @@ def _quiz_lang(prefs, langs):
     return lang
 
 
+# How many of a selection are named under a quiz's title before the rest
+# become an ellipsis. Three fits one line on a phone, which is the constraint;
+# the count in the title is what answers "how many" exactly.
+NAMED_TOPICS = 3
+
+
+def _topic_summary(topics):
+    """The topic names to print under a quiz's title, or **None**.
+
+    None for a single topic, because the title already names it — "Quiz: Work"
+    above a line reading "Work" is the same word twice. The title of a several-
+    topic run says how many, which is the one thing this line cannot: it is
+    truncated, and a truncated list that also had to be countable would have to
+    show every name.
+    """
+    if len(topics) < 2:
+        return None
+    shown = ", ".join(topics[:NAMED_TOPICS])
+    return f"{shown} …" if len(topics) > NAMED_TOPICS else shown
+
+
 def _run_quiz(topics, heading, self_url, back):
     """Render or grade a quiz over `topics` — one of them or several (#250).
 
@@ -2188,7 +2209,7 @@ def _run_quiz(topics, heading, self_url, back):
     prefs = current_settings()
     langs = _visible_quiz_langs(prefs)
     common = {"heading": heading, "self_url": self_url, "back": back,
-              "langs": langs}
+              "langs": langs, "topic_summary": _topic_summary(topics)}
     if not langs:
         # Both languages hidden in Settings (#46/#79) — nothing to quiz on.
         return render_template(

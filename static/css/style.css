@@ -1548,3 +1548,16 @@ button:disabled:hover { background: #9db4c7; }
     flex-wrap: wrap;
 }
 .picker-total { margin: 0; color: var(--muted); font-size: 0.92rem; }
+
+/* The topics a several-topic quiz is running over (#250), under the title that
+   counts them. Pulled up close so the two read as one heading block.
+
+   Translucent white with a shadow, like .site-footer — not var(--muted), which
+   is a dark slate meant for text on a panel. This line sits on the background
+   photograph beside .page-title, where a dark grey would disappear. */
+.quiz-topics {
+    margin: -0.9rem 0 1.2rem;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    font-size: 0.85rem;
+}
