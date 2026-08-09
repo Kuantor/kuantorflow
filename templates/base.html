@@ -917,10 +917,29 @@
                 copyText(el.dataset.copyText || el.textContent || "");
             }
 
-            function makeCopyable(el, text) {
-                // The original string, not the rendered element: innerHTML has
-                // been through markdownLite and may carry a "sources:" line,
-                // and neither belongs on the learner's clipboard.
+            // What the learner can see in the bubble, as plain text (#245).
+            //
+            // Copying Mykola's raw string handed them his markdown — the
+            // asterisks around **rains** are punctuation he never meant them
+            // to read, and they are not on screen either, because markdownLite
+            // turned them into <strong>. So the rule is "copy what is
+            // displayed": the rendered text, with the `sources:` line and the
+            // button itself left out.
+            //
+            // Stated that way rather than as "strip the asterisks", it also
+            // stays right if markdownLite ever learns another mark — anything
+            // it renders stops being punctuation, and anything it does not
+            // render is on screen and belongs in the copy.
+            function plainTextOf(el) {
+                var copy = el.cloneNode(true);
+                Array.prototype.forEach.call(
+                    copy.querySelectorAll(".mykola-sources, .mykola-copy"),
+                    function (node) { node.parentNode.removeChild(node); });
+                return (copy.textContent || "").trim();
+            }
+
+            function makeCopyable(el) {
+                var text = plainTextOf(el);
                 el.dataset.copyText = text;
                 if (canHover) {
                     var btn = document.createElement("button");
@@ -956,7 +975,7 @@
             // that behaves differently from all the others.
             Array.prototype.forEach.call(
                 messages.querySelectorAll(".mykola-msg.mykola"),
-                function (el) { makeCopyable(el, el.textContent); });
+                function (el) { makeCopyable(el); });
 
             function addMessage(kind, text, sources, shouldPersist) {
                 if (shouldPersist === undefined) shouldPersist = true;
@@ -976,7 +995,7 @@
                 // not errors, and not the typing placeholder, which is about
                 // to be replaced by the thing actually worth keeping (#245).
                 if (kind === "mykola") {
-                    makeCopyable(el, text);
+                    makeCopyable(el);
                 }
 
                 messages.appendChild(el);
