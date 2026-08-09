@@ -1050,6 +1050,11 @@ def get_mykola():
     """Lazily build the MykolaAgent (loads the knowledge base) on first use."""
     global _mykola_agent
     if _mykola_agent is None:
+        # ai_agent emits to its own loggers and, being a library, does not
+        # decide where they write. Point them at logs/mykola.log before the
+        # first call, or every line it logs is silently discarded
+        # (ai_agent#71, #75).
+        applog.attach_agent_logs()
         # Inject our DB writer when the installed agent supports it —
         # feature-detected so older ai_agent checkouts keep working.
         # Feature-detected, so the two repos can be deployed in either order:

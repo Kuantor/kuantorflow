@@ -43,6 +43,7 @@ KEEP_ROTATIONS = 12
 CARDS = "cards"
 DICT = "dict"
 PARSED_FILES = "parsed_files"
+MYKOLA = "mykola"
 
 _configured = {}  # logger name -> the directory it is currently writing to
 
@@ -394,3 +395,31 @@ class Timer:
     def ms(self):
         end = self._end if self._end is not None else time.monotonic()
         return int((end - self._start) * 1000)
+
+
+# --- the agent's own logging (ai_agent#71, #75) ---------------------------
+
+# The loggers ai_agent writes to. It is a library, so it emits and does not
+# decide where the lines land — that is the application's job, and this is the
+# application. Named here rather than imported, so a missing or older ai_agent
+# costs nothing.
+AGENT_LOGGERS = ("mykola.usage", "mykola.tools")
+
+
+def attach_agent_logs():
+    """Give ai_agent's loggers somewhere to write: logs/mykola.log.
+
+    Without this they inherit the root logger's WARNING and have no handler, so
+    every line is discarded — which is how ai_agent#71's token figures and #75's
+    tool-choice lines both shipped writing to nothing at all. An observability
+    feature that is itself invisible is worse than none, because it is believed.
+
+    Safe to call more than once: `_logger()` reconfigures rather than stacking
+    handlers, and the level and propagation are set idempotently.
+    """
+    handler_owner = _logger(MYKOLA)
+    for name in AGENT_LOGGERS:
+        logger = logging.getLogger(name)
+        logger.handlers = list(handler_owner.handlers)
+        logger.setLevel(logging.INFO)
+        logger.propagate = False    # the file, not the web server's stderr
