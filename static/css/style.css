@@ -1148,6 +1148,60 @@ button:disabled:hover { background: #9db4c7; }
     font-size: 0.72rem;
     color: var(--muted);
 }
+
+/* Copying one of Mykola's replies (#245).
+   Only his: the learner's own messages, errors and the typing placeholder
+   carry no copy affordance, so .mykola-msg.mykola is the anchor. */
+.mykola-msg.mykola { position: relative; }
+.mykola-copy {
+    position: absolute;
+    top: 0.2rem;
+    right: 0.2rem;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid #dce3ea;
+    border-radius: 6px;
+    background: #fff;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.5;
+    cursor: pointer;
+    /* Hidden rather than absent, so it never reflows the text underneath it
+       when it appears. */
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+.mykola-copy:hover { color: var(--ink); border-color: var(--blue); }
+
+/* `hover`, not a width breakpoint: a narrow desktop window still has a mouse
+   and should keep the button, while a tablet has neither hover nor any use
+   for it — there, the whole message is the target (see the tap handler).
+   `focus-within` is what makes it reachable without a pointer at all. */
+@media (hover: hover) {
+    .mykola-msg.mykola:hover .mykola-copy,
+    .mykola-msg.mykola:focus-within .mykola-copy { opacity: 1; }
+}
+@media (hover: none) {
+    .mykola-copy { display: none; }
+}
+
+/* "Copied" — a status, not an alert. Half-transparent and short-lived, over
+   the message list rather than over the composer the learner is typing in. */
+.mykola-copied {
+    position: absolute;
+    left: 50%;
+    bottom: 3.6rem;
+    transform: translateX(-50%);
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(20, 30, 40, 0.72);
+    color: #fff;
+    font-size: 0.78rem;
+    pointer-events: none;      /* never in the way of the next tap */
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    z-index: 3;
+}
+.mykola-copied.shown { opacity: 1; }
 #mykola-form {
     display: flex;
     gap: 0.4rem;

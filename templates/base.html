@@ -674,6 +674,9 @@
         <div id="mykola-messages">
             <div class="mykola-msg mykola">Good day{% if current_user %}, {{ current_user.name }}{% endif %}! I'm Mykola 🎩 Ask me anything about English or how to use KuantorFlow — it would be my pleasure.</div>
         </div>
+        {# "Copied" (#245). A status rather than an alert: it reports something
+           the learner just did on purpose, so it should not interrupt them. #}
+        <div id="mykola-copied" class="mykola-copied" role="status" aria-live="polite"></div>
         <form id="mykola-form" autocomplete="off">
             <input type="text" id="mykola-input" placeholder="Type your question…" required>
             <button type="submit" id="mykola-send">Send</button>
@@ -853,6 +856,95 @@
                     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
                     .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
             }
+            // --- copying a reply (#245) ----------------------------------
+            var copiedNote = document.getElementById("mykola-copied");
+            var copiedTimer = null;
+            // The question is whether this device can hover, not how wide it
+            // is: a narrow desktop window still has a mouse and keeps the
+            // button; a tablet has neither, and gets tap-to-copy instead.
+            var canHover = !window.matchMedia ||
+                           window.matchMedia("(hover: hover)").matches;
+
+            function showCopied(note) {
+                if (!copiedNote) return;
+                copiedNote.textContent = note;
+                copiedNote.classList.add("shown");
+                clearTimeout(copiedTimer);
+                copiedTimer = setTimeout(function () {
+                    copiedNote.classList.remove("shown");
+                }, 1600);
+            }
+
+            function copyText(text) {
+                // execCommand is the fallback, not the primary: the clipboard
+                // API needs a secure context, which we have on the live site
+                // and on localhost but cannot assume everywhere.
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function () {
+                        showCopied("Copied");
+                    }, function () {
+                        showCopied(legacyCopy(text) ? "Copied"
+                                                    : "Could not copy");
+                    });
+                    return;
+                }
+                showCopied(legacyCopy(text) ? "Copied" : "Could not copy");
+            }
+
+            function legacyCopy(text) {
+                try {
+                    var box = document.createElement("textarea");
+                    box.value = text;
+                    box.setAttribute("readonly", "");
+                    box.style.position = "fixed";
+                    box.style.opacity = "0";
+                    document.body.appendChild(box);
+                    box.select();
+                    var done = document.execCommand("copy");
+                    document.body.removeChild(box);
+                    return done;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            function copyReply(el) {
+                // Selecting text inside a bubble and letting go is a click.
+                // Copying then would replace the learner's own selection with
+                // the whole message, which is the opposite of what they meant.
+                var selected = window.getSelection && window.getSelection().toString();
+                if (selected) return;
+                copyText(el.dataset.copyText || el.textContent || "");
+            }
+
+            function makeCopyable(el, text) {
+                // The original string, not the rendered element: innerHTML has
+                // been through markdownLite and may carry a "sources:" line,
+                // and neither belongs on the learner's clipboard.
+                el.dataset.copyText = text;
+                if (canHover) {
+                    var btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.className = "mykola-copy";
+                    btn.textContent = "Copy";
+                    btn.setAttribute("aria-label", "Copy this reply");
+                    btn.addEventListener("click", function (e) {
+                        e.stopPropagation();
+                        copyText(text);
+                    });
+                    el.appendChild(btn);
+                } else {
+                    el.addEventListener("click", function () { copyReply(el); });
+                }
+            }
+
+            // The opening greeting is rendered by the template, not by
+            // addMessage, so it would otherwise be the one reply in the panel
+            // that behaves differently from all the others.
+            Array.prototype.forEach.call(
+                messages.querySelectorAll(".mykola-msg.mykola"),
+                function (el) { makeCopyable(el, el.textContent); });
+
             function addMessage(kind, text, sources, shouldPersist) {
                 if (shouldPersist === undefined) shouldPersist = true;
                 var el = document.createElement("div");
@@ -867,6 +959,13 @@
                     }).join("; ");
                     el.appendChild(s);
                 }
+                // His finished replies only — not the learner's own messages,
+                // not errors, and not the typing placeholder, which is about
+                // to be replaced by the thing actually worth keeping (#245).
+                if (kind === "mykola") {
+                    makeCopyable(el, text);
+                }
+
                 messages.appendChild(el);
                 messages.scrollTop = messages.scrollHeight;
 
