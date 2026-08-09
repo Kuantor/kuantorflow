@@ -674,6 +674,9 @@
         <div id="mykola-messages">
             <div class="mykola-msg mykola">Good day{% if current_user %}, {{ current_user.name }}{% endif %}! I'm Mykola 🎩 Ask me anything about English or how to use KuantorFlow — it would be my pleasure.</div>
         </div>
+        {# "Copied" (#245). A status rather than an alert: it reports something
+           the learner just did on purpose, so it should not interrupt them. #}
+        <div id="mykola-copied" class="mykola-copied" role="status" aria-live="polite"></div>
         <form id="mykola-form" autocomplete="off">
             <input type="text" id="mykola-input" placeholder="Type your question…" required>
             <button type="submit" id="mykola-send">Send</button>
@@ -853,6 +856,127 @@
                     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
                     .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
             }
+            // --- copying a reply (#245) ----------------------------------
+            var copiedNote = document.getElementById("mykola-copied");
+            var copiedTimer = null;
+            // The question is whether this device can hover, not how wide it
+            // is: a narrow desktop window still has a mouse and keeps the
+            // button; a tablet has neither, and gets tap-to-copy instead.
+            var canHover = !window.matchMedia ||
+                           window.matchMedia("(hover: hover)").matches;
+
+            function showCopied(note) {
+                if (!copiedNote) return;
+                copiedNote.textContent = note;
+                copiedNote.classList.add("shown");
+                clearTimeout(copiedTimer);
+                copiedTimer = setTimeout(function () {
+                    copiedNote.classList.remove("shown");
+                }, 1600);
+            }
+
+            function copyText(text) {
+                // execCommand is the fallback, not the primary: the clipboard
+                // API needs a secure context, which we have on the live site
+                // and on localhost but cannot assume everywhere.
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function () {
+                        showCopied("Copied");
+                    }, function () {
+                        showCopied(legacyCopy(text) ? "Copied"
+                                                    : "Could not copy");
+                    });
+                    return;
+                }
+                showCopied(legacyCopy(text) ? "Copied" : "Could not copy");
+            }
+
+            function legacyCopy(text) {
+                try {
+                    var box = document.createElement("textarea");
+                    box.value = text;
+                    box.setAttribute("readonly", "");
+                    box.style.position = "fixed";
+                    box.style.opacity = "0";
+                    document.body.appendChild(box);
+                    box.select();
+                    var done = document.execCommand("copy");
+                    document.body.removeChild(box);
+                    return done;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            function copyReply(el) {
+                // Selecting text inside a bubble and letting go is a click.
+                // Copying then would replace the learner's own selection with
+                // the whole message, which is the opposite of what they meant.
+                var selected = window.getSelection && window.getSelection().toString();
+                if (selected) return;
+                copyText(el.dataset.copyText || el.textContent || "");
+            }
+
+            // What the learner can see in the bubble, as plain text (#245).
+            //
+            // Copying Mykola's raw string handed them his markdown — the
+            // asterisks around **rains** are punctuation he never meant them
+            // to read, and they are not on screen either, because markdownLite
+            // turned them into <strong>. So the rule is "copy what is
+            // displayed": the rendered text, with the `sources:` line and the
+            // button itself left out.
+            //
+            // Stated that way rather than as "strip the asterisks", it also
+            // stays right if markdownLite ever learns another mark — anything
+            // it renders stops being punctuation, and anything it does not
+            // render is on screen and belongs in the copy.
+            function plainTextOf(el) {
+                var copy = el.cloneNode(true);
+                Array.prototype.forEach.call(
+                    copy.querySelectorAll(".mykola-sources, .mykola-copy"),
+                    function (node) { node.parentNode.removeChild(node); });
+                return (copy.textContent || "").trim();
+            }
+
+            function makeCopyable(el) {
+                var text = plainTextOf(el);
+                el.dataset.copyText = text;
+                if (canHover) {
+                    var btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.className = "mykola-copy";
+                    // The two-sheets glyph everything else uses for "copy", so
+                    // it needs no label to be understood. Inline rather than a
+                    // font or an image: one icon is not worth a request, and
+                    // `currentColor` lets it dim and darken with the button.
+                    btn.innerHTML =
+                        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" ' +
+                        'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+                        'stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+                        '<rect x="9" y="9" width="13" height="13" rx="2"></rect>' +
+                        '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1">' +
+                        '</path></svg>';
+                    // Icon-only, so the accessible name has to come from here,
+                    // and the tooltip is what a mouse user reads.
+                    btn.setAttribute("aria-label", "Copy this reply");
+                    btn.title = "Copy this reply";
+                    btn.addEventListener("click", function (e) {
+                        e.stopPropagation();
+                        copyText(text);
+                    });
+                    el.appendChild(btn);
+                } else {
+                    el.addEventListener("click", function () { copyReply(el); });
+                }
+            }
+
+            // The opening greeting is rendered by the template, not by
+            // addMessage, so it would otherwise be the one reply in the panel
+            // that behaves differently from all the others.
+            Array.prototype.forEach.call(
+                messages.querySelectorAll(".mykola-msg.mykola"),
+                function (el) { makeCopyable(el); });
+
             function addMessage(kind, text, sources, shouldPersist) {
                 if (shouldPersist === undefined) shouldPersist = true;
                 var el = document.createElement("div");
@@ -867,6 +991,13 @@
                     }).join("; ");
                     el.appendChild(s);
                 }
+                // His finished replies only — not the learner's own messages,
+                // not errors, and not the typing placeholder, which is about
+                // to be replaced by the thing actually worth keeping (#245).
+                if (kind === "mykola") {
+                    makeCopyable(el);
+                }
+
                 messages.appendChild(el);
                 messages.scrollTop = messages.scrollHeight;
 
