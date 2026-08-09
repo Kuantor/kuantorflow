@@ -2221,8 +2221,16 @@ def _run_quiz(topics, heading, self_url, back, words):
 
     lang = _quiz_lang(prefs, langs)
     field = f"translation_{lang}"
-    cards = [c for c in get_flashcards_by_topics(topics, cards_owner_filter())
-             if c.get(field)]
+    # A card with no translation in this language cannot be asked, so it is
+    # dropped *before* the draw — the sample can only contain answerable words.
+    # How many were dropped is worth saying, though: the picker counts cards,
+    # not cards with a Ukrainian translation, so a learner who ticked 41 and
+    # was asked 20 has no way to tell that from the word limit. 74 of the 569
+    # cards in production have no Ukrainian and 38 no Russian, so this is a
+    # number people will actually meet.
+    in_selection = get_flashcards_by_topics(topics, cards_owner_filter())
+    cards = [c for c in in_selection if c.get(field)]
+    untranslated = len(in_selection) - len(cards)
 
     results = score = None
     if request.method == "POST":
@@ -2266,7 +2274,7 @@ def _run_quiz(topics, heading, self_url, back, words):
 
     return render_template(
         "quiz.html", cards=cards, lang=lang, lang_name=QUIZ_LANGS[lang],
-        results=results, score=score, **common)
+        results=results, score=score, untranslated=untranslated, **common)
 
 
 @app.route("/quiz/<topic>", methods=["GET", "POST"])
