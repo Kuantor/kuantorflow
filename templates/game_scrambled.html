@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} | KuantorFlow{% endblock %}
+
+{#
+   A round of #133 — the Cambridge effect. Each word keeps its first and last
+   letter and has its middle shuffled; the learner types what it was.
+
+   Typed and graded, not self-marked: unlike #235's meanings there is exactly
+   one right answer, so the page can check it rather than asking the learner to
+   be honest. The shape follows the quiz deliberately — a learner who has taken
+   one already knows how this page works.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+    </p>
+    <h1 class="page-title">{{ activity.name }}</h1>
+
+    {% if results is none %}
+        {% if not questions %}
+            <div class="panel">
+                <p>No words here can be scrambled yet.</p>
+                {# A word needs four letters and two different ones in the
+                   middle before shuffling it can produce anything other than
+                   itself. A small topic of short words really can have none. #}
+                <p class="hint">A word needs at least four letters, with two
+                   different letters between the first and the last.
+                   {% if settings.individual_cards %}<em>Use only individual
+                   cards</em> is on, so anyone else&rsquo;s are hidden.{% endif %}</p>
+            </div>
+        {% else %}
+            <div class="panel panel--tight">
+                <p>Type each word with its letters put back in order
+                   ({{ questions|length }} word{{ '' if questions|length == 1 else 's' }}):
+                {% if skipped %}
+                    <span class="hint">{{ skipped }}
+                    {{- ' word was' if skipped == 1 else ' words were' }} too short
+                    to scramble, so {{ 'it is' if skipped == 1 else 'they are' }}
+                    not asked.</span>
+                {% endif %}
+                </p>
+            </div>
+
+            <form method="POST">
+                {% for question in questions %}
+                    <div class="panel question">
+                        <div class="word">{{ loop.index }}. {{ question.scrambled }}</div>
+                        {# The puzzle travels with the answer so the results can
+                           show what was actually on screen. The round is a
+                           random sample and the shuffle is random too, so
+                           nothing here could be rebuilt from the card alone. #}
+                        <input type="hidden" name="scrambled_{{ question.id }}"
+                               value="{{ question.scrambled }}">
+                        <input type="text" name="answer_{{ question.id }}"
+                               autocomplete="off" autocapitalize="none"
+                               spellcheck="false">
+                    </div>
+                {% endfor %}
+                <button type="submit">Check answers</button>
+            </form>
+        {% endif %}
+
+    {% else %}
+        <p class="score">Score: {{ score }} / {{ results|length }}</p>
+        {% for r in results %}
+            <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
+                <div class="word">{{ loop.index }}. {{ r.scrambled }}</div>
+                <p>Your answer: {{ r.user_answer or '—' }}</p>
+                {% if not r.correct %}
+                    <p class="expected">Correct answer: {{ r.word }}</p>
+                {% endif %}
+            </div>
+        {% endfor %}
+        {# A way out as well as a way round again. The row at the top of the
+           page has one, but a learner reading their score is at the bottom of
+           ten answers and should not have to scroll back up to leave. #}
+        <p class="crumbs">
+            <a href="{{ url_for('index') }}">&larr; Home</a>
+            <a href="{{ url_for('game_play', game=activity.slug, topic=topics) }}">Play again</a>
+        </p>
+    {% endif %}
+{% endblock %}

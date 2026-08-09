@@ -219,7 +219,6 @@ ACTIVITIES = {
             min_cards=1,
             too_small="Tick at least one topic to start.",
             tagline="Unscramble the letters",
-            ticket="#133",
         ),
         Activity(
             slug="fill_the_gap",
@@ -337,3 +336,56 @@ def sample(cards, count, rng=None):
     if count >= len(cards):
         return list(cards)
     return (rng or random).sample(list(cards), count)
+
+
+# --- scrambling a word (#133) --------------------------------------------
+
+
+def scramble(word, rng=None):
+    """A word with its middle letters shuffled, or **None** if it cannot be.
+
+    The Cambridge effect: the first and last letters are held, so the shape a
+    reader recognises survives and only the inside is disturbed.
+
+    None rather than the word unchanged, which is the whole subtlety here. A
+    three-letter word has no middle to shuffle; `book` has a middle of two
+    identical letters; `noon` shuffles to itself whatever the draw. Returning
+    the original in those cases would put a word on screen that *is* the
+    answer, which is worse than not asking it -- so the caller filters on None
+    instead of having to notice.
+
+    `rng` is injectable so a test can pin the shuffle.
+    """
+    if len(word) < 4:
+        return None
+    middle = list(word[1:-1])
+    # Every arrangement the middle can take, minus the one it already has. If
+    # that leaves nothing, no shuffle of this word can differ from it.
+    if len(set(middle)) < 2:
+        return None
+    rng = rng or random
+    for _ in range(20):
+        shuffled = middle[:]
+        rng.shuffle(shuffled)
+        if shuffled != middle:
+            return word[0] + "".join(shuffled) + word[-1]
+    # Vanishingly unlikely, and cheaper to admit than to loop forever.
+    return None
+
+
+def scramble_entry(entry, rng=None):
+    """Scramble every word of an entry, or None if none of them could be.
+
+    A card's `word` may be an expression -- "take for granted" -- and each word
+    in it is scrambled separately so the phrase keeps its shape and its word
+    count. Anything too short or too repetitive is left alone, which is safe
+    here in a way it is not for a single word: the round is still a puzzle as
+    long as *something* moved.
+    """
+    parts = entry.split()
+    if not parts:
+        return None
+    scrambled = [scramble(part, rng) for part in parts]
+    if not any(scrambled):
+        return None
+    return " ".join(new or old for old, new in zip(parts, scrambled))
