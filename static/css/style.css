@@ -886,6 +886,36 @@ button:disabled:hover { background: #9db4c7; }
 .settings-reset:hover { background: var(--bad-bg); }
 .settings-error { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--bad-border); }
 
+/* The Settings action row on a phone (#238). Four buttons do not fit across
+   360px, and .modal-actions is `justify-content: flex-end` — so the overflow
+   spilled past the row's *start* edge, where nothing can scroll to it and
+   Reset Auth was simply unreachable.
+
+   A grid rather than `flex-wrap: wrap`: wrapping breaks wherever the widths
+   happen to run out, so renaming one label can move the break and leave Save
+   sitting beside Delete account. Here each button is placed.
+
+   Scoped to #settings-modal on purpose. The card-deletion and Reset Auth
+   confirmations share .modal-actions, have two buttons, and are not broken —
+   a blanket rule would push their Cancel onto a row of its own.
+
+   Rows are assigned rather than inferred so the layout holds in both states:
+   signed in there are four buttons, anonymous there are three (Reset Auth,
+   Close, and a disabled Save) and row one simply carries one. */
+@media (max-width: 600px) {
+    #settings-modal .modal-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.6rem;
+    }
+    #settings-modal .settings-reset {
+        grid-row: 1;
+        margin: 0;    /* the auto margin that right-aligns Save has no job here */
+    }
+    #settings-modal #settings-cancel,
+    #settings-modal #settings-save { grid-row: 2; }
+}
+
 /* Keyword gate (access screen) */
 .gate-body {
     display: flex;
