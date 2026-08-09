@@ -14,9 +14,9 @@
 {% block content %}
     <p class="crumbs">
         <a href="{{ url_for('index') }}">&larr; Home</a>
-        | <a href="{{ url_for('flashcards', topic=topic) }}">List view</a>
+        <a href="{{ url_for('flashcards', topic=topic) }}">List view</a>
         {% if settings.show_ukrainian or settings.show_russian %}
-        | <a href="{{ url_for('quiz', topic=topic) }}">Take quiz</a>
+        <a href="{{ url_for('quiz', topic=topic) }}">Take quiz</a>
         {% endif %}
     </p>
     <h1 class="page-title">Card deck: {{ topic }}</h1>

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} | KuantorFlow{% endblock %}
+
+{#
+   The round an activity will have, before it has one (#253).
+
+   Every activity in #233 registers as soon as the panel exists, so its tile,
+   its picker and its Start button are all real from the first day. Only the
+   round is missing, and this page says so plainly rather than 404ing — a tile
+   whose Start button led nowhere would be worse than no tile at all.
+
+   It names the ticket that owns the round and shows the selection that would
+   have been played, so the chain from panel to picker to round is visible end
+   to end and a game ticket has one obvious place to start.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+    </p>
+    <h1 class="page-title">{{ activity.name }}</h1>
+
+    <div class="panel">
+        <p><strong>This one isn&rsquo;t built yet.</strong>
+           {{ activity.tagline }} &mdash; it lands with
+           {% if activity.ticket %}{{ activity.ticket }}{% else %}its own ticket{% endif %}.</p>
+
+        {# A bare /games/<slug>/play means the whole visible deck (#248), so
+           this is usually every topic there is — named up to three, then an
+           ellipsis, as the quiz's title does. #}
+        {% if topics %}
+            <p class="hint">It would have played over
+               {{ topic_summary }}
+               ({{ topics | length }} topic{{ '' if topics | length == 1 else 's' }}).</p>
+        {% else %}
+            <p class="hint">There are no topics to play over yet.</p>
+        {% endif %}
+    </div>
+{% endblock %}

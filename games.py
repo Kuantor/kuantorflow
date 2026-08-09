@@ -151,10 +151,18 @@ class Activity:
 
     slug: str
     name: str
-    kind: str            # "quiz" or "game"
+    kind: str            # "quiz", "game" or "reader" -- which panel it is in
     picker_heading: str
     min_cards: int
     too_small: str
+    # The tile's second line, under its name, where a topic tile shows its card
+    # count. A game has no count worth showing, and a tile with a name and a
+    # picture but nothing else reads as unfinished.
+    tagline: str = ""
+    # The ticket that will build the round. Present while the activity is a
+    # stub and removed when it lands, so the stub page can say who owns it
+    # rather than apologising vaguely.
+    ticket: str = ""
     # Whether the picker offers a translation language (#113's quiz_lang).
     # The quiz asks for a translation, so which one is a choice worth making
     # *before* the words are drawn -- switching afterwards re-draws the round.
@@ -178,9 +186,79 @@ ACTIVITIES = {
             min_cards=1,
             too_small="Tick at least one topic to start the quiz.",
             picks_language=True,
+            tagline="Type the translation",
+        ),
+        Activity(
+            slug="multiple_choice",
+            name="Multiple choice",
+            kind="game",
+            picker_heading="Choose the topics to be tested on",
+            # Four answers to a question, so four cards before one can be
+            # built. The exact rule -- four *distinct* translations -- is
+            # #130's, asked on its own page where it has the cards.
+            min_cards=4,
+            too_small="Tick topics holding at least four cards.",
+            tagline="Pick from four",
+            ticket="#130",
+        ),
+        Activity(
+            slug="real_or_fake",
+            name="Real or fake",
+            kind="game",
+            picker_heading="Choose the topics to draw real words from",
+            min_cards=1,
+            too_small="Tick at least one topic to start.",
+            tagline="Spot the invented word",
+            ticket="#132",
+        ),
+        Activity(
+            slug="scrambled",
+            name="Scrambled",
+            kind="game",
+            picker_heading="Choose the topics to scramble words from",
+            min_cards=1,
+            too_small="Tick at least one topic to start.",
+            tagline="Unscramble the letters",
+            ticket="#133",
+        ),
+        Activity(
+            slug="fill_the_gap",
+            name="Fill the gap",
+            kind="game",
+            picker_heading="Choose the topics to take sentences from",
+            min_cards=1,
+            too_small="Tick at least one topic to start.",
+            tagline="Guess the missing word",
+            ticket="#235",
+        ),
+        Activity(
+            slug="read_a_text",
+            name="Generate a text",
+            kind="reader",
+            picker_heading="Choose the topics I should take the words from",
+            min_cards=1,
+            too_small="Tick at least one topic to write about.",
+            tagline="A passage built from your own words",
+            ticket="#237",
         ),
     )
 }
+
+
+def panel(kind):
+    """The activities belonging in one panel, in declaration order.
+
+    Declaration order is deliberate and is the panel's order: #233 puts the
+    quiz first, because it is the oldest activity here and the one a returning
+    learner is most likely to want.
+    """
+    return [a for a in ACTIVITIES.values() if a.kind == kind]
+
+
+# Every activity except the quiz is reached at /games/<slug>. The quiz keeps
+# its own URLs because /quiz/<topic> predates all of this and is linked from
+# three templates (#250).
+GAMES_URL_KINDS = ("game", "reader")
 
 
 def activity(slug, kind=None):
@@ -194,7 +272,9 @@ def activity(slug, kind=None):
     -- which is what every game slug is until its ticket lands.
     """
     found = ACTIVITIES.get(slug)
-    if found is None or (kind is not None and found.kind != kind):
+    if kind is not None and isinstance(kind, str):
+        kind = (kind,)
+    if found is None or (kind is not None and found.kind not in kind):
         return None
     return found
 
