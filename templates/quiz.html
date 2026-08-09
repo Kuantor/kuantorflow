@@ -19,9 +19,14 @@
     </p>
     <h1 class="page-title">Quiz: {{ heading }}</h1>
     {# Which topics, under the count that says how many. Absent for a single
-       topic, whose name is already the title. #}
+       topic, whose name is already the title.
+
+       In a panel rather than loose on the page: the background photograph is
+       nearly white along its top edge, and pale text on it was unreadable. #}
     {% if topic_summary %}
-        <p class="quiz-topics">{{ topic_summary }}</p>
+        <div class="panel panel--tight">
+            <p class="quiz-topics">{{ topic_summary }}</p>
+        </div>
     {% endif %}
 
     {% if not langs %}
@@ -54,7 +59,7 @@
         </div>
 
     {% elif results is none %}
-        <div class="panel">
+        <div class="panel panel--tight">
             <p>Type the {{ lang_name }} translation for each English word ({{ cards|length }} questions):</p>
         </div>
         <form method="POST" action="{{ self_url(lang) }}">

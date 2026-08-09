@@ -2109,6 +2109,9 @@ def _render_picker(activity, start_url):
         sections=[(name, topics) for name, topics in sections if topics],
         selected=set(games.remembered_selection(session, visible)),
         total_cards=sum(count for _, topics in sections for _, count in topics),
+        words=games.remembered_word_count(session),
+        words_min=games.QUIZ_WORDS_MIN,
+        words_max=games.QUIZ_WORDS_MAX,
     )
 
 
@@ -2193,7 +2196,7 @@ def _topic_summary(topics):
     return f"{shown} …" if len(topics) > NAMED_TOPICS else shown
 
 
-def _run_quiz(topics, heading, self_url, back):
+def _run_quiz(topics, heading, self_url, back, words):
     """Render or grade a quiz over `topics` — one of them or several (#250).
 
     `self_url(lang=...)` builds this quiz's own URL, because the language
@@ -2223,6 +2226,23 @@ def _run_quiz(topics, heading, self_url, back):
 
     results = score = None
     if request.method == "POST":
+        # Grade the questions that were **asked**, not a fresh draw. The round
+        # is a random sample, so re-sampling here would mark answers against
+        # words the learner never saw. The submitted field names say which
+        # cards were on the page, and they are the only record of it — which is
+        # also why this needs no server-side state between the two requests.
+        # In the order they were **asked**, which is the order the fields were
+        # submitted — not the order the database returned them. The results
+        # list is numbered, and a learner reading "3. wrong" has to find the
+        # third question they answered, not the third alphabetically.
+        by_id = {str(card["id"]): card for card in cards}
+        cards = []
+        for key in request.form:
+            if not key.startswith("answer_"):
+                continue
+            card = by_id.pop(key[len("answer_"):], None)
+            if card is not None:      # pop, so a repeated field cannot
+                cards.append(card)    # ask the same question twice
         results = []
         for card in cards:
             user_answer = (request.form.get(f"answer_{card['id']}") or "").strip()
@@ -2236,6 +2256,13 @@ def _run_quiz(topics, heading, self_url, back):
                 "correct": correct,
             })
         score = sum(1 for r in results if r["correct"])
+    else:
+        # A round is `words` questions drawn uniformly from every card in the
+        # selection — so a topic with 36 cards contributes more of them than
+        # one with 20, which is what drawing from the words rather than from
+        # the topics means. Fewer cards than asked for is simply a shorter
+        # round.
+        cards = games.sample(cards, words)
 
     return render_template(
         "quiz.html", cards=cards, lang=lang, lang_name=QUIZ_LANGS[lang],
@@ -2253,11 +2280,15 @@ def quiz(topic):
     query parameter, and it picks the converter — making the multi-topic URL
     unbuildable.
     """
+    words = games.word_count(request.args.get("words"),
+                             games.remembered_word_count(session))
     return _run_quiz(
         [topic],
         heading=topic,
-        self_url=lambda lang: url_for("quiz", topic=topic, lang=lang),
+        self_url=lambda lang: url_for("quiz", topic=topic, lang=lang,
+                                      words=words),
         back=(url_for("flashcards", topic=topic), f"Flashcards: {topic}"),
+        words=words,
     )
 
 
@@ -2280,13 +2311,18 @@ def quiz_topics():
 
     topics = games.resolve_selection(
         requested, games.visible_topic_names(_visible_sections()))
+    words = games.word_count(request.args.get("words"),
+                             games.remembered_word_count(session))
     games.remember_selection(session, topics)
+    games.remember_word_count(session, words)
     heading = topics[0] if len(topics) == 1 else f"{len(topics)} topics"
     return _run_quiz(
         topics,
         heading=heading,
-        self_url=lambda lang: url_for("quiz_topics", topic=topics, lang=lang),
+        self_url=lambda lang: url_for("quiz_topics", topic=topics, lang=lang,
+                                      words=words),
         back=(url_for("quiz_topics"), "Choose topics"),
+        words=words,
     )
 
 

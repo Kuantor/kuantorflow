@@ -129,6 +129,7 @@ def remember_selection(store, names):
 # anything renders them would be guessing at fields nobody has asked of yet --
 # the same reason this declaration did not exist at all in #248.
 
+import random
 from dataclasses import dataclass
 
 
@@ -188,3 +189,63 @@ def activity(slug, kind=None):
     if found is None or (kind is not None and found.kind != kind):
         return None
     return found
+
+
+# --- how many words a round asks -----------------------------------------
+#
+# A quiz over the whole curriculum was 93 typed answers, which is not a round
+# so much as an afternoon. Twenty is the default; the picker offers a box.
+#
+# Remembered in the session beside the topic selection and for the same reason
+# (#233): it is a per-round preference, not a per-account setting, so it needs
+# no `DEFAULTS` entry, works identically signed in or not, and does not write a
+# `SETTINGS` line to `cards.log` every time somebody starts a quiz.
+
+QUIZ_WORDS_DEFAULT = 20
+QUIZ_WORDS_MIN = 1
+QUIZ_WORDS_MAX = 200
+
+WORDS_KEY = "quiz_words"
+
+
+def word_count(raw, remembered=None):
+    """How many words a round should ask, from a query parameter.
+
+    Clamped rather than rejected: this arrives from a URL anybody can edit, and
+    a round is not the place to argue about it. Anything unreadable falls back
+    to `remembered`, then to the default — the same "a stored value is a hint"
+    rule the topic selection follows.
+    """
+    for candidate in (raw, remembered):
+        try:
+            value = int(candidate)
+        except (TypeError, ValueError):
+            continue
+        return max(QUIZ_WORDS_MIN, min(QUIZ_WORDS_MAX, value))
+    return QUIZ_WORDS_DEFAULT
+
+
+def remembered_word_count(store):
+    """The last word count this visitor asked for, or the default."""
+    return word_count(store.get(WORDS_KEY))
+
+
+def remember_word_count(store, count):
+    store[WORDS_KEY] = int(count)
+
+
+def sample(cards, count, rng=None):
+    """`count` cards drawn uniformly from `cards`, without replacement.
+
+    Every card in the selection has the same chance whichever topic it came
+    from, so a topic with 36 cards contributes more questions than one with 20
+    — which is what "drawn from all the words in the selected topics" means.
+    Weighting by topic instead would make a small topic's words several times
+    more likely, and nobody asked for that.
+
+    Fewer cards than asked for is not an error: the round is what there is.
+    `rng` is injectable so a test can pin the draw.
+    """
+    if count >= len(cards):
+        return list(cards)
+    return (rng or random).sample(list(cards), count)

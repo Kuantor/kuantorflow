@@ -34,9 +34,37 @@
             {% endif %}
         </div>
     {% else %}
+    {# Rendered twice, above and below the topics. The list runs to a screenful
+       and more, so a learner who has finished ticking near the top would
+       otherwise have to scroll past everything to reach Start. Declared once so
+       the two cannot drift apart; the script drives both by class, not by id,
+       for the same reason.
+
+       Both word boxes carry name="words", and the script keeps them equal. The
+       server reads the first, which is correct whether or not the script ran:
+       with no JavaScript they are both still whatever was rendered. #}
+    {% macro actions() %}
+        <div class="panel panel--tight picker-actions">
+            <p class="picker-total"></p>
+            <label class="picker-words">
+                Words
+                <input type="number" name="words" class="picker-words-box"
+                       min="{{ words_min }}" max="{{ words_max }}"
+                       value="{{ words }}" inputmode="numeric">
+            </label>
+            {# Enabled by the script once the selection is big enough. It starts
+               disabled so a browser with JavaScript off cannot submit an
+               unplayable selection — the round would only have to refuse it. #}
+            <button type="submit" class="picker-start" disabled>Start</button>
+        </div>
+    {% endmacro %}
+
     <form method="GET" action="{{ start_url }}" id="topic-picker"
           data-min-cards="{{ activity.min_cards }}"
           data-too-small="{{ activity.too_small }}">
+
+        {{ actions() }}
+
         <div class="panel">
             <h2>{{ activity.picker_heading }}</h2>
 
@@ -78,13 +106,7 @@
             {% endfor %}
         </div>
 
-        <div class="panel picker-actions">
-            <p class="picker-total" id="picker-total"></p>
-            {# Enabled by the script once the selection is big enough. It starts
-               disabled so that a browser with JavaScript off cannot submit an
-               unplayable selection — the round would only have to refuse it. #}
-            <button type="submit" id="picker-start" disabled>Start</button>
-        </div>
+        {{ actions() }}
     </form>
 
     <script>
@@ -94,8 +116,15 @@
 
             var minCards = parseInt(form.dataset.minCards, 10) || 1;
             var tooSmall = form.dataset.tooSmall;
-            var start = document.getElementById("picker-start");
-            var totalLine = document.getElementById("picker-total");
+            // Two of each, above and below the list. Everything below writes
+            // to all of them, so the copies cannot disagree about whether the
+            // selection is playable.
+            var starts = Array.prototype.slice.call(
+                form.querySelectorAll(".picker-start"));
+            var totalLines = Array.prototype.slice.call(
+                form.querySelectorAll(".picker-total"));
+            var wordBoxes = Array.prototype.slice.call(
+                form.querySelectorAll(".picker-words-box"));
             var topics = Array.prototype.slice.call(
                 form.querySelectorAll(".picker-topic-box"));
 
@@ -129,15 +158,16 @@
                     return sum + (parseInt(t.dataset.count, 10) || 0);
                 }, 0);
 
+                var line;
                 if (!chosen.length) {
-                    totalLine.textContent = tooSmall;
+                    line = tooSmall;
                 } else {
-                    totalLine.textContent =
-                        chosen.length + (chosen.length === 1 ? " topic, " : " topics, ") +
+                    line = chosen.length + (chosen.length === 1 ? " topic, " : " topics, ") +
                         cards + (cards === 1 ? " card" : " cards") +
                         (cards < minCards ? " — " + tooSmall : "");
                 }
-                start.disabled = cards < minCards;
+                totalLines.forEach(function (el) { el.textContent = line; });
+                starts.forEach(function (b) { b.disabled = cards < minCards; });
             }
 
             groups.forEach(function (group) {
@@ -153,6 +183,16 @@
             });
             topics.forEach(function (t) {
                 t.addEventListener("change", refresh);
+            });
+
+            // Keep the two word boxes equal, so whichever one the learner typed
+            // into is the one the form sends (the server reads the first).
+            wordBoxes.forEach(function (box) {
+                box.addEventListener("input", function () {
+                    wordBoxes.forEach(function (other) {
+                        if (other !== box) other.value = box.value;
+                    });
+                });
             });
 
             refresh();   // reflect whatever the remembered selection ticked

@@ -1548,6 +1548,29 @@ button:disabled:hover { background: #9db4c7; }
     flex-wrap: wrap;
 }
 .picker-total { margin: 0; color: var(--muted); font-size: 0.92rem; }
+/* The word box sits between the running total and Start, reading as part of
+   the same sentence: this many topics, this many words, go. `label` is a block
+   with its own margins by default, which would stack the caption above the
+   field and make the row two lines tall. */
+.picker-words {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0;
+    font-size: 0.92rem;
+    color: var(--muted);
+}
+.picker-words input {
+    width: 4.5rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #c5d0da;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: #fff;
+}
+/* The total takes the slack so the box and the button stay together on the
+   right, and the row still wraps cleanly on a phone. */
+.picker-actions .picker-total { flex: 1 1 auto; }
 
 /* The topics a several-topic quiz is running over (#250), under the title that
    counts them. Pulled up close so the two read as one heading block.
@@ -1556,8 +1579,20 @@ button:disabled:hover { background: #9db4c7; }
    is a dark slate meant for text on a panel. This line sits on the background
    photograph beside .page-title, where a dark grey would disappear. */
 .quiz-topics {
-    margin: -0.9rem 0 1.2rem;
-    color: rgba(255, 255, 255, 0.85);
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    margin: 0;
+    color: var(--ink);
     font-size: 0.85rem;
 }
+
+/* A panel holding one line. .panel's 1.3rem of vertical padding is built for a
+   form or a stack of cards; around a single sentence it reads as an empty box
+   with some text lost in the middle. Same width, same background, same corner
+   -- only the height comes down. */
+.panel--tight {
+    padding: 0.6rem 1.5rem;
+    margin-bottom: 0.8rem;
+}
+/* A paragraph's own 1em top and bottom margins are most of what is left, and
+   they are there to separate it from the next paragraph — of which a one-line
+   panel has none. Without this the padding comes down and the box does not. */
+.panel--tight > p { margin: 0; }
