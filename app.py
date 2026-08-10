@@ -2279,7 +2279,7 @@ def _scrambled_round(activity, topics):
             })
         return render_template(
             "game_scrambled.html", activity=activity, topics=topics,
-            questions=None, results=results,
+            questions=None, results=results, words=words,
             score=sum(1 for r in results if r["correct"]), skipped=0)
 
     playable = []
@@ -2289,7 +2289,7 @@ def _scrambled_round(activity, topics):
             playable.append({"id": card["id"], "word": card["word"],
                              "scrambled": puzzle})
     return render_template(
-        "game_scrambled.html", activity=activity, topics=topics,
+        "game_scrambled.html", activity=activity, topics=topics, words=words,
         questions=games.sample(playable, words), results=None, score=None,
         skipped=len(cards) - len(playable))
 
@@ -2327,7 +2327,7 @@ def _real_or_fake_round(activity, topics):
                             "correct": said == really})
         return render_template(
             "game_real_or_fake.html", activity=activity, topics=topics,
-            items=None, results=results,
+            items=None, results=results, words=words,
             score=sum(1 for r in results if r["correct"]))
 
     def playable(card):
@@ -2357,7 +2357,7 @@ def _real_or_fake_round(activity, topics):
     random.shuffle(items)
     return render_template(
         "game_real_or_fake.html", activity=activity, topics=topics,
-        items=items, results=None, score=None,
+        items=items, results=None, score=None, words=words,
         real_count=len(reals), fake_count=len(fakes),
         games_min=games.MIN_INVENTED_LENGTH)
 

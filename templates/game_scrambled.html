@@ -78,7 +78,7 @@
            ten answers and should not have to scroll back up to leave. #}
         <p class="crumbs">
             <a href="{{ url_for('index') }}">&larr; Home</a>
-            <a href="{{ url_for('game_play', game=activity.slug, topic=topics) }}">Play again</a>
+            <a href="{{ url_for('game_play', game=activity.slug, topic=topics, words=words) }}">Play again</a>
         </p>
     {% endif %}
 {% endblock %}
