@@ -2183,6 +2183,12 @@ def activity_play_url(activity, topic):
     return url_for("game_play", game=activity.slug, topic=topic)
 
 
+# What a greyed tile says on hover (#261). An activity carrying `ticket` has no
+# round yet; the tile stays on the page so the set of activities is legible, and
+# explains itself rather than vanishing.
+UNDER_CONSTRUCTION = "Not built yet — this one is still under construction."
+
+
 @app.context_processor
 def inject_activities():
     """The one declaration, reachable from every template that renders it
@@ -2194,6 +2200,9 @@ def inject_activities():
         "generation_available": _generation_available(),
         "activity_picker_url": activity_picker_url,
         "activity_play_url": activity_play_url,
+        # Said in one place because three surfaces say it (#261), and a tooltip
+        # that differed between them would read as three different states.
+        "under_construction": UNDER_CONSTRUCTION,
     }
 
 

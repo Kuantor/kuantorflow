@@ -1749,3 +1749,31 @@ button:disabled:hover { background: #9db4c7; }
     cursor: pointer;
 }
 .verdict input { width: 1.05rem; height: 1.05rem; }
+
+/* Activities with no round yet (#261). Greyed rather than removed: the tile
+   staying on the page is what makes the set of activities legible — a learner
+   should see that Fill the gap is coming, not wonder whether it exists.
+
+   Rendered as a `span`, so there is nothing to click and nothing to focus;
+   these rules only have to make that visible. `cursor: default` rather than
+   `not-allowed`, which reads as a refusal — nothing is being refused, the
+   thing simply is not built. */
+.topic-tile--soon,
+.reader-banner--soon {
+    cursor: default;
+    filter: grayscale(0.85);
+    opacity: 0.55;
+}
+/* Cancels .topic-tile:hover / .reader-banner:hover — a lift on hover is an
+   invitation, and this one leads nowhere. */
+.topic-tile--soon:hover,
+.reader-banner--soon:hover { background: var(--blue); transform: none; }
+.topic-tile--soon:hover .topic-tile-img,
+.reader-banner--soon:hover .reader-banner-img { filter: none; }
+/* The same state in the topic page's activity row, where the neighbours are
+   white links on the blue panel rather than pictures. */
+.crumbs-soon {
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+    cursor: default;
+}
