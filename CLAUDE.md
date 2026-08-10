@@ -122,6 +122,39 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   destination. `SETTINGS` records `set=`, `rejected=` and `unknown=` separately:
   the store silently replaces an invalid value with the default, so what was
   asked for and what stuck are different questions.
+- **`games.py`** — the word games (#233). Holds **one declaration**,
+  `ACTIVITIES`, which the front-page panel, #237's reader button and the topic
+  page's activity row all render from: adding an activity is one entry, not one
+  entry and three templates. Two fields are load-bearing beyond their names.
+  `kind` (`quiz` / `game` / `reader`) decides which panel an activity appears in
+  — the quiz keeps its own URLs because `/quiz/<topic>` predates all of this and
+  is linked from three templates, while every game shares `/games/<slug>`.
+  **`ticket` is present exactly while an activity is a stub** (#253) and is the
+  whole lifecycle: the stub page names it, the front-page tile and the topic row
+  grey on it (#261), and the test suite reads it (automation#69) — so a game
+  ticket drops that one field and every surface follows with no other edit.
+  Also the pure round logic, none of which touches the database: `resolve_selection()`
+  (repeated `?topic=` parameters, the remembered selection, and "no topic means
+  the whole visible deck" are one question, answered once, in page order, with
+  names that have since vanished dropped in silence), `word_count()` /
+  `sample()`, `scramble()` (#133 — returns **None** rather than an unchanged
+  word, because `cat`, `book` and `noon` cannot differ and printing one is
+  printing the answer), and `pseudowords()` (#132's n-gram, trained on the whole
+  visible deck rather than the selection because a trigram over twenty words
+  hands those twenty back).
+- **The games chassis** — `/games/<slug>` is the picker and `/games/<slug>/play`
+  a round, dispatched through `GAME_ROUNDS` in `app.py`; a game is one entry
+  there plus one in `ACTIVITIES`. **`/quiz` is a separate endpoint from
+  `/quiz/<topic>` on purpose** (#250): with both rules on one endpoint `url_for`
+  must choose between the path converter and a repeated query parameter, and it
+  picks the converter, making the multi-topic URL unbuildable. The picker is a
+  plain GET form whose checkboxes are named `topic`, so the round's URL is
+  shareable and needs no JavaScript to build. **A round grades the questions it
+  asked**, read back from the submitted field names, because the draw is random
+  and re-sampling on POST would mark answers against words nobody saw. Selection
+  and round length live in the Flask session — a signed cookie with a ~4 KB
+  ceiling Werkzeug enforces by silently dropping it, so only currently-visible
+  topic names go in and a generated text (#237) will need somewhere else.
 - **Mykola widget** lives in `templates/base.html`; endpoints `/mykola/chat`,
   `/mykola/recap`. Its intelligence comes from the `ai_agent` package.
   **Agent tools are hosted here**: the agent defines them, this app injects the
@@ -190,7 +223,10 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
 - **Significant PRs get a report** — a Markdown + PDF verification report
   committed under `kuantorflow_automation/test_reports/` (render with
   `reports/scripts/md_to_pdf.py`). Small PRs are exempt unless asked.
-- Report tooling lives in `reports/scripts/` (`md_to_docx.py`, `md_to_pdf.py`).
+- Build-time tooling lives in `reports/scripts/` — `md_to_docx.py`,
+  `md_to_pdf.py`, and `to_webp.py` (#234), which sizes artwork to the tiles
+  and banners. Its numbers are measured against the eighteen topic icons,
+  not chosen; `--width` derives height from the source so nothing is cropped.
 - **Never duplicate `ai_agent` code here** — import it. **Never commit
   secrets**; `.env` and `settings/*.json` are gitignored.
 
