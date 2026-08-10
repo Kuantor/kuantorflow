@@ -72,8 +72,9 @@
        `.game-tile` block — a second set of numbers beside the first drifts the
        moment either is tuned (#233).
 
-       This panel always renders, and every tile is always clickable, even on
-       an empty deck: the same argument #218 made for an empty section heading.
+       This panel always renders, and every tile stays on it even on an empty
+       deck: the same argument #218 made for an empty section heading. A tile
+       for an activity with no round yet is greyed rather than removed (#261).
        Whether a selection can actually play the game is the picker's question,
        and it is asked there and nowhere else — a tile has no selection to
        reason about, so a second copy of the rule could only guess. #}
@@ -83,10 +84,28 @@
             {# The quiz first: it is the oldest activity here and the one a
                returning learner is most likely to want, and until now it was
                reachable only from inside a topic page. #}
+            {# A tile for an activity that still carries `ticket` is greyed and
+               does not navigate (#261). That is not the judgement #233 forbids:
+               "can this selection play?" depends on what was ticked and stays
+               in the picker, while "does this game exist?" is true before any
+               selection and is already written on the declaration.
+
+               A `span` rather than a disabled `<a>`: an anchor with no href is
+               still focusable in some browsers and still looks clickable. The
+               `aria-disabled` + `title` pairing is what the card controls
+               already use (#162/#176/#177) — the control stays on the page and
+               explains itself rather than vanishing. #}
             {% for activity in [quiz_activity] + game_activities %}
                 {% set icon = activity.slug | game_icon %}
-                <a class="topic-tile{% if icon %} topic-tile--image{% endif %}"
-                   href="{{ activity_picker_url(activity) }}">
+                {% set soon = activity.ticket %}
+                {% set classes = 'topic-tile' ~ (' topic-tile--image' if icon else '')
+                                              ~ (' topic-tile--soon' if soon else '') %}
+                {% if soon %}
+                    <span class="{{ classes }}" aria-disabled="true"
+                          title="{{ under_construction }}">
+                {% else %}
+                    <a class="{{ classes }}" href="{{ activity_picker_url(activity) }}">
+                {% endif %}
                     {% if icon %}
                         {# Decorative, as on a topic tile (#223): the name is
                            already on the tile as text. #}
@@ -95,7 +114,7 @@
                     {% endif %}
                     <span class="topic-tile-name">{{ activity.name }}</span>
                     <span class="topic-tile-count">{{ activity.tagline }}</span>
-                </a>
+                {% if soon %}</span>{% else %}</a>{% endif %}
             {% endfor %}
         </div>
     </div>
@@ -111,14 +130,21 @@
     <div class="panel panel--fit">
         <h2>Read a text from your own words</h2>
         {% set banner = reader_activity.slug | game_icon %}
-        <a class="reader-banner{% if banner %} reader-banner--image{% endif %}"
-           href="{{ activity_picker_url(reader_activity) }}">
+        {% set soon = reader_activity.ticket %}
+        {% set classes = 'reader-banner' ~ (' reader-banner--image' if banner else '')
+                                         ~ (' reader-banner--soon' if soon else '') %}
+        {% if soon %}
+            <span class="{{ classes }}" aria-disabled="true"
+                  title="{{ under_construction }}">
+        {% else %}
+            <a class="{{ classes }}" href="{{ activity_picker_url(reader_activity) }}">
+        {% endif %}
             {% if banner %}
                 <img class="reader-banner-img" src="{{ banner }}"
                      alt="" loading="lazy" decoding="async">
             {% endif %}
             <span class="reader-banner-label">Generate a text</span>
-        </a>
+        {% if soon %}</span>{% else %}</a>{% endif %}
     </div>
     {% endif %}
 

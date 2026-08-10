@@ -25,11 +25,22 @@
         {% if settings.show_ukrainian or settings.show_russian %}
         <a href="{{ activity_play_url(quiz_activity, topic) }}">Take quiz</a>
         {% endif %}
+        {# Greyed here too when the activity has no round yet (#261). Greying
+           the front page alone would leave this row inviting the same dead
+           click one page away. #}
         {% for activity in game_activities %}
+            {% if activity.ticket %}
+        <span class="crumbs-soon" aria-disabled="true" title="{{ under_construction }}">{{ activity.name }}</span>
+            {% else %}
         <a href="{{ activity_play_url(activity, topic) }}">{{ activity.name }}</a>
+            {% endif %}
         {% endfor %}
         {% if generation_available %}
+            {% if reader_activity.ticket %}
+        <span class="crumbs-soon" aria-disabled="true" title="{{ under_construction }}">{{ reader_activity.name }}</span>
+            {% else %}
         <a href="{{ activity_play_url(reader_activity, topic) }}">{{ reader_activity.name }}</a>
+            {% endif %}
         {% endif %}
     </p>
     <h1 class="page-title">Flashcards: {{ topic }}</h1>
