@@ -206,10 +206,12 @@ ACTIVITIES = {
             name="Real or fake",
             kind="game",
             picker_heading="Choose the topics to draw real words from",
-            min_cards=1,
-            too_small="Tick at least one topic to start.",
+            # Half a round is real words from the selection, so a handful is
+            # needed before there is a round at all. The invented half is
+            # modelled on the whole deck, not on these.
+            min_cards=4,
+            too_small="Tick topics holding at least four cards.",
             tagline="Spot the invented word",
-            ticket="#132",
         ),
         Activity(
             slug="scrambled",
@@ -389,3 +391,166 @@ def scramble_entry(entry, rng=None):
     if not any(scrambled):
         return None
     return " ".join(new or old for old, new in zip(parts, scrambled))
+
+
+# --- inventing words that could have been real (#132) --------------------
+#
+# A character n-gram (Markov) model over the deck's own words. The learner is
+# shown a mix of real words and invented ones and has to tell them apart, so
+# the invented ones have to be *phonotactically* plausible English -- `plimber`
+# rather than `xkqrtz` -- which is exactly what a model of which letters follow
+# which produces.
+
+VOWELS = set("aeiouy")
+
+# Three characters of context. Two is close to random and makes obvious
+# nonsense; four memorises the training words and hands them back, which in a
+# deck of a few hundred is the more likely failure. Three is the setting that
+# invents rather than recites.
+NGRAM_ORDER = 3
+
+# Padding, and the marker that a word has ended. Outside the alphabet on
+# purpose so they cannot collide with a letter of a real word.
+START = "\x02"
+END = "\x03"
+
+
+def _ngram_model(words, order):
+    """`{context: [letters that followed it]}`, with repeats left in.
+
+    Repeats are the weighting: a letter that followed a context four times
+    appears four times, so choosing uniformly from the list samples the real
+    distribution without counting anything.
+    """
+    model = {}
+    for word in words:
+        padded = START * order + word + END
+        for i in range(len(word) + 1):
+            model.setdefault(padded[i:i + order], []).append(padded[i + order])
+    return model
+
+
+def _invent(model, order, rng, max_length):
+    """One word from the model, or None if it ran away.
+
+    None rather than a truncated word: a model can wander into a context whose
+    only continuations extend it forever, and half a word is not a plausible
+    one.
+    """
+    context = START * order
+    out = []
+    while len(out) <= max_length:
+        choices = model.get(context)
+        if not choices:
+            return None
+        letter = rng.choice(choices)
+        if letter == END:
+            return "".join(out)
+        out.append(letter)
+        context = (context + letter)[-order:]
+    return None
+
+
+# Invented words shorter than this are not offered, and real ones are held to
+# the same floor so the length is not a tell in either direction.
+#
+# Short output is where the model accidentally produces *real* English, and a
+# fake that is really a word is marked wrong for being right. Runs over the
+# seeded deck offered `out`, `sent` and `qual` at no floor, then `legate` and
+# `embark` at six. Seven removes both of those and costs nothing measurable:
+# the model still fills every round asked of it, and the deck still has plenty
+# of real words this long.
+MIN_INVENTED_LENGTH = 7
+
+# An invented word sharing this many opening characters with a real one is
+# assumed to be a variant of it rather than a new word. See `pseudowords()`.
+STEM_LENGTH = 6
+
+
+def vocabulary(cards):
+    """Every English word the cards themselves contain, for rejecting fakes.
+
+    A free and surprisingly effective dictionary. `explanation_en` and
+    `examples_en` are both real English written by a real dictionary (#225), so
+    the common words a trigram model stumbles onto are mostly in there --
+    examples alone gave only about six hundred words and let `author` through;
+    the explanations are the larger half by far.
+
+    Still nowhere near a lexicon, so it narrows the problem rather than solving
+    it, and `MIN_INVENTED_LENGTH` covers what is left.
+    """
+    seen = set()
+
+    def add(text):
+        for part in str(text).split():
+            seen.add(part.strip(".,!?;:'\"()[]").lower())
+
+    for card in cards:
+        add(card.get("word") or "")
+        add(card.get("explanation_en") or "")
+        for sentence in card.get("examples_en") or ():
+            add(sentence)
+    return {word for word in seen if word.isalpha()}
+
+
+def pseudowords(words, count, rng=None, order=NGRAM_ORDER, known=()):
+    """`count` invented words that look like they came from `words`.
+
+    Fewer than asked for if the model cannot produce them, which a small or
+    repetitive deck really can cause -- the caller plays what it gets rather
+    than looping forever.
+
+    Three filters, and each is a way the game gives itself away:
+
+    * **a word the deck already has is not invented**, it is remembered. The
+      model is built from these words, so reproducing one is its most likely
+      output, and it would be marked wrong for being right. `known` widens that
+      to any English the cards contain -- see `vocabulary()` -- because the
+      trap is not only the deck's headwords: a run over the seeded deck offered
+      `out`, `sent` and `qual`, all real, none of them cards.
+    * **no shared stem with a real word.** The model recombines real morphemes,
+      so it invents `litigate` from `litigation` and `deposition` from
+      `deposit` -- words that are perfectly real and would be marked wrong for
+      being right. Rejecting anything sharing `STEM_LENGTH` opening characters
+      with a known word is a blunt instrument that removes most of them.
+    * **no vowel, no word.** `plimber` is arguable; `blkstr` is not, and a
+      learner spots it without knowing any English.
+    * length inside the range the real words occupy and at least
+      `MIN_INVENTED_LENGTH`, because short output is where the model collides
+      with real English. Some rare word will still slip through; this is a
+      game, and the alternative is shipping a dictionary.
+
+    Only single words are trained on and returned. An expression's spaces would
+    have the model inventing phrases, and "is this a real *word*" is not the
+    question being asked about `take for granted`.
+    """
+    rng = rng or random
+    real = [w.lower() for w in words if w and " " not in w and w.isalpha()]
+    if not real:
+        return []
+    forbidden = set(real) | {w.lower() for w in known}
+    stems = {w[:STEM_LENGTH] for w in forbidden if len(w) >= STEM_LENGTH}
+    longest = max(map(len, real))
+    shortest = min(max(MIN_INVENTED_LENGTH, min(map(len, real))), longest)
+    model = _ngram_model(real, order)
+
+    found = []
+    seen = set()
+    # Bounded rather than "until we have enough": a deck of twenty words has
+    # only so many words in it, and the alternative is a page that never
+    # renders.
+    for _ in range(count * 60):
+        if len(found) == count:
+            break
+        word = _invent(model, order, rng, longest)
+        if not word or word in forbidden or word in seen:
+            continue
+        if not (shortest <= len(word) <= longest):
+            continue
+        if not set(word) & VOWELS:
+            continue
+        if word[:STEM_LENGTH] in stems:
+            continue
+        seen.add(word)
+        found.append(word)
+    return found
