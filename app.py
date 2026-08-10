@@ -61,6 +61,43 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 # any server-side storage — the identity still lives only in the signed cookie.
 app.permanent_session_lifetime = timedelta(days=30)
 
+
+def _bool_env(name, default):
+    """A yes/no setting from the environment; unset keeps `default`."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in ("0", "false", "no", "off", "")
+
+
+# The session cookie is this app's entire authentication state: the keyword gate
+# pass and, since #40, the signed-in Google identity that #158's admin check and
+# #127's ownership filter both read. Flask leaves every protective flag at its
+# default, which means Secure is **off** — so that identity would travel in
+# clear text if a request ever arrived over plain HTTP (#274). HttpOnly is
+# Flask's default already and is stated here so all three are one decision in
+# one place rather than two decisions and an inheritance.
+#
+# SameSite is **Lax and must not be tightened to Strict**. Authlib keeps the
+# OAuth state and nonce in this same session, and Google's callback arrives as a
+# top-level GET navigation *from accounts.google.com* — a cross-site request.
+# Strict withholds the cookie on exactly that navigation, so the state is gone
+# when Authlib checks it, authorize_access_token() raises, and sign-in fails
+# with nothing to see but a silent redirect back to the index.
+#
+# Secure defaults to **on**, which is what the WSGI process on PythonAnywhere
+# gets. `python app.py` turns it off at the bottom of this file, because local
+# development is http://localhost and a browser accepts no Secure cookie there:
+# the gate would set its pass, fail to store it, and ask for the keyword again
+# forever. The default is this way round deliberately — a forgotten override
+# then breaks locally and visibly, rather than quietly unprotecting the cookie
+# on the deployed site, where nothing would look wrong.
+app.config.update(
+    SESSION_COOKIE_SECURE=_bool_env("SESSION_COOKIE_SECURE", True),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
+
 # PythonAnywhere serves the app behind a proxy; trust its X-Forwarded-*
 # headers so absolute URLs (og:image etc.) use https and the real host.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -2584,4 +2621,11 @@ def quiz_topics():
 
 
 if __name__ == "__main__":
+    # Local development is http://localhost, where a browser accepts no cookie
+    # marked Secure — the gate pass would never stick (#274). Only this entry
+    # point relaxes it, and the deployed WSGI process never runs it. An explicit
+    # SESSION_COOKIE_SECURE in .env still wins, for anyone serving locally over
+    # HTTPS or reproducing production behaviour.
+    if "SESSION_COOKIE_SECURE" not in os.environ:
+        app.config["SESSION_COOKIE_SECURE"] = False
     app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
