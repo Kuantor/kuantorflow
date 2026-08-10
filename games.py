@@ -283,14 +283,18 @@ def activity(slug, kind=None):
 # --- how many words a round asks -----------------------------------------
 #
 # A quiz over the whole curriculum was 93 typed answers, which is not a round
-# so much as an afternoon. Twenty is the default; the picker offers a box.
+# so much as an afternoon. Ten is the default; the picker offers a box.
+#
+# Ten rather than the twenty this shipped with: a round should be finishable in
+# one sitting, and the learner who wants a longer one only has to say so, while
+# the learner who finds twenty too long has already abandoned it.
 #
 # Remembered in the session beside the topic selection and for the same reason
 # (#233): it is a per-round preference, not a per-account setting, so it needs
 # no `DEFAULTS` entry, works identically signed in or not, and does not write a
 # `SETTINGS` line to `cards.log` every time somebody starts a quiz.
 
-QUIZ_WORDS_DEFAULT = 20
+QUIZ_WORDS_DEFAULT = 10
 QUIZ_WORDS_MIN = 1
 QUIZ_WORDS_MAX = 200
 
