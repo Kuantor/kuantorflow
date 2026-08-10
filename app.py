@@ -2,6 +2,7 @@ import hashlib
 import inspect
 import json
 import os
+import random
 import re
 import shutil
 import sys
@@ -2293,6 +2294,80 @@ def _scrambled_round(activity, topics):
         skipped=len(cards) - len(playable))
 
 
+def _real_or_fake_round(activity, topics):
+    """A round of #132: real words from the deck, mixed with invented ones.
+
+    **The model is trained on the whole visible deck, not the selection.** A
+    trigram over twenty words reproduces those twenty words; over five hundred
+    it invents. The *real* words still come from the topics the learner ticked
+    — the selection chooses what is being revised, and the model only needs a
+    bigger sample of English to imitate.
+
+    Both halves share a length floor, which is not tidiness: the fakes cannot
+    be shorter than `MIN_INVENTED_LENGTH` (that is where the model collides
+    with real English), so real words shorter than it would be a giveaway in
+    the opposite direction — every short word on the page would be real.
+
+    Single words only. An expression's spaces would have the model inventing
+    phrases, and half the page would be obviously real for having them.
+    """
+    words = games.word_count(request.args.get("words"),
+                             games.remembered_word_count(session))
+
+    if request.method == "POST":
+        results = []
+        for key in sorted(request.form, key=_answer_index):
+            if not key.startswith("answer_"):
+                continue
+            index = key[len("answer_"):]
+            word = request.form.get(f"item_{index}", "")
+            really = request.form.get(f"real_{index}") == "1"
+            said = request.form.get(key) == "real"
+            results.append({"word": word, "real": really, "said_real": said,
+                            "correct": said == really})
+        return render_template(
+            "game_real_or_fake.html", activity=activity, topics=topics,
+            items=None, results=results,
+            score=sum(1 for r in results if r["correct"]))
+
+    def playable(card):
+        word = (card.get("word") or "").strip()
+        return (word.isalpha() and len(word) >= games.MIN_INVENTED_LENGTH
+                and " " not in word)
+
+    # Deduplicated: #101 keeps one card per word *and part of speech*, so a
+    # word that is both a noun and a verb is two cards, and the same word twice
+    # on the page is a free mark and looks like a mistake.
+    selected, seen = [], set()
+    for card in get_flashcards_by_topics(topics, cards_owner_filter()):
+        if playable(card) and card["word"].lower() not in seen:
+            seen.add(card["word"].lower())
+            selected.append(card["word"])
+    everything = get_flashcards_by_topics(
+        games.visible_topic_names(_visible_sections()), cards_owner_filter())
+
+    wanted_fake = words // 2
+    fakes = games.pseudowords(
+        [c["word"] for c in everything], wanted_fake,
+        known=games.vocabulary(everything))
+    reals = games.sample(selected, words - len(fakes))
+
+    items = ([{"word": w, "real": True} for w in reals]
+             + [{"word": w, "real": False} for w in fakes])
+    random.shuffle(items)
+    return render_template(
+        "game_real_or_fake.html", activity=activity, topics=topics,
+        items=items, results=None, score=None,
+        real_count=len(reals), fake_count=len(fakes),
+        games_min=games.MIN_INVENTED_LENGTH)
+
+
+def _answer_index(key):
+    """Sort answer_<n> fields back into the order they were asked."""
+    tail = key.rsplit("_", 1)[-1]
+    return int(tail) if tail.isdigit() else -1
+
+
 # slug -> the view that renders one round, as `f(activity, topics)`. Every
 # registered activity has an entry; a game ticket replaces its stub with the
 # real round and touches nothing else.
@@ -2300,6 +2375,7 @@ GAME_ROUNDS = {activity.slug: _round_stub
                for activity in games.ACTIVITIES.values()
                if activity.kind in games.GAMES_URL_KINDS}
 GAME_ROUNDS["scrambled"] = _scrambled_round
+GAME_ROUNDS["real_or_fake"] = _real_or_fake_round
 
 
 @app.route("/games/<game>/play", methods=["GET", "POST"])

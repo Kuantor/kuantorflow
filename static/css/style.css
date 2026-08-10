@@ -1728,3 +1728,24 @@ button:disabled:hover { background: #9db4c7; }
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 .reader-banner--image:hover .reader-banner-img { filter: brightness(1.12); }
+
+/* The two answers in "real or fake" (#132). A radio pair rather than one
+   checkbox: an unticked box means both "invented" and "not looked at yet", and
+   a score cannot tell those apart. `label` is a block by default, which would
+   put the two answers on separate lines. */
+.verdict {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.4rem;
+    margin: 0.5rem 0 0;
+}
+.verdict label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--ink);
+    cursor: pointer;
+}
+.verdict input { width: 1.05rem; height: 1.05rem; }

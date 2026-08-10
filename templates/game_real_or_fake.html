@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} | KuantorFlow{% endblock %}
+
+{#
+   A round of #132. Real words from the learner's selection, mixed with words
+   invented by a character n-gram model over the whole deck, and the learner
+   says which is which.
+
+   Radio pairs rather than a single "real" checkbox: an unticked checkbox means
+   both "I say this is invented" and "I have not looked at this one yet", and
+   the score cannot tell those apart. Two buttons make the answer explicit.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+    </p>
+    <h1 class="page-title">{{ activity.name }}</h1>
+
+    {% if results is none %}
+        {% if not items or not fake_count or not real_count %}
+            <div class="panel">
+                <p>There aren&rsquo;t enough words here for a round yet.</p>
+                {# Two different shortages, and the learner can act on both.
+                   The invented half needs a deck big enough to model; the real
+                   half needs words in the topics they ticked. #}
+                <p class="hint">This game needs a few hundred words in the deck
+                   to invent convincing ones from, and at least a handful of
+                   real words &mdash; of {{ games_min }} letters or more &mdash;
+                   in the topics you chose.
+                   {% if settings.individual_cards %}<em>Use only individual
+                   cards</em> is on, so anyone else&rsquo;s are hidden.{% endif %}</p>
+            </div>
+        {% else %}
+            <div class="panel panel--tight">
+                <p>Which of these are real English words?
+                   ({{ items|length }} to judge)</p>
+            </div>
+
+            <form method="POST">
+                {% for item in items %}
+                    <div class="panel question">
+                        <div class="word">{{ loop.index }}. {{ item.word }}</div>
+                        {# The word and its truth travel with the answer: half
+                           of them were invented a moment ago and are in no
+                           database, so a POST could not look them up. #}
+                        <input type="hidden" name="item_{{ loop.index }}" value="{{ item.word }}">
+                        <input type="hidden" name="real_{{ loop.index }}" value="{{ 1 if item.real else 0 }}">
+                        <p class="verdict">
+                            <label><input type="radio" name="answer_{{ loop.index }}"
+                                          value="real" required> Real</label>
+                            <label><input type="radio" name="answer_{{ loop.index }}"
+                                          value="fake"> Invented</label>
+                        </p>
+                    </div>
+                {% endfor %}
+                <button type="submit">Check answers</button>
+            </form>
+        {% endif %}
+
+    {% else %}
+        <p class="score">Score: {{ score }} / {{ results|length }}</p>
+        {% for r in results %}
+            <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
+                <div class="word">{{ loop.index }}. {{ r.word }}</div>
+                <p>You said it was {{ 'real' if r.said_real else 'invented' }}
+                   &mdash; it {{ 'is a real word' if r.real else 'was invented for this round' }}.</p>
+            </div>
+        {% endfor %}
+        <p class="crumbs">
+            <a href="{{ url_for('index') }}">&larr; Home</a>
+            <a href="{{ url_for('game_play', game=activity.slug, topic=topics) }}">Play again</a>
+        </p>
+    {% endif %}
+{% endblock %}
