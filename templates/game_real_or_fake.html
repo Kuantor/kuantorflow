@@ -61,6 +61,17 @@
 
     {% else %}
         <p class="score">Score: {{ score }} / {{ results|length }}</p>
+        {# The invented words come from a model trained on English, so it can
+           produce English by accident (#258). A learner who is told a real word
+           was invented has been taught something false, and until #258 closes
+           that properly the least this page can do is admit it — and point at
+           the dictionary, which is where the learner would settle it anyway. #}
+        <div class="panel panel--tight">
+            <p class="hint">The invented words are made up by the app, and it
+               sometimes invents a real one by accident. If you think a word
+               here is genuine, look it up in a dictionary &mdash; you may well
+               be right.</p>
+        </div>
         {% for r in results %}
             <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
                 <div class="word">{{ loop.index }}. {{ r.word }}</div>
@@ -70,7 +81,7 @@
         {% endfor %}
         <p class="crumbs">
             <a href="{{ url_for('index') }}">&larr; Home</a>
-            <a href="{{ url_for('game_play', game=activity.slug, topic=topics) }}">Play again</a>
+            <a href="{{ url_for('game_play', game=activity.slug, topic=topics, words=words) }}">Play again</a>
         </p>
     {% endif %}
 {% endblock %}
