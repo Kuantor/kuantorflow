@@ -168,6 +168,23 @@
                 </fieldset>
                 </div>{# /settings-grid #}
 
+                {# Fast thinking (ai_agent#50). Unlike the typewriter below,
+                   this one really does change the answer — so the hint has to
+                   say what turning it off buys, not only what it costs. #}
+                <label class="settings-check">
+                    <input type="checkbox" name="mykola_fast_thinking"
+                           {% if settings.mykola_fast_thinking %}checked{% endif %}
+                           {% if settings_read_only %}disabled{% endif %}>
+                    Enable Mykola&rsquo;s fast thinking
+                </label>
+                <p class="settings-hint">On by default: Mykola deliberates less
+                   before answering and keeps his replies short &mdash; measured
+                   at about a second to his first word instead of three, and two
+                   seconds to his last instead of seven. The trade is real, so
+                   <em>turn it off</em> when you want the fuller answer &mdash;
+                   the explanation around it, and the extra examples &mdash;
+                   and are willing to wait a few seconds longer for it.</p>
+
                 {# Typewriter (ai_agent#50). Presentation only — the answer
                    arrives at the same speed either way, and the animation is
                    never allowed to outlive the text it is drawing. #}
@@ -591,6 +608,7 @@
                         show_ukrainian: settingsForm.show_ukrainian.checked,
                         show_russian: settingsForm.show_russian.checked,
                         quiz_lang: settingsForm.quiz_lang.value,
+                        mykola_fast_thinking: settingsForm.mykola_fast_thinking.checked,
                         mykola_typewriter: settingsForm.mykola_typewriter.checked,
                         // checked "never" is stored as 0 (ai_agent#54)
                         restart_chat_interval: restartNever.checked
