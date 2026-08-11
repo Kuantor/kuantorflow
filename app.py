@@ -658,6 +658,10 @@ def _agent_kwargs(method, away_hours=None):
     # open by acknowledging the break. Older agents simply don't take it.
     if away_hours is not None and "away_hours" in params:
         kwargs["away_hours"] = away_hours
+    # ai_agent#50: deliberate less, answer shorter. Only ever passed when it is
+    # on, so an agent that predates the parameter behaves as it always did.
+    if "fast" in params and current_settings().get("mykola_fast_thinking"):
+        kwargs["fast"] = True
     return kwargs
 
 

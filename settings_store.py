@@ -57,6 +57,12 @@ DEFAULTS = {
     # ai_agent#54 — hours of silence after which Mykola's chat is restarted
     # (his recap of the last exchanges opens the fresh one). 0 = never.
     "restart_chat_interval": 2,
+    # ai_agent#50 — ask Mykola to deliberate less and answer shorter. Measured
+    # over six short questions: 3.17s to the first word and 7.04s to the last
+    # without it, 0.98s and 1.98s with. Off by default: it is a trade, not a
+    # free win — the answers really are briefer, and that is the learner's
+    # call rather than ours.
+    "mykola_fast_thinking": False,
     # ai_agent#50 — type Mykola's answer out instead of showing each streamed
     # chunk the moment it lands. Presentation only: the words arrive at the
     # same time either way, and the animation never outlives the text it is
