@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 
 from flask import (
     Flask,
+    Response,
     abort,
     flash,
     g,
@@ -21,6 +22,7 @@ from flask import (
     request,
     send_from_directory,
     session,
+    stream_with_context,
     url_for,
 )
 from authlib.integrations.flask_client import OAuth
@@ -701,10 +703,25 @@ def _anonymous_quota_refusal():
     return None
 
 
-def _handle_mykola_chat_request():
-    """Shared JSON chat handler for widget and full ai_agent-style page."""
+def _mykola_chat_inputs():
+    """Every rule that decides whether a message may be answered at all.
+
+    Returns `(payload, None)` with the question, history and chat id, or
+    `(None, refusal)` — a Flask response to return unchanged.
+
+    Split out because there are now two chat endpoints, the JSON one and the
+    streamed one (ai_agent#50), and they must not acquire two sets of these
+    rules. Every check here is somebody's ticket — the block (#126), the size
+    cap, the anonymous quota (#164) — and a second copy is the one that goes
+    stale.
+
+    **The quota is claimed here, before any response begins.** A streamed
+    response has its headers on the wire from the first byte, and a session
+    write after that point never reaches the browser: the free-message counter
+    would silently stop counting.
+    """
     if not MYKOLA_AVAILABLE:
-        return jsonify({"error": "Mykola is not available on this server."}), 503
+        return None, (jsonify({"error": "Mykola is not available on this server."}), 503)
 
     # A blocked account (#126) does not get the widget, but hiding it is
     # presentation: this is the refusal that holds for a request made by hand.
@@ -712,23 +729,34 @@ def _handle_mykola_chat_request():
     # the endpoint's answers to probe anything.
     if is_blocked():
         applog.mykola_denied(user=_current_email())
-        return jsonify({"error": blocked_notice()}), 403
+        return None, (jsonify({"error": blocked_notice()}), 403)
 
     if request.content_length and request.content_length > MAX_MYKOLA_REQUEST_BYTES:
-        return jsonify({"error": "Your message is too long. Please shorten it and try again."}), 413
+        return None, (jsonify({"error": "Your message is too long. Please shorten it and try again."}), 413)
 
     data = request.get_json(silent=True) or {}
     question = (data.get("question") or "").strip()
     history = data.get("history", [])
     chat_id = _safe_chat_id(data.get("chat_id"))
     if not question:
-        return jsonify({"error": "Please type a question."}), 400
+        return None, (jsonify({"error": "Please type a question."}), 400)
 
     # Anonymous quota (#164) — checked before the model is called, so a
     # refused message costs nothing.
     refusal = _anonymous_quota_refusal()
     if refusal:
+        return None, refusal
+
+    return {"question": question, "history": history, "chat_id": chat_id}, None
+
+
+def _handle_mykola_chat_request():
+    """Shared JSON chat handler for widget and full ai_agent-style page."""
+    payload, refusal = _mykola_chat_inputs()
+    if refusal is not None:
         return refusal
+    question, history, chat_id = (
+        payload["question"], payload["history"], payload["chat_id"])
 
     try:
         result = _agent_answer(question, history)
@@ -1537,6 +1565,91 @@ def mykola_chat():
 def mykola_chat_api():
     """Compatibility endpoint used by ai_agent chat page JS."""
     return _handle_mykola_chat_request()
+
+
+def _sse(payload) -> str:
+    """One Server-Sent Event carrying a JSON object.
+
+    `ensure_ascii` stays on: the frame travels as one line, and a stray raw
+    newline inside a Ukrainian reply would end the event early and split one
+    message into two malformed ones.
+    """
+    return "data: " + json.dumps(payload, ensure_ascii=True) + "\n\n"
+
+
+@app.route("/mykola/chat/stream", methods=["POST"])
+def mykola_chat_stream():
+    """The same answer as `/mykola/chat`, sent as it is written (ai_agent#50).
+
+    The agent has streamed from the API since it was written; until now the
+    fragments were joined into a string before anything outside the call could
+    see one, so the learner watched a spinner while the text sat in a Python
+    variable. This carries `stream_answer()`'s deltas to the browser.
+
+    **404 when the installed ai_agent cannot stream**, which is how the widget
+    knows to use the JSON endpoint instead. The two repos deploy in either
+    order (the same reason `get_mykola()` feature-detects its savers), so a
+    kuantorflow that has been pulled and an ai_agent that has not must degrade
+    to yesterday's behaviour rather than to an error.
+
+    Everything the JSON endpoint decides is decided *before* the first byte,
+    in `_mykola_chat_inputs()`: a refusal is still an ordinary JSON response
+    with an ordinary status code. Once the stream opens the status is 200 for
+    good, so a failure after that point can only be an `error` event.
+    """
+    agent = get_mykola() if MYKOLA_AVAILABLE else None
+    if agent is None or not hasattr(agent, "stream_answer"):
+        abort(404)
+
+    payload, refusal = _mykola_chat_inputs()
+    if refusal is not None:
+        return refusal
+    question, history, chat_id = (
+        payload["question"], payload["history"], payload["chat_id"])
+    kwargs = _agent_kwargs(agent.stream_answer)
+
+    def events():
+        try:
+            for kind, data in agent.stream_answer(question, history, **kwargs):
+                if kind == "text":
+                    yield _sse({"type": "delta", "text": data})
+                    continue
+                # The closing event: the words are already on screen, but the
+                # sources, the history and — the one that matters — which
+                # cards were saved are only known now.
+                _append_chat_log(chat_id, question, data.get("response", ""))
+                yield _sse(dict(data, type="done", chat_id=chat_id))
+        except Exception as e:
+            # Guarded, unlike the JSON path's plain import: this runs inside
+            # the generator, so an ImportError here would replace the error
+            # message with a broken stream — the one moment the learner most
+            # needs a sentence they can read. Mykola is optional, and a server
+            # without the anthropic package is a server where that import is
+            # exactly the thing that fails.
+            try:
+                import anthropic
+                api_error = isinstance(e, anthropic.APIError)
+            except Exception:
+                api_error = False
+            if api_error:
+                body, _status = api_error_response(e)
+            else:
+                app.logger.exception("Mykola chat stream failed")
+                body = {"error": "Internal server error. Please try again later."}
+            yield _sse(dict(body, type="error"))
+
+    return Response(
+        stream_with_context(events()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            # A buffering proxy would hold every fragment and deliver the reply
+            # in one piece at the end — the exact behaviour this endpoint
+            # exists to remove, and invisible from the code. nginx honours this
+            # header; anything else in front of the app has to be checked.
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.route("/mykola/recap", methods=["POST"])
