@@ -169,20 +169,21 @@
                 </div>{# /settings-grid #}
 
                 {# Fast thinking (ai_agent#50). Unlike the typewriter below,
-                   this one really does change the answer — it is a trade, so
-                   it is off until asked for. #}
+                   this one really does change the answer — so the hint has to
+                   say what turning it off buys, not only what it costs. #}
                 <label class="settings-check">
                     <input type="checkbox" name="mykola_fast_thinking"
                            {% if settings.mykola_fast_thinking %}checked{% endif %}
                            {% if settings_read_only %}disabled{% endif %}>
                     Enable Mykola&rsquo;s fast thinking
                 </label>
-                <p class="settings-hint">When on, Mykola deliberates less before
-                   answering and keeps his replies short &mdash; measured at
-                   about a second to his first word instead of three, and two
-                   seconds to his last instead of seven. The trade is real: you
-                   get the answer, not the surrounding lesson. Best for quick
-                   lookups; turn it off when you want him to explain properly.</p>
+                <p class="settings-hint">On by default: Mykola deliberates less
+                   before answering and keeps his replies short &mdash; measured
+                   at about a second to his first word instead of three, and two
+                   seconds to his last instead of seven. The trade is real, so
+                   <em>turn it off</em> when you want the fuller answer &mdash;
+                   the explanation around it, and the extra examples &mdash;
+                   and are willing to wait a few seconds longer for it.</p>
 
                 {# Typewriter (ai_agent#50). Presentation only — the answer
                    arrives at the same speed either way, and the animation is

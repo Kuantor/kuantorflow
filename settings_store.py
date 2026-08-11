@@ -59,10 +59,15 @@ DEFAULTS = {
     "restart_chat_interval": 2,
     # ai_agent#50 — ask Mykola to deliberate less and answer shorter. Measured
     # over six short questions: 3.17s to the first word and 7.04s to the last
-    # without it, 0.98s and 1.98s with. Off by default: it is a trade, not a
-    # free win — the answers really are briefer, and that is the learner's
-    # call rather than ours.
-    "mykola_fast_thinking": False,
+    # without it, 0.98s and 1.98s with.
+    #
+    # On by default, which is a judgement about what a chat widget is for: a
+    # learner who types a question into a corner of the page is asking for an
+    # answer, not an essay, and seven seconds of silence reads as broken long
+    # before it reads as thorough. It remains a real trade — the replies are
+    # much shorter — so anybody who wants the longer lesson turns it off, and
+    # the popup says plainly what they would be turning off.
+    "mykola_fast_thinking": True,
     # ai_agent#50 — type Mykola's answer out instead of showing each streamed
     # chunk the moment it lands. Presentation only: the words arrive at the
     # same time either way, and the animation never outlives the text it is
