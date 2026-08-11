@@ -1289,6 +1289,132 @@
                 if (hasConversation()) maybeRestartChat();
             })();
 
+            // --- sending a message, and reading the reply as it is written ---
+            // (ai_agent#50). The words are streamed; everything else about the
+            // answer — the sources, and which cards were saved — arrives in one
+            // closing event, because none of it is known until the end.
+            function showChatError(data) {
+                addMessage("error", (data && data.error) || "Something went wrong.");
+                // Out of free messages (#164): the input is replaced by the
+                // sign-in offer, so the dead end explains itself.
+                if (data && data.sign_in_required) showSignInRequired();
+            }
+
+            // The closing event, and the whole-answer reply, carry the same
+            // fields — so finishing an answer is one function, whichever path
+            // delivered it.
+            function finishAnswer(data) {
+                chatId = data.chat_id || chatId;
+                addMessage("mykola", data.response || "(no answer)", data.sources);
+                history = data.history || history;
+                saveWidgetState();
+                if (data.saved_cards && data.saved_cards.length) refreshBrowseTopics();
+            }
+
+            // Yesterday's path: one request, one JSON answer, nothing on screen
+            // until it is finished. Kept as the fallback for a server that
+            // cannot stream — an ai_agent that predates stream_answer(), or a
+            // browser without ReadableStream.
+            function askWhole(body, typing) {
+                return fetch("{{ url_for('mykola_chat') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: body,
+                }).then(function (resp) {
+                    return resp.json().then(function (data) {
+                        typing.remove();
+                        if (resp.ok) finishAnswer(data); else showChatError(data);
+                    });
+                });
+            }
+
+            function askStreaming(body, typing) {
+                return fetch("{{ url_for('mykola_chat_stream') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: body,
+                }).then(function (resp) {
+                    if (resp.status === 404 || !resp.body || !resp.body.getReader) {
+                        return askWhole(body, typing);
+                    }
+                    if (!resp.ok) {
+                        return resp.json().then(function (data) {
+                            typing.remove();
+                            showChatError(data);
+                        });
+                    }
+                    return readReply(resp, typing);
+                });
+            }
+
+            function readReply(resp, typing) {
+                var reader = resp.body.getReader();
+                var decoder = new TextDecoder();
+                var buffer = "";        // whole events only; a split frame waits
+                var text = "";          // what has arrived so far
+                var bubble = null;      // the live preview, replaced when done
+                var finished = false;
+
+                function live() {
+                    if (!bubble) {
+                        typing.remove();
+                        // Not persisted: this element is a preview of an answer
+                        // that is still arriving, and finishAnswer() renders the
+                        // real one — with its sources and copy button — the
+                        // moment it is complete.
+                        bubble = addMessage("mykola", "", [], false);
+                    }
+                    bubble.innerHTML = markdownLite(text);
+                    messages.scrollTop = messages.scrollHeight;
+                }
+
+                function handle(event) {
+                    if (event.type === "delta") {
+                        text += event.text || "";
+                        live();
+                    } else if (event.type === "done") {
+                        finished = true;
+                        if (bubble) bubble.remove(); else typing.remove();
+                        finishAnswer(event);
+                    } else if (event.type === "error") {
+                        finished = true;
+                        if (bubble) bubble.remove(); else typing.remove();
+                        showChatError(event);
+                    }
+                }
+
+                function pump() {
+                    return reader.read().then(function (chunk) {
+                        if (chunk.done) {
+                            // The connection ended without a closing event —
+                            // a dropped stream, or a proxy that gave up. The
+                            // words on screen are real, so keep them and say
+                            // the rest is missing rather than blanking them.
+                            if (!finished) {
+                                if (bubble) bubble.remove(); else typing.remove();
+                                if (text) {
+                                    addMessage("mykola", text, []);
+                                    saveWidgetState();
+                                } else {
+                                    showChatError({ error: "The answer was cut off — please try again." });
+                                }
+                            }
+                            return;
+                        }
+                        buffer += decoder.decode(chunk.value, { stream: true });
+                        var frames = buffer.split("\n\n");
+                        buffer = frames.pop();          // the tail may be partial
+                        frames.forEach(function (frame) {
+                            var line = frame.replace(/^data: ?/, "").trim();
+                            if (!line) return;
+                            try { handle(JSON.parse(line)); } catch (err) { /* ignore a frame we cannot read */ }
+                        });
+                        return pump();
+                    });
+                }
+                return pump();
+            }
+
             form.addEventListener("submit", function (e) {
                 e.preventDefault();
                 var question = input.value.trim();
@@ -1299,31 +1425,9 @@
                 send.disabled = true;
                 var typing = addMessage("mykola typing", "Mykola is thinking…");
 
-                fetch("{{ url_for('mykola_chat') }}", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ question: question, history: history, chat_id: chatId }),
-                }).then(function (resp) {
-                    return resp.json().then(function (data) {
-                        return { ok: resp.ok, data: data };
-                    });
-                }).then(function (r) {
-                    typing.remove();
-                    if (!r.ok) {
-                        addMessage("error", r.data.error || "Something went wrong.");
-                        // Out of free messages (#164): the input is replaced by
-                        // the sign-in offer, so the dead end explains itself.
-                        if (r.data.sign_in_required) showSignInRequired();
-                    } else {
-                        chatId = r.data.chat_id || chatId;
-                        addMessage("mykola", r.data.response || "(no answer)", r.data.sources);
-                        history = r.data.history || history;
-                        saveWidgetState();
-                        if (r.data.saved_cards && r.data.saved_cards.length) {
-                            refreshBrowseTopics();
-                        }
-                    }
-                }).catch(function () {
+                var body = JSON.stringify({ question: question, history: history, chat_id: chatId });
+
+                askStreaming(body, typing).catch(function () {
                     typing.remove();
                     addMessage("error", "Network error — please try again.");
                 }).then(function () {
