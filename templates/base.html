@@ -168,6 +168,21 @@
                 </fieldset>
                 </div>{# /settings-grid #}
 
+                {# Typewriter (ai_agent#50). Presentation only — the answer
+                   arrives at the same speed either way, and the animation is
+                   never allowed to outlive the text it is drawing. #}
+                <label class="settings-check">
+                    <input type="checkbox" name="mykola_typewriter"
+                           {% if settings.mykola_typewriter %}checked{% endif %}
+                           {% if settings_read_only %}disabled{% endif %}>
+                    Show Mykola&rsquo;s typewriting animation
+                </label>
+                <p class="settings-hint">When on, his reply is typed out as it is
+                   written, at whatever pace keeps up with it. Turn it off to see
+                   each piece the moment it arrives. Either way the whole answer
+                   is finished at the same time, and a system setting asking for
+                   reduced motion turns it off on its own.</p>
+
                 {# A blocked account keeps its own settings (#126) — the block
                    is about changing shared things, not personal preferences.
                    This is where they are told how to ask for access back. #}
@@ -576,6 +591,7 @@
                         show_ukrainian: settingsForm.show_ukrainian.checked,
                         show_russian: settingsForm.show_russian.checked,
                         quiz_lang: settingsForm.quiz_lang.value,
+                        mykola_typewriter: settingsForm.mykola_typewriter.checked,
                         // checked "never" is stored as 0 (ai_agent#54)
                         restart_chat_interval: restartNever.checked
                             ? 0 : Number(restartSlider.value),
@@ -1347,15 +1363,39 @@
                 });
             }
 
+            // How fast Mykola types (ai_agent#50). Not a characters-per-second
+            // number, because the answer does not arrive at a steady rate: the
+            // pace is set by how much text is waiting, so a chunk landing while
+            // the previous one is still being typed speeds the typing up and
+            // the two run together instead of stopping between them.
+            //
+            // Each frame reveals a LAG-th of what is waiting, which drains the
+            // backlog towards the arrival rate on its own and keeps the writing
+            // roughly this many frames behind the words the server has sent.
+            // Measured against a real answer: chunks land about a second apart,
+            // 100-200 characters each, and at 60fps this settles around 3-6
+            // characters a frame — a fast, steady hand rather than a stutter.
+            var TYPE_FRAME_MS = 16;          // ≈60 a second, a frame's worth
+            var TYPE_LAG_FRAMES = 24;        // ≈0.4s behind while text is still coming
+            var TYPE_LAG_CLOSING = 6;        // the tail, once the server has finished
+            var TYPE_MAX_PER_FRAME = 40;     // a huge backlog still reads as typing
+            // The animation must never make anybody wait for words that have
+            // already arrived: a reader who asked for less motion, or who turned
+            // the setting off, gets each chunk the moment it lands.
+            var TYPEWRITER = {{ 'true' if settings.mykola_typewriter else 'false' }}
+                && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
             function readReply(resp, typing) {
                 var reader = resp.body.getReader();
                 var decoder = new TextDecoder();
                 var buffer = "";        // whole events only; a split frame waits
-                var text = "";          // what has arrived so far
+                var shown = "";         // on screen
+                var waiting = "";       // arrived, not yet typed
                 var bubble = null;      // the live preview, replaced when done
-                var finished = false;
+                var closing = null;     // the done/error event, held until typing catches up
+                var timer = null;
 
-                function live() {
+                function paint() {
                     if (!bubble) {
                         typing.remove();
                         // Not persisted: this element is a preview of an answer
@@ -1364,22 +1404,63 @@
                         // moment it is complete.
                         bubble = addMessage("mykola", "", [], false);
                     }
-                    bubble.innerHTML = markdownLite(text);
+                    bubble.innerHTML = markdownLite(shown);
                     messages.scrollTop = messages.scrollHeight;
+                }
+
+                // Everything typed, and the server has said its last word.
+                function settle() {
+                    if (bubble) bubble.remove(); else typing.remove();
+                    if (closing.type === "error") showChatError(closing);
+                    else finishAnswer(closing);
+                }
+
+                function tick() {
+                    if (document.hidden) {
+                        // Nobody is watching it type. Catch up in one go: a
+                        // hidden tab is where an animation stops being a
+                        // courtesy and starts being a way to lose an answer.
+                        shown += waiting;
+                        waiting = "";
+                    } else {
+                        var lag = closing ? TYPE_LAG_CLOSING : TYPE_LAG_FRAMES;
+                        var take = Math.min(TYPE_MAX_PER_FRAME,
+                                            Math.max(1, Math.ceil(waiting.length / lag)));
+                        shown += waiting.slice(0, take);
+                        waiting = waiting.slice(take);
+                    }
+                    paint();
+                    if (waiting) {
+                        timer = setTimeout(tick, TYPE_FRAME_MS);
+                    } else {
+                        timer = null;
+                        if (closing) settle();
+                    }
+                }
+
+                // A timer rather than requestAnimationFrame, which is the
+                // obvious choice and the wrong one: a browser stops running
+                // animation frames in a tab that is not on screen, so an
+                // answer that arrived while the learner was reading something
+                // else would sit half-typed forever — and `settle()` never
+                // runs, so the sources, the copy button and a saved card's
+                // deck refresh would all be lost with it. A timer keeps
+                // running, and `document.hidden` above finishes the job at
+                // once when there is nobody to watch it.
+                function write(text) {
+                    if (!TYPEWRITER) { shown += text; paint(); return; }
+                    waiting += text;
+                    if (!timer) timer = setTimeout(tick, TYPE_FRAME_MS);
                 }
 
                 function handle(event) {
                     if (event.type === "delta") {
-                        text += event.text || "";
-                        live();
-                    } else if (event.type === "done") {
-                        finished = true;
-                        if (bubble) bubble.remove(); else typing.remove();
-                        finishAnswer(event);
-                    } else if (event.type === "error") {
-                        finished = true;
-                        if (bubble) bubble.remove(); else typing.remove();
-                        showChatError(event);
+                        write(event.text || "");
+                    } else if (event.type === "done" || event.type === "error") {
+                        closing = event;
+                        // The words may still be catching up; tick() settles
+                        // when the last one is on screen.
+                        if (!timer) settle();
                     }
                 }
 
@@ -1390,22 +1471,24 @@
                             // a dropped stream, or a proxy that gave up. The
                             // words on screen are real, so keep them and say
                             // the rest is missing rather than blanking them.
-                            if (!finished) {
-                                if (bubble) bubble.remove(); else typing.remove();
-                                if (text) {
-                                    addMessage("mykola", text, []);
-                                    saveWidgetState();
-                                } else {
-                                    showChatError({ error: "The answer was cut off — please try again." });
-                                }
+                            if (closing) return;
+                            if (timer) { clearTimeout(timer); timer = null; }
+                            shown += waiting;          // nothing more is coming
+                            waiting = "";
+                            if (bubble) bubble.remove(); else typing.remove();
+                            if (shown) {
+                                addMessage("mykola", shown, []);
+                                saveWidgetState();
+                            } else {
+                                showChatError({ error: "The answer was cut off — please try again." });
                             }
                             return;
                         }
                         buffer += decoder.decode(chunk.value, { stream: true });
                         var frames = buffer.split("\n\n");
                         buffer = frames.pop();          // the tail may be partial
-                        frames.forEach(function (frame) {
-                            var line = frame.replace(/^data: ?/, "").trim();
+                        frames.forEach(function (piece) {
+                            var line = piece.replace(/^data: ?/, "").trim();
                             if (!line) return;
                             try { handle(JSON.parse(line)); } catch (err) { /* ignore a frame we cannot read */ }
                         });

@@ -57,6 +57,13 @@ DEFAULTS = {
     # ai_agent#54 — hours of silence after which Mykola's chat is restarted
     # (his recap of the last exchanges opens the fresh one). 0 = never.
     "restart_chat_interval": 2,
+    # ai_agent#50 — type Mykola's answer out instead of showing each streamed
+    # chunk the moment it lands. Presentation only: the words arrive at the
+    # same time either way, and the animation never outlives the text it is
+    # drawing, so nothing is ever delayed waiting for it. On by default
+    # because the chunky version is what it replaces, and a reader who wants
+    # the raw arrival can say so.
+    "mykola_typewriter": True,
     # issue #127 — show only the cards this user added (#89 records who), and
     # hide everyone else's. Off by default: the deck is shared by design, and
     # a learner who has added nothing would otherwise open an empty site.
