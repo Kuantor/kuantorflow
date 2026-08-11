@@ -626,6 +626,16 @@
                         .forEach(function (el) { el.defaultChecked = el.checked; });
                     // same for the range input, whose reset() value is defaultValue
                     restartSlider.defaultValue = restartSlider.value;
+                    // The typewriter (ai_agent#50) is the one setting the
+                    // browser acts on rather than the server: it lives in a
+                    // variable in the widget, so saving has to hand it over or
+                    // it keeps the value the page was rendered with. Every
+                    // other setting here is read server-side on the next
+                    // request and needs nothing. Guarded because the widget is
+                    // absent when Mykola is unavailable.
+                    if (window.mykolaSetTypewriter) {
+                        window.mykolaSetTypewriter(settingsForm.mykola_typewriter.checked);
+                    }
                     closeSettings();
                     if (filterChanged) window.location.reload();
                 }).catch(function () {
@@ -1400,8 +1410,21 @@
             // The animation must never make anybody wait for words that have
             // already arrived: a reader who asked for less motion, or who turned
             // the setting off, gets each chunk the moment it lands.
+            function reducedMotion() {
+                return !!(window.matchMedia
+                    && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+            }
             var TYPEWRITER = {{ 'true' if settings.mykola_typewriter else 'false' }}
-                && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+                && !reducedMotion();
+            // Saving the Settings popup does not re-render the page, so without
+            // this the checkbox would only take effect on the next page load —
+            // the learner ticks it, nothing changes, and the setting looks
+            // broken. The popup calls this on a successful save; the
+            // reduced-motion rule is re-applied here rather than trusted from
+            // the caller, so it cannot be overridden by a stale form.
+            window.mykolaSetTypewriter = function (on) {
+                TYPEWRITER = !!on && !reducedMotion();
+            };
 
             function readReply(resp, typing) {
                 var reader = resp.body.getReader();
