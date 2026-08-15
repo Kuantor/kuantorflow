@@ -3,9 +3,10 @@
 Converters that are run by hand when preparing something for the repo, rather
 than by the app at runtime. Two jobs live here:
 
-- **Reports** — turn a Markdown report from `reports/` into styled DOCX and PDF
+- **Reports** — turn a Markdown report from `reports/` into styled PDF and DOCX
   renders (KuantorFlow palette: blue headings, yellow rules, branded table
-  headers).
+  headers). Weekly reports ship as Markdown and PDF only since 15 August 2026;
+  DOCX remains for one-off documents that want it.
 - **Images** — turn source artwork into the WebP files the site's tiles and
   banners expect (`to_webp.py`, added for the game icons in #234).
 
@@ -32,7 +33,9 @@ python reports/scripts/to_webp.py --width 1600 src/wide.png static/img/games/wid
 
 - `md_to_docx.py` — parses the report Markdown (headings, bullets, numbered
   lists, tables, `**bold**` / `*italic*` / `` `code` `` / links) and emits the
-  document with python-docx. The parser is importable (`parse_markdown`).
+  document with python-docx. The parser is importable (`parse_markdown`), and
+  **`md_to_pdf.py` imports it** — so this file stays even though weekly reports
+  no longer render a DOCX. Deleting it takes the PDF converter with it.
 - `md_to_pdf.py` — reuses that same parser, emits styled HTML, and prints it
   to PDF with **headless Microsoft Edge** (present on every Windows 10/11
   machine — no LibreOffice or Word required). It then **reads the PDF back**

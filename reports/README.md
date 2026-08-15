@@ -2,13 +2,19 @@
 
 Documents written for people rather than for the app. Two kinds live here:
 
-- **Weekly development reports** — `YYYY-MM-DD-weekly-report.{md,pdf,docx}`, one
+- **Weekly development reports** — `YYYY-MM-DD-weekly-report.{md,pdf}`, one
   per week, covering all three repositories (issue #63).
 - **One-off documents** — an idea written up (`2026-07-14-spaced-repetition-idea`),
   a code walkthrough (`2026-07-13-code-snippets`), and the `mht/` source notes.
 
-The Markdown is the original; the PDF and DOCX are renders of it. All three are
-committed together, and `reports/scripts/README.md` documents the converters.
+The Markdown is the original and the PDF is a render of it; both are committed
+together, and `reports/scripts/README.md` documents the converters.
+
+**Weekly reports stopped shipping a DOCX after 15 August 2026.** The PDF is
+rendered from the Markdown directly, so the third file was a third copy of the
+same words with nothing that only it could say. Editions up to that date keep
+theirs, and `md_to_docx.py` stays — a one-off document may still want DOCX, and
+`md_to_pdf.py` imports its Markdown parser.
 
 Verification reports for individual pull requests are a **different** thing and
 live in the other repository, under `kuantorflow_automation/test_reports/`.
@@ -108,14 +114,19 @@ as one long line per paragraph, as in the existing reports.
 ### 8. Render, and read the verification line
 
 ```bash
-venv/Scripts/python reports/scripts/md_to_pdf.py  reports/DATE-weekly-report.md
-venv/Scripts/python reports/scripts/md_to_docx.py reports/DATE-weekly-report.md
+venv/Scripts/python reports/scripts/md_to_pdf.py reports/DATE-weekly-report.md
 ```
 
 `md_to_pdf.py` prints `verified: N page(s), N characters` — **read it.** Headless
 Edge returns before it has rendered anything, and a report was once committed as
-a one-page PDF of Edge's own "File not found" page with a successful exit code
+a one-page PDF of the browser's own error page with a successful exit code
 (#211). See `reports/scripts/README.md`.
+
+Its check reads the finished PDF back and refuses a render whose text contains
+the browser's error string. **Quoting that string in a report trips it** — the
+15 August edition described this very trap and was rejected twice for saying the
+words out loud. Reword rather than reaching for a flag; there isn't one, and the
+check is what makes a silent bad render impossible.
 
 Then a `docs/DATE-weekly-report` branch, all three files in one commit, and a PR.
 
