@@ -68,6 +68,14 @@
                         <div class="flip-face flip-front">
                             <div class="deck-word">{{ card.word }}
                                 {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
+                                {# Hear the word (#283), on the front face —
+                                   the side showing the word. The card flips
+                                   when clicked (#78), so speech.js stops the
+                                   press here from also turning it over. #}
+                                <button type="button" class="say say--deck" hidden
+                                        data-say="{{ card.word }}"
+                                        title="Hear it"
+                                        aria-label="Pronounce {{ card.word }}">&#128266;</button>
                             </div>
                             <div class="deck-hint">Click to flip</div>
                         </div>
