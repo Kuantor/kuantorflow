@@ -12,7 +12,7 @@ The header carries **Home**, **About**, and **Settings** — a popup described a
 
 ## Building your deck
 
-**Look up a word.** Type it, name a topic, and press *Look up & save*. KuantorFlow asks a translator and an English dictionary at once, and builds **one card per part of speech**: `record` the noun and `record` the verb are different words in every way that matters, so they are kept apart. A card holds the English word, its part of speech, an English definition, authentic dictionary examples, and translations into Ukrainian and Russian. If a word is already in your deck you are warned before it is looked up again.
+**Look up a word.** Type it, name a topic — the box offers the topics you already have, and a name it does not know becomes a new one — and press *Look up & save*. KuantorFlow asks a translator and an English dictionary at once, and builds **one card per part of speech**: `record` the noun and `record` the verb are different words in every way that matters, so they are kept apart. A card holds the English word, its part of speech, an English definition, authentic dictionary examples, and translations into Ukrainian and Russian. If a word is already in your deck you are warned before it is looked up again.
 
 Unless you have asked for cards to be saved automatically, the results arrive in a **review popup** first. Every field is editable there — fix a translation, cut an example, then *Add* the cards you want or *Add All*.
 

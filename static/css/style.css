@@ -544,6 +544,12 @@ button:hover { background: var(--blue-dark); }
 }
 .topic-tile-count { font-size: 0.85rem; opacity: 0.8; }
 .hint { color: var(--muted); font-size: 0.92rem; }
+/* A hint that belongs to the field above it rather than to the panel (#292):
+   close under the row, so it reads as part of the Topic box rather than as a
+   caption for the whole form. The row ends exactly where its inputs do, so
+   this margin is what separates the two — a negative one puts the text inside
+   the field. */
+.form-hint { margin: 0.3rem 0 0.9rem; font-size: 0.86rem; }
 
 /* About modal */
 .modal-overlay[hidden] { display: none; }
