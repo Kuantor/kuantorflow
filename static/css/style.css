@@ -272,11 +272,25 @@ button:hover { background: var(--blue-dark); }
     border: none;
     background: none;
     cursor: pointer;
-    padding: 0 0.25rem;
-    margin-left: 0.35rem;
+    padding: 0;
+    margin-left: 0.4rem;
     font-size: 0.85rem;
+    /* A square box that centres the glyph, sitting on the same baseline as
+       the text beside it.
+       `vertical-align: middle` is the obvious choice here and is wrong: the
+       part-of-speech pill is an ordinary *inline* element, so it hugs the
+       baseline, while `middle` centres this box on the parent's x-height —
+       and the two land 7.2px apart, which is the gap that made the speaker
+       look dropped. Measured across both sizes: middle +7.2px, baseline
+       +0.7px. Sharing the baseline is also the more font-agnostic of the
+       two, since it does not depend on the parent's x-height. */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6em;
+    height: 1.6em;
     line-height: 1;
-    vertical-align: middle;
+    vertical-align: baseline;
     opacity: 0.45;
     filter: grayscale(1);
     transition: opacity 0.15s ease, filter 0.15s ease;
@@ -287,7 +301,7 @@ button:hover { background: var(--blue-dark); }
 }
 /* A comfortable target on a phone, where this is most likely to be used. */
 @media (max-width: 640px) {
-    .say { padding: 0.25rem 0.4rem; font-size: 1rem; opacity: 0.6; }
+    .say { font-size: 1rem; width: 1.9em; height: 1.9em; opacity: 0.6; }
 }
 .say--deck { font-size: 1rem; margin-left: 0.5rem; }
 .pos {
