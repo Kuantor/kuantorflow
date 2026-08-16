@@ -802,6 +802,15 @@
             // When the learner last wrote here (epoch ms) — the break the
             // automatic restart is measured against (ai_agent#54).
             var lastMessageAt = null;
+            // The question we are waiting on, or null (#304).
+            //
+            // Set before the request and cleared only when the turn ends —
+            // answered, refused or failed. Navigating away kills the request
+            // but not this, so the next page can see that a question is owed
+            // an answer and ask it again. It is the *whole* memory of the
+            // turn: `history` is assigned from the server's reply, so an
+            // interrupted question was never in it.
+            var pending = null;
 
             function hasStorage() {
                 try {
@@ -876,6 +885,11 @@
                     chatId: chatId,
                     lastMessageAt: lastMessageAt,
                     scrollTop: messages.scrollTop,
+                    // A question whose answer never arrived (#304). The
+                    // request lives in one page's JavaScript and dies with it,
+                    // so this is what the *next* page needs in order to know
+                    // that something is owed.
+                    pending: pending,
                 };
                 try {
                     localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(data));
@@ -1384,9 +1398,25 @@
                     messages.scrollTop = state.scrollTop;
                 }
                 lastMessageAt = state.lastMessageAt || null;
-                // A conversation was restored — it may have gone stale while
-                // the learner was away (ai_agent#54).
-                if (hasConversation()) maybeRestartChat();
+
+                // A question asked on the page we just left, whose answer died
+                // with it (#304). Picked up here, before anything else looks at
+                // this conversation.
+                //
+                // It comes before the staleness check on purpose. Both can be
+                // true at once — ask something, wander off for three hours,
+                // come back — and restarting first would wipe the thread and
+                // the unanswered question with it. The recap is not lost by
+                // waiting; it happens on the next load, once this turn has
+                // somewhere to belong.
+                if (state.pending) {
+                    pending = state.pending;
+                    resumePending(state.pending);
+                } else if (hasConversation()) {
+                    // A conversation was restored — it may have gone stale
+                    // while the learner was away (ai_agent#54).
+                    maybeRestartChat();
+                }
             })();
 
             // --- sending a message, and reading the reply as it is written ---
@@ -1394,6 +1424,11 @@
             // answer — the sources, and which cards were saved — arrives in one
             // closing event, because none of it is known until the end.
             function showChatError(data) {
+                // A refusal or a failure ends the turn too (#304): the error is
+                // on screen and retryable, and a question that keeps re-asking
+                // itself on every page load would be worse than one that
+                // stopped and said so.
+                pending = null;
                 addMessage("error", (data && data.error) || "Something went wrong.");
                 // Out of free messages (#164): the input is replaced by the
                 // sign-in offer, so the dead end explains itself.
@@ -1405,7 +1440,12 @@
             // delivered it.
             function finishAnswer(data) {
                 chatId = data.chat_id || chatId;
+                // The turn is closed, whichever page asked for it (#304).
+                pending = null;
                 addMessage("mykola", data.response || "(no answer)", data.sources);
+                // The server's history includes the turn that has just ended,
+                // which is what puts an interrupted question back into the
+                // conversation the model is shown.
                 history = data.history || history;
                 saveWidgetState();
                 if (data.saved_cards && data.saved_cards.length) refreshBrowseTopics();
@@ -1574,6 +1614,10 @@
                             waiting = "";
                             if (bubble) bubble.remove(); else typing.remove();
                             if (shown) {
+                                // Half an answer is still an answer to this
+                                // question: the turn is over and must not be
+                                // asked again by the next page (#304).
+                                pending = null;
                                 addMessage("mykola", shown, []);
                                 saveWidgetState();
                             } else {
@@ -1595,26 +1639,59 @@
                 return pump();
             }
 
+            // Ask, and wait for the answer. One function for both the learner
+            // pressing send and a page picking up a question the previous page
+            // never got an answer to (#304) — the two differ only in what is
+            // already on screen and whether the input deserves focus.
+            function ask(question, focusWhenDone) {
+                send.disabled = true;
+                var typing = addMessage("mykola typing", "Mykola is thinking…");
+                var body = JSON.stringify({
+                    question: question, history: history, chat_id: chatId,
+                });
+                return askStreaming(body, typing).catch(function () {
+                    typing.remove();
+                    pending = null;
+                    addMessage("error", "Network error — please try again.");
+                }).then(function () {
+                    send.disabled = false;
+                    if (focusWhenDone) input.focus();
+                });
+            }
+
             form.addEventListener("submit", function (e) {
                 e.preventDefault();
                 var question = input.value.trim();
                 if (!question) return;
                 lastMessageAt = Date.now();     // restarts are measured from here
+                // Before the message is added, so the save inside addMessage()
+                // already carries it: between these two lines is exactly the
+                // window a click on a link would fall into (#304).
+                pending = question;
                 addMessage("user", question);
                 input.value = "";
-                send.disabled = true;
-                var typing = addMessage("mykola typing", "Mykola is thinking…");
-
-                var body = JSON.stringify({ question: question, history: history, chat_id: chatId });
-
-                askStreaming(body, typing).catch(function () {
-                    typing.remove();
-                    addMessage("error", "Network error — please try again.");
-                }).then(function () {
-                    send.disabled = false;
-                    input.focus();
-                });
+                ask(question, true);
             });
+
+            // A question this browser asked and never heard back about, picked
+            // up on whatever page the learner is on now (#304).
+            //
+            // It re-asks rather than resuming: the original request died with
+            // the page that made it, and there is nothing left to attach to.
+            // The cost is a second call for an answer the server may already
+            // have produced; the alternative is a question that is on screen,
+            // unanswered, and — because `history` only ever comes back from a
+            // reply — invisible to Mykola on the next turn.
+            function resumePending(question) {
+                // Normally the question is already the last thing on screen,
+                // saved when it was sent. If the write failed, put it back
+                // rather than showing an answer to nothing.
+                var last = uiMessages[uiMessages.length - 1];
+                if (!last || last.kind !== "user" || last.text !== question) {
+                    addMessage("user", question);
+                }
+                ask(question, false);   // focus belongs to the page, not to us
+            }
         })();
     </script>
     {% endif %}
