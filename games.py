@@ -117,6 +117,88 @@ def remember_selection(store, names):
     store[SELECTION_KEY] = list(names)
 
 
+# --- how long a round is -------------------------------------------------
+#
+# A quiz over the whole curriculum was 93 typed answers, which is not a round
+# so much as an afternoon. Ten is the default; the picker offers a box.
+#
+# Ten rather than the twenty this shipped with: a round should be finishable in
+# one sitting, and the learner who wants a longer one only has to say so, while
+# the learner who finds twenty too long has already abandoned it.
+#
+# Remembered in the session beside the topic selection and for the same reason
+# (#233): it is a per-round preference, not a per-account setting, so it needs
+# no `DEFAULTS` entry, works identically signed in or not, and does not write a
+# `SETTINGS` line to `cards.log` every time somebody starts a quiz. That is why
+# it lives here, beside the selection, rather than beside the activities.
+#
+# The box means **different things to different activities**, which is what
+# `Words` is for. A quiz's number is questions asked (1-200); #237's is words of
+# prose (50-400), and its floor is not 1 because fifty words is the shortest
+# thing worth calling a passage. One box, two meanings, so the bounds travel
+# with the activity rather than being one pair of constants the picker reaches
+# for regardless of what it is rendering.
+
+from collections import namedtuple
+
+# `hint` is what the picker prints beside the box, or "" for nothing. The
+# browser enforces `low`/`high` through the input's min and max either way; the
+# hint is for the learner who wants to know the range before being corrected by
+# it, which matters for #237's 50 and not for a quiz's 1.
+Words = namedtuple("Words", "key default low high hint")
+
+QUIZ_WORDS_DEFAULT = 10
+QUIZ_WORDS_MIN = 1
+QUIZ_WORDS_MAX = 200
+
+WORDS_KEY = "quiz_words"
+
+QUIZ_WORDS = Words(WORDS_KEY, QUIZ_WORDS_DEFAULT, QUIZ_WORDS_MIN,
+                   QUIZ_WORDS_MAX, "")
+
+# #237's passage. 150 words is a paragraph or two -- long enough to put a dozen
+# words in context, short enough to read before losing interest -- and 400 is
+# where a generated text stops being a demo and starts being homework. The
+# ceiling is also what bounds `max_tokens`, so it is the only thing standing
+# between a bug and a runaway response.
+GENERATED_WORDS_DEFAULT = 150
+GENERATED_WORDS_MIN = 50
+GENERATED_WORDS_MAX = 400
+
+GENERATED_WORDS_KEY = "generated_words"
+
+GENERATED_WORDS = Words(
+    GENERATED_WORDS_KEY, GENERATED_WORDS_DEFAULT,
+    GENERATED_WORDS_MIN, GENERATED_WORDS_MAX,
+    f"{GENERATED_WORDS_MIN}–{GENERATED_WORDS_MAX} words")
+
+
+def word_count(raw, remembered=None, words=QUIZ_WORDS):
+    """How long a round should be, from a query parameter.
+
+    Clamped rather than rejected: this arrives from a URL anybody can edit, and
+    a round is not the place to argue about it. Anything unreadable falls back
+    to `remembered`, then to the default — the same "a stored value is a hint"
+    rule the topic selection follows.
+    """
+    for candidate in (raw, remembered):
+        try:
+            value = int(candidate)
+        except (TypeError, ValueError):
+            continue
+        return max(words.low, min(words.high, value))
+    return words.default
+
+
+def remembered_word_count(store, words=QUIZ_WORDS):
+    """The last length this visitor asked for, or the default."""
+    return word_count(store.get(words.key), words=words)
+
+
+def remember_word_count(store, count, words=QUIZ_WORDS):
+    store[words.key] = int(count)
+
+
 # --- the activities themselves -------------------------------------------
 #
 # #233 asks for **one declaration** of the activities, rendered by the
@@ -170,6 +252,15 @@ class Activity:
     # about its spelling has no translation in it at all. False by default so a
     # new game inherits no control it cannot explain.
     picks_language: bool = False
+    # What the picker's number box counts, and between which bounds -- see
+    # `Words` above. Questions asked, for everything that asks questions; #237
+    # overrides it because its number is words of prose.
+    words: Words = QUIZ_WORDS
+    # Whether the picker offers the free-text line describing what the round
+    # should be about (#237). Only a round that *writes* something has anything
+    # to do with it, which is why it is off by default: a quiz has no use for
+    # "a letter of complaint to a hotel".
+    asks_instruction: bool = False
 
 
 # The quiz is the only entry today, and it is the loosest of the five: one card
@@ -240,7 +331,8 @@ ACTIVITIES = {
             min_cards=1,
             too_small="Tick at least one topic to write about.",
             tagline="A passage built from your own words",
-            ticket="#237",
+            words=GENERATED_WORDS,
+            asks_instruction=True,
         ),
     )
 }
@@ -280,51 +372,7 @@ def activity(slug, kind=None):
     return found
 
 
-# --- how many words a round asks -----------------------------------------
-#
-# A quiz over the whole curriculum was 93 typed answers, which is not a round
-# so much as an afternoon. Ten is the default; the picker offers a box.
-#
-# Ten rather than the twenty this shipped with: a round should be finishable in
-# one sitting, and the learner who wants a longer one only has to say so, while
-# the learner who finds twenty too long has already abandoned it.
-#
-# Remembered in the session beside the topic selection and for the same reason
-# (#233): it is a per-round preference, not a per-account setting, so it needs
-# no `DEFAULTS` entry, works identically signed in or not, and does not write a
-# `SETTINGS` line to `cards.log` every time somebody starts a quiz.
-
-QUIZ_WORDS_DEFAULT = 10
-QUIZ_WORDS_MIN = 1
-QUIZ_WORDS_MAX = 200
-
-WORDS_KEY = "quiz_words"
-
-
-def word_count(raw, remembered=None):
-    """How many words a round should ask, from a query parameter.
-
-    Clamped rather than rejected: this arrives from a URL anybody can edit, and
-    a round is not the place to argue about it. Anything unreadable falls back
-    to `remembered`, then to the default — the same "a stored value is a hint"
-    rule the topic selection follows.
-    """
-    for candidate in (raw, remembered):
-        try:
-            value = int(candidate)
-        except (TypeError, ValueError):
-            continue
-        return max(QUIZ_WORDS_MIN, min(QUIZ_WORDS_MAX, value))
-    return QUIZ_WORDS_DEFAULT
-
-
-def remembered_word_count(store):
-    """The last word count this visitor asked for, or the default."""
-    return word_count(store.get(WORDS_KEY))
-
-
-def remember_word_count(store, count):
-    store[WORDS_KEY] = int(count)
+# --- drawing the round ---------------------------------------------------
 
 
 def sample(cards, count, rng=None):
@@ -558,3 +606,170 @@ def pseudowords(words, count, rng=None, order=NGRAM_ORDER, known=()):
         seen.add(word)
         found.append(word)
     return found
+
+
+# --- finding a headword inside real English (#235, #237) -----------------
+#
+# Two activities need the same awkward question answered: **where in this
+# sentence is this card's word?** #235 cuts the word out of its own example to
+# make a gap, and #237 picks the learner's own words out of a generated text to
+# put them in bold. Neither can do it with `in` or `str.replace()`, because the
+# text almost never holds the headword verbatim: Oxford's sentence for `resign`
+# is "He *resigned* from the board", and a model asked to use `apply` writes
+# "she applied".
+#
+# So it is built once, here, and both use it. Two implementations of "find this
+# headword in this English sentence" would disagree within a month, and they
+# would disagree in opposite directions -- #235 would show a sentence containing
+# its own answer, #237 would report a word as unused that is on the screen.
+#
+# A **light stem match, not lemmatisation**. Regular inflections only: this is a
+# card game, and the alternative is shipping a morphological analyser. `resign`
+# finds `resigned`, `apply` finds `applies`, `plan` finds `planning`, `create`
+# finds `creating`. `take` does not find `took`, and `resign` deliberately does
+# not find `resignation` -- that is a different word, and #237 would rather
+# report a word as unused than draw a box around something the learner was not
+# studying.
+
+import re
+
+# What a headword may be wearing, per stem. Kept separate rather than thrown
+# into one list because a stem earns only the endings its own spelling rule
+# produces: `appl` may become `applies`, but allowing it everything would also
+# let it match `apples`.
+#
+# Inflections only, no derivations. `work` -> `worker` is a different word (and
+# a different part of speech), and #235 gapping `worker` out of a sentence would
+# be asking for an answer that is not the card's.
+_BASE_ENDINGS = ("ing", "es", "ed", "s", "d", "")
+_E_DROP_ENDINGS = ("ing", "ed")       # create -> creating
+_Y_ENDINGS = ("ies", "ied")           # apply  -> applies
+_DOUBLED_ENDINGS = ("ing", "ed")      # plan   -> planning
+
+
+def _consonant(word, index):
+    """Whether `word[index]` counts as a consonant for the spelling rules.
+
+    The `u` of `qu` does not: it is spelling, not a vowel sound, which is why
+    `acquit` doubles to `acquitted` and `equip` to `equipped` where the plain
+    consonant-vowel-consonant test says neither should. Found by watching
+    `acquit` be reported unused under a text saying "acquitted" twice.
+    """
+    letter = word[index]
+    if letter not in VOWELS:
+        return True
+    return letter == "u" and index > 0 and word[index - 1] == "q"
+
+
+def _stems(word):
+    """`(stem, endings)` pairs covering the ways `word` regularly changes."""
+    base = word.lower()
+    pairs = [(base, _BASE_ENDINGS)]
+    if len(base) > 2 and base.endswith("e"):
+        pairs.append((base[:-1], _E_DROP_ENDINGS))
+    if len(base) > 2 and base.endswith("y") and _consonant(base, len(base) - 2):
+        pairs.append((base[:-1], _Y_ENDINGS))
+    # The doubling rule, roughly: a word ending consonant-vowel-consonant
+    # doubles that last consonant before a vowel ending. `plan` -> `planning`,
+    # `stop` -> `stopped`. Over-generous on longer words (`visit` -> `visitt`),
+    # which costs nothing: a stem no English word spells simply never matches.
+    if (len(base) >= 3 and base[-1].isalpha()
+            and _consonant(base, len(base) - 1)
+            and not _consonant(base, len(base) - 2)
+            and _consonant(base, len(base) - 3)):
+        pairs.append((base + base[-1], _DOUBLED_ENDINGS))
+    return pairs
+
+
+def _one_word_pattern(word):
+    """The regex source matching one word of a headword, however inflected."""
+    return "|".join(
+        f"{re.escape(stem)}(?:{'|'.join(endings)})" for stem, endings in _stems(word)
+    )
+
+
+# How many words may sit *between* the parts of an expression. English puts the
+# object inside the phrase — "take **it** for granted", "make **your mind** up"
+# — so a pattern demanding the parts be adjacent finds almost no real use of a
+# phrasal expression at all, which would have #237 reporting a word as unused
+# while it is on the screen.
+#
+# Two, and separated by plain words only: a comma or a full stop ends the
+# search, so this widens the window rather than letting three words match across
+# half a paragraph.
+_INFIX_WORDS = 2
+_JOIN = rf"\s+(?:\w+\s+){{0,{_INFIX_WORDS}}}"
+
+
+def word_pattern(word):
+    """A compiled pattern finding `word` in English text, or **None**.
+
+    A multi-word expression is matched **whole** -- one pattern across "take for
+    granted", not three -- because that is what #235 has to gap out in one piece
+    and what #237 has to bold in one piece. Each word of it may inflect and the
+    phrase may hold its object, so "takes it for granted" matches as one span;
+    irregular forms like "took" do not, which is the documented edge of a stem
+    match rather than a bug in it.
+    """
+    parts = str(word or "").split()
+    if not parts:
+        return None
+    body = _JOIN.join(f"(?:{_one_word_pattern(part)})" for part in parts)
+    return re.compile(rf"\b(?:{body})\b", re.IGNORECASE)
+
+
+def find_word(text, word):
+    """Every `(start, end)` in `text` where `word` appears. `[]` if it does not.
+
+    Spans rather than a boolean or a rewritten string, so the two callers can
+    each do their own thing with the same answer: #235 replaces one span with a
+    gap, #237 wraps every span in bold. `[]` is #235's "this example is not
+    eligible" and #237's "the model did not use this word".
+    """
+    pattern = word_pattern(word)
+    if pattern is None:
+        return []
+    return [match.span() for match in pattern.finditer(text or "")]
+
+
+def mark_words(text, words):
+    """Cut `text` into runs, marking the ones that are a learner's own word.
+
+    Returns `(segments, used, missing)`:
+
+    * `segments` — `(run, is_word)` pairs covering the whole text in order, so
+      a template renders them without any HTML being built in Python. Escaping
+      stays Jinja's job, which is what keeps a model's output from becoming
+      markup.
+    * `used` / `missing` — which of `words` the text turned out to contain, in
+      the order they were supplied.
+
+    **Used is decided by the match, not by the markup.** A word swallowed by a
+    longer overlapping expression is still a word the model used, and saying
+    otherwise would be the same unverified claim #237 exists to avoid — just in
+    the other direction.
+
+    Overlaps are resolved longest-first so "take for granted" wins over
+    "granted" and the page shows one phrase in bold rather than a phrase with a
+    darker tail.
+    """
+    text = text or ""
+    spans, used, missing = [], [], []
+    for word in words:
+        found = find_word(text, word)
+        (used if found else missing).append(word)
+        spans.extend(found)
+
+    # Longest first at the same start, so the widest match claims the ground.
+    spans.sort(key=lambda span: (span[0], -span[1]))
+    segments, at = [], 0
+    for start, end in spans:
+        if start < at:          # inside a span already taken
+            continue
+        if start > at:
+            segments.append((text[at:start], False))
+        segments.append((text[start:end], True))
+        at = end
+    if at < len(text):
+        segments.append((text[at:], False))
+    return segments, used, missing

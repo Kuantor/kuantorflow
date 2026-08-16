@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} | KuantorFlow{% endblock %}
+
+{#
+   #237 — the one activity that *produces* language rather than testing it.
+   Claude writes a short passage using a dozen or so of the learner's own words,
+   and they are picked out of it in bold.
+
+   Nothing here is scored and there is no round to finish, so the page is not
+   shaped like a game: it is a passage to read, with the words it was built
+   from listed underneath.
+
+   **The bold is verified, not requested.** The model was asked for plain prose;
+   `games.mark_words()` found the words afterwards by matching, and the segments
+   below are that answer. Which is also why the list underneath says which words
+   went unused instead of claiming a coverage nobody checked.
+
+   The generate button is a POST and the page it lands on is a GET, so a refresh
+   re-reads the held text rather than paying for a second one. Every POST spends
+   an allowance — that is what makes regeneration explicit.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+    </p>
+    <h1 class="page-title">{{ activity.name }}</h1>
+
+    {% set post_url = url_for('game_play', game=activity.slug, topic=topics, words=words) %}
+
+    {# The form the learner writes with, shown above a text they already have
+       and below one they do not — either way it is the only control on the
+       page. Declared once because the two placements must not drift. #}
+    {% macro write_form(label) %}
+        <form method="POST" action="{{ post_url }}" class="panel reader-form">
+            <label class="reader-about-label" for="reader-about">
+                What should it be about?
+            </label>
+            <input type="text" name="about" id="reader-about"
+                   class="reader-about-box" value="{{ instruction }}"
+                   maxlength="{{ instruction_max }}" autocomplete="off"
+                   placeholder="a letter of complaint to a hotel — optional">
+            {# Carried with the form as well as in the URL, so changing the
+               instruction and pressing the button keeps the length that was
+               chosen on the picker. #}
+            <input type="hidden" name="words" value="{{ words }}">
+            <p class="hint">About {{ words }} words, using
+               {{ topic_summary or (topics[0] if topics else 'your deck') }}.</p>
+            <button type="submit">{{ label }}</button>
+        </form>
+    {% endmacro %}
+
+    {% if not topics %}
+        <div class="panel">
+            <p>There is nothing to write about yet.</p>
+            <p class="hint">Look up a word or upload notes to start a topic
+               {%- if settings.individual_cards %}, or turn off <em>use only
+               individual cards</em> in Settings to see other people&rsquo;s
+               {%- endif %}.</p>
+        </div>
+
+    {% else %}
+
+    {# A refusal is said above whatever the learner already has, not instead of
+       it: being told you cannot have a second text is no reason to lose the
+       first. The form is what goes away — it would only be refused again. #}
+    {% if refusal %}
+        <div class="panel">
+            <p>{{ refusal.message }}</p>
+            {# Offered only where it would actually help. A site-wide ceiling
+               and a blocked account are not things signing in fixes, and a
+               button that changed nothing would be worse than none. #}
+            {# `signin-required-go` for the styling the sign-in popup already
+               has; `reader-signin` because this is the only one on the page
+               that is *offered* — base.html carries the popup's copy on every
+               page, so the shared class alone cannot tell anyone whether this
+               refusal offered a way forward. #}
+            {% if refusal.sign_in %}
+                <p><a class="signin-required-go reader-signin" href="{{ url_for('login_google') }}">Sign in with Google</a></p>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {% if held and held.error %}
+        <div class="panel">
+            <p>{{ held.error }}</p>
+        </div>
+        {% if not refusal %}{{ write_form("Try again") }}{% endif %}
+
+    {% elif held %}
+        {# white-space: pre-wrap in the stylesheet, so the model's own
+           paragraphs survive without the segments having to be split around
+           them. Each run is printed as text and escaped by Jinja: the model's
+           output never becomes markup. #}
+        <div class="panel reader-text">
+            {%- for run, marked in held.segments -%}
+                {%- if marked %}<strong class="reader-word">{{ run }}</strong>{% else %}{{ run }}{% endif -%}
+            {%- endfor -%}
+        </div>
+
+        <div class="panel panel--tight reader-words">
+            <p><strong>{{ held.used | length }}</strong> of your
+               {{ held.words | length }} words appeared:</p>
+            <p class="reader-word-list">
+                {%- for word in held.used -%}
+                    <span class="reader-word-used">{{ word }}</span>
+                {%- endfor -%}
+            </p>
+            {# Reported rather than hidden: the model does not always use every
+               word it is given, and #237 would rather say so than claim a
+               coverage that was never checked. Not an error — the text is still
+               the text. #}
+            {% if held.missing %}
+                <p class="hint">It did not find a place for
+                   {{ held.missing | length }} of them:</p>
+                <p class="reader-word-list">
+                    {%- for word in held.missing -%}
+                        <span class="reader-word-unused">{{ word }}</span>
+                    {%- endfor -%}
+                </p>
+            {% endif %}
+        </div>
+
+        {% if not refusal %}{{ write_form("Write another") }}{% endif %}
+
+    {% elif not refusal %}
+        <div class="panel panel--tight">
+            <p>A short text written for you, using words from
+               {{ topic_summary or topics[0] }}
+               ({{ topics | length }} topic{{ '' if topics | length == 1 else 's' }}).
+               The words you are studying will be in <strong>bold</strong>.</p>
+        </div>
+        {{ write_form("Write my text") }}
+    {% endif %}
+
+    {% endif %}
+{% endblock %}

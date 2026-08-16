@@ -76,6 +76,81 @@ def claim_anonymous_message(daily_limit):
         conn.close()
 
 
+# The row in text_generation_usage that counts everybody rather than one
+# account. See schema.sql for why it is 0 and not NULL.
+ALL_ACCOUNTS = 0
+
+
+def _claim_one_text(cursor, user_id, limit):
+    """Take a slot on one text_generation_usage row. True if this call got it.
+
+    The same single statement `claim_anonymous_message()` uses, for the same
+    reason: the row only advances while it is under the limit, and `ROW_COUNT()`
+    says whether *this* request was the one that advanced it, so two workers
+    cannot both slip past the last slot.
+    """
+    cursor.execute(
+        """
+        INSERT INTO text_generation_usage (day, user_id, texts)
+        VALUES (CURDATE(), %s, 1)
+        ON DUPLICATE KEY UPDATE texts = IF(texts < %s, texts + 1, texts)
+        """,
+        (user_id, limit),
+    )
+    return cursor.rowcount != 0
+
+
+def claim_text_generation(user_id, user_limit, daily_limit):
+    """Count one generated text against both of its ceilings (issue #237).
+
+    Returns `(allowed, scope, used)` — `scope` is None when the text may go
+    ahead, or "user" / "daily" naming the ceiling that refused it, so the caller
+    can say which one plainly rather than showing one message for both. `used`
+    is the count on the row that decided.
+
+    `user_id` is None for an anonymous visitor, who has no per-account row: they
+    are held by a session counter instead (#164's shape), and their texts still
+    count towards the daily ceiling, which is the one actually bounding the
+    bill. A limit of 0 or less means "no ceiling".
+
+    **The per-account claim goes first, and the order is deliberate.** Two rows
+    cannot be claimed in one atomic statement, so one of them can be taken by a
+    generation the other then refuses. Claiming the account first means a
+    learner can spend one of their ten on a day the whole site is exhausted;
+    the reverse burns a site-wide slot for somebody who was already over their
+    own limit, which is the worse of the two. Neither matters at a third of a
+    cent — but it is decided rather than accidental.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        for scope, row, limit in (("user", user_id, user_limit),
+                                  ("daily", ALL_ACCOUNTS, daily_limit)):
+            if row is None or not limit or limit <= 0:
+                continue
+            # Read rowcount straight after the write, before anything else
+            # touches the cursor: 0 means the IF() held the row back because
+            # the ceiling was already reached.
+            if not _claim_one_text(cursor, row, limit):
+                conn.commit()
+                cursor.execute(
+                    "SELECT texts FROM text_generation_usage "
+                    "WHERE day = CURDATE() AND user_id = %s", (row,))
+                found = cursor.fetchone()
+                cursor.close()
+                return False, scope, (found[0] if found else 0)
+        conn.commit()
+        cursor.execute(
+            "SELECT texts FROM text_generation_usage "
+            "WHERE day = CURDATE() AND user_id = %s",
+            (ALL_ACCOUNTS if user_id is None else user_id,))
+        found = cursor.fetchone()
+        cursor.close()
+        return True, None, (found[0] if found else 0)
+    finally:
+        conn.close()
+
+
 def upsert_user(google_sub, email, display_name=None, given_name=None,
                 family_name=None):
     """
