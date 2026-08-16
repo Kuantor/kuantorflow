@@ -20,7 +20,7 @@ Unless you have asked for cards to be saved automatically, the results arrive in
 
 ## Your deck
 
-The front page lists the **topics**, grouped into sections and shown as tiles with a card count. A topic you invent by naming it in a lookup is filed under *Other*; the curated **B2–C1 Conversational Topics** section holds the eighteen topics the starting deck is built from. You can also type a topic name straight into the box.
+The front page lists the **topics**, grouped into sections and shown as tiles with a card count. A topic you invent by naming it in a lookup is filed under *Other*; the curated **B2–C1 Conversational Topics** section holds the eighteen topics the starting deck is built from. Click a section's heading to fold it away when you are not working on it; it stays folded on that device until you click it again.
 
 Opening a topic gives you the **flashcard list** — every card in full, with its definition, examples and translations. Each card carries a **speaker button**: press it to hear the word read aloud by a voice your device already has. On a card you added you can **edit** any field, **move** it to another topic, or **delete** it; other people's cards you can read but not change.
 
