@@ -6,6 +6,11 @@ Interactive language learning with notes and dictionaries
 KuantorFlow is a flexible language‑learning platform built with Flask.  
 It transforms notes, dictionary lookups, and study materials into interactive activities such as explanations, translations, flashcards, and quizzes.
 
+📖 **New here as a learner?** Read the [user guide](docs/user-guide.md)
+([PDF](docs/user-guide.pdf), 3 pages) — what every part of the site does, in
+the words the site uses. The rest of this README is for running and building
+it.
+
 ---
 
 ## 🚀 Features
