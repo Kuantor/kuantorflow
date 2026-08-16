@@ -21,7 +21,9 @@ about whether a PDF was written. Two consequences shape this script:
 * The result is read back before this script claims success. Nothing cheaper
   works: that error page is a structurally valid PDF with a correct header, a
   correct trailer and a plausible size, because it still embeds the fonts the
-  stylesheet asks for.
+  stylesheet asks for. The error page is recognised by its *shape* — one page
+  that is almost entirely the message — and not by the message alone, so a
+  report is free to quote the string (#282).
 
 Whether Edge hands off depends on another Edge or Chromium process already
 running, so the failure is intermittent — which is why the check is not
@@ -134,6 +136,24 @@ LIGATURES = {"ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl", "ﬃ": "ffi", "ﬄ": "ffl",
 
 SETTLE_SECONDS = 90
 
+# Edge's error page, and the shape that tells it apart from a report which
+# merely writes *about* it (#282). The marker check used to search the whole
+# document, so the 15 August edition — six pages that quoted the string once,
+# in the section describing this very trap — was refused as an error page.
+# What the error page actually is: a single page that is almost nothing but
+# the message (92 characters on the day one was committed), so that is what is
+# asked for. Everything longer is judged by the heading check below, which is
+# the stronger signal anyway — a render missing headings from the source is a
+# bad render whatever else it says. There is still no way to skip the check.
+ERROR_MARKERS = ("ERR_FILE_NOT_FOUND", "File not found")
+MIN_TEXT = 1000
+
+
+def _is_error_page(pages, text):
+    """Is this the error page itself, rather than a report that quotes it?"""
+    return (pages == 1 and len(text) < MIN_TEXT
+            and any(marker in text for marker in ERROR_MARKERS))
+
 
 def _settle(out):
     """Wait for Edge to finish writing, since it exited long ago (#211)."""
@@ -165,9 +185,9 @@ def _read_back(out):
 def verify(src_text, out):
     """Read the PDF back. Exits non-zero rather than reporting a bad render."""
     pages, text = _read_back(out)
-    if "ERR_FILE_NOT_FOUND" in text or "File not found" in text:
+    if _is_error_page(pages, text):
         sys.exit(f"error: {out.name} is Edge's error page, not the report.")
-    if len(text) < 1000:
+    if len(text) < MIN_TEXT:
         sys.exit(f"error: {out.name} holds only {len(text)} characters of text "
                  f"— it did not render.")
 

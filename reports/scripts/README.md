@@ -41,9 +41,11 @@ python reports/scripts/to_webp.py --width 1600 src/wide.png static/img/games/wid
   machine — no LibreOffice or Word required). It then **reads the PDF back**
   and fails if the text is not the report (issue #211): Edge exits before it
   has rendered anything, and given half a chance will print its own "File not
-  found" page — a structurally valid PDF that passes every cheaper check. It
-  prints the page and character count on success, so a silent bad render is
-  not a thing that can happen.
+  found" page — a structurally valid PDF that passes every cheaper check. That
+  page is recognised by its shape, a single page that is almost entirely the
+  message, rather than by the message alone: a report that *writes about* the
+  trap may quote the string (#282). It prints the page and character count on
+  success, so a silent bad render is not a thing that can happen.
 
 One parser, two emitters: if the Markdown dialect grows, extend
 `parse_markdown` once and both formats pick it up.

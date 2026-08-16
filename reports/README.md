@@ -122,11 +122,12 @@ Edge returns before it has rendered anything, and a report was once committed as
 a one-page PDF of the browser's own error page with a successful exit code
 (#211). See `reports/scripts/README.md`.
 
-Its check reads the finished PDF back and refuses a render whose text contains
-the browser's error string. **Quoting that string in a report trips it** — the
-15 August edition described this very trap and was rejected twice for saying the
-words out loud. Reword rather than reaching for a flag; there isn't one, and the
-check is what makes a silent bad render impossible.
+Its check reads the finished PDF back and refuses a render that *is* the error
+page — one page holding almost nothing but the browser's message. It is scoped
+to that shape on purpose (#282), so a report is free to **quote the error string
+in its own prose**; the 15 August edition was rejected twice for doing so before
+that was fixed. There is no flag to skip the check, and there is not meant to
+be: it is what makes a silent bad render impossible.
 
 Then a `docs/DATE-weekly-report` branch, all three files in one commit, and a PR.
 
