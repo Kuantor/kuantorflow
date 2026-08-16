@@ -22,8 +22,21 @@
            headings above nothing is a worse first run than one sentence. #}
         {% if sections | map(attribute=1) | map('length') | sum %}
             {% for section, topics in sections %}
-                <h3 class="topic-section">{{ section }}</h3>
+                {# A section with topics folds away (#288); one without keeps a
+                   plain heading, because a disclosure control that reveals
+                   nothing is a promise the page cannot keep. `open` here and
+                   the fold restored by JavaScript: the server cannot know what
+                   this device folded, and expanded is the state that costs
+                   nothing to be wrong about. #}
                 {% if topics %}
+                <details class="topic-fold" data-section="{{ section }}" open>
+                    <summary>
+                        {# The heading stays a heading inside the summary: it is
+                           what puts the section into the page's outline, under
+                           "Browse flashcards", and a screen reader still reads
+                           the disclosure state from the details around it. #}
+                        <h3 class="topic-section">{{ section }}</h3>
+                    </summary>
                     <div class="topic-tiles">
                         {% for topic, count in topics %}
                             {% set icon = topic | topic_icon %}
@@ -43,6 +56,9 @@
                             </a>
                         {% endfor %}
                     </div>
+                </details>
+                {% else %}
+                    <h3 class="topic-section">{{ section }}</h3>
                 {% endif %}
             {% endfor %}
         {% elif settings.individual_cards %}
@@ -55,6 +71,12 @@
             <p class="hint">No topics yet — look up a word or upload notes to create one.</p>
         {% endif %}
         </div>
+        {# Loaded here rather than with the other scripts, and without `defer`,
+           on purpose (#288): it runs the moment the block above is parsed, so a
+           section this device folded is closed before anything is painted.
+           Deferred, the panel would open in full and collapse a moment later —
+           a flicker on every visit, on the tallest thing on the page. #}
+        <script src="{{ url_for('static', filename='js/browse_folds.js') }}"></script>
         <form method="GET" onsubmit="window.location='/flashcards/' + encodeURIComponent(this.topic.value); return false;">
             <label for="browse-topic">Or type a topic name</label>
             <input type="text" id="browse-topic" name="topic" required

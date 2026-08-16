@@ -1213,8 +1213,25 @@
                             var heading = document.createElement("h3");
                             heading.className = "topic-section";
                             heading.textContent = section[0];
-                            box.appendChild(heading);
-                            if (!section[1].length) return;
+                            // A section with no topics keeps a plain heading,
+                            // exactly as the template renders it (#288): there
+                            // is nothing to disclose.
+                            if (!section[1].length) {
+                                box.appendChild(heading);
+                                return;
+                            }
+                            // Otherwise the folding markup, or a chat save
+                            // would replace every fold with a bare heading and
+                            // the panel would stop folding until the next full
+                            // page load (#288).
+                            var fold = document.createElement("details");
+                            fold.className = "topic-fold";
+                            fold.setAttribute("data-section", section[0]);
+                            fold.open = true;
+                            var summary = document.createElement("summary");
+                            summary.appendChild(heading);
+                            fold.appendChild(summary);
+                            box.appendChild(fold);
                             var grid = document.createElement("div");
                             grid.className = "topic-tiles";
                             section[1].forEach(function (t) {
@@ -1245,8 +1262,14 @@
                                 a.appendChild(count);
                                 grid.appendChild(a);
                             });
-                            box.appendChild(grid);
+                            fold.appendChild(grid);
                         });
+                        // The folds are new elements, so what this device had
+                        // closed has to be put back — otherwise saving a card
+                        // from the chat springs every section open (#288).
+                        // Absent on any page without the panel, and on the
+                        // index page before its script has run.
+                        if (window.kfBrowseFolds) window.kfBrowseFolds.apply(box);
                     })
                     .catch(function () {});
             }
