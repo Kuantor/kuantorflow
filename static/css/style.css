@@ -1920,3 +1920,102 @@ button:disabled:hover { background: #9db4c7; }
     white-space: nowrap;
     cursor: default;
 }
+
+/* --- Generating a text from your own words (#237) --------------------- */
+
+/* The range, beside the box rather than left to the browser to enforce after
+   the fact. Muted and small: it is a note on the field, not a second label. */
+.picker-words-hint {
+    color: var(--muted);
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+
+/* "What should it be about?" on the picker. Its own row under the total and
+   the word box, because it is a sentence-length field and squeezing it into
+   that line would leave it three words wide on a phone. */
+.picker-about {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.picker-about-label {
+    font-size: 0.92rem;
+    color: var(--muted);
+}
+.picker-about-box,
+.reader-about-box {
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #c5d0da;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background: #fff;
+    color: var(--ink);
+}
+
+/* The same field on the round itself, where it is the control the learner
+   iterates with: change the line, press the button, read a different text. */
+.reader-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    align-items: flex-start;
+}
+.reader-about-label {
+    font-size: 0.95rem;
+    color: var(--muted);
+}
+.reader-form .hint { margin: 0.1rem 0 0; }
+.reader-form button { align-self: flex-start; }
+
+/* The passage. Wider line height and a reading measure — this is the one
+   screen in the app somebody actually reads a paragraph on, and the panel's
+   default leading is built for form rows and card lists.
+
+   `pre-wrap` is load-bearing: the model writes its own paragraph breaks, and
+   preserving them here is what lets the highlighting stay a flat list of runs
+   rather than something that has to be split around every newline. */
+.reader-text {
+    white-space: pre-wrap;
+    line-height: 1.7;
+    font-size: 1.05rem;
+    max-width: 38rem;
+}
+/* The learner's own word, found by matching rather than by trusting the model
+   (#237). Weight alone is the highlight, with the yellow behind it just warm
+   enough to scan for — a full-strength var(--yellow) on every twelfth word
+   turns a paragraph into a highlighter accident. */
+.reader-word {
+    font-weight: 600;
+    background: rgba(243, 199, 58, 0.35);
+    border-radius: 3px;
+    padding: 0 0.1em;
+}
+
+/* Which words made it in, and which did not. */
+.reader-words p { margin: 0.3rem 0; }
+.reader-word-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.4rem;
+}
+.reader-word-used,
+.reader-word-unused {
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.9rem;
+}
+.reader-word-used {
+    background: var(--ok-bg);
+    border: 1px solid var(--ok-border);
+    color: var(--ok-ink);
+}
+/* Grey rather than red: a word the text did not reach for is information, not
+   a failure, and the palette's --bad- trio would call it an error. */
+.reader-word-unused {
+    background: #eef2f5;
+    border: 1px solid #c5d0da;
+    color: var(--muted);
+}

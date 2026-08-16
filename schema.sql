@@ -16,6 +16,32 @@ CREATE TABLE IF NOT EXISTS anonymous_usage (
                                    ON UPDATE CURRENT_TIMESTAMP
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- Generated texts per day (issue #237). Same shape and same reason as
+-- anonymous_usage above: a ceiling on something that costs money has to hold
+-- across PythonAnywhere's worker processes, so it is counted in a row rather
+-- than in memory. Two ceilings are counted here — one row per account per day,
+-- and one row per day counting everybody.
+--
+-- user_id 0 is that everybody row, and it is 0 rather than the NULL #237's
+-- comment describes because MySQL treats NULLs in a unique key as distinct: an
+-- ON DUPLICATE KEY UPDATE against a NULL user_id inserts a second row every
+-- time instead of incrementing the first, and a PRIMARY KEY cannot hold NULL at
+-- all. users.id is AUTO_INCREMENT and starts at 1, so 0 is free and can mean
+-- only this.
+--
+-- **No foreign key to users**, unlike every other user_id in this file. These
+-- are day-scoped counters, not attribution: a deleted account leaving one stale
+-- row that expires the same day is better than another RESTRICT/CASCADE
+-- decision on the account-deletion path (#165).
+CREATE TABLE IF NOT EXISTS text_generation_usage (
+    day        DATE NOT NULL,
+    user_id    INT NOT NULL DEFAULT 0,
+    texts      INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                   ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (day, user_id)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- Signed-in identities (issue #148). Keyed on google_sub, Google's OIDC
 -- subject: it is unique per account and never changes, where an email can be
 -- changed by its owner. Email is ordinary updatable data.

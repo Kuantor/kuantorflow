@@ -372,6 +372,27 @@ def terms_split(lines, terms, model=None, error=None):
            error=error)
 
 
+def text_generated(model=None, supplied=0, used=0, length=None, elapsed_ms=None,
+                   error=None):
+    """A text was written from the learner's own words (#237).
+
+    It calls a paid API, so it leaves a line — `terms_split()` above is the
+    shape to copy, and for the same reason: a path that costs money and can fail
+    quietly is exactly the one that has to say what model it used and what went
+    wrong.
+
+    `supplied` and `used` are the honest pair the page shows: how many words
+    went into the prompt, and how many of them the text turned out to contain.
+    A gap between them is information, not an error — see textgen.generate().
+
+    In `dict.log` rather than `cards.log`: nothing is written to the deck here,
+    and this is the log that already answers "what did the app go and ask
+    somebody else for", which is where the lookups and the quota refusals live.
+    """
+    _write(DICT, "GENERATE", model=model, supplied=supplied, used=used,
+           words=length, ms=elapsed_ms, error=error)
+
+
 class Timer:
     """Elapsed milliseconds for the log lines above: `with Timer() as t: …`.
 

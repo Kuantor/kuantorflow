@@ -32,9 +32,11 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import applog
 import games
 import settings_store
+import textgen
 from parsers import lookup_word, parse_notes_preview
 from utils import (
     claim_anonymous_message,
+    claim_text_generation,
     delete_flashcard,
     delete_user,
     resolve_user_cards,
@@ -2308,9 +2310,16 @@ def _render_picker(activity, start_url):
         sections=[(name, topics) for name, topics in sections if topics],
         selected=set(games.remembered_selection(session, visible)),
         total_cards=sum(count for _, topics in sections for _, count in topics),
-        words=games.remembered_word_count(session),
-        words_min=games.QUIZ_WORDS_MIN,
-        words_max=games.QUIZ_WORDS_MAX,
+        # The box counts what this activity counts, between its own bounds
+        # (#237) — questions for a quiz, words of prose for a text. Read off
+        # the activity rather than off one pair of constants, so the picker
+        # cannot offer 1–200 words of prose to a reader.
+        words=games.remembered_word_count(session, activity.words),
+        words_min=activity.words.low,
+        words_max=activity.words.high,
+        words_hint=activity.words.hint,
+        instruction=session.get(INSTRUCTION_KEY, "") if activity.asks_instruction else "",
+        instruction_max=textgen.INSTRUCTION_MAX_CHARS,
     )
 
 
@@ -2369,7 +2378,7 @@ def game_picker(game):
     a tile that opened a picker whose start button led nowhere would be worse
     than no tile at all.
     """
-    activity = games.activity(game, kind=games.GAMES_URL_KINDS)
+    activity = _reachable_activity(game)
     if activity is None:
         abort(404)
     return _render_picker(
@@ -2386,6 +2395,209 @@ def _generation_available():
     therefore read None on a perfectly working deployment.
     """
     return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
+def _reachable_activity(slug):
+    """The activity behind a /games/ URL, or **None** if it is not there.
+
+    Not there covers three things, and they are one answer on purpose: an
+    unknown slug, the quiz (which has its own URLs, so `/games/quiz` is not a
+    second way in), and — since #237 — an activity whose requirements this
+    deployment does not meet.
+
+    Text generation with no `ANTHROPIC_API_KEY` cannot work and has no
+    fallback: nothing else can write the text. So the tile is hidden, and this
+    is the same answer given to a hand-typed URL. #233's rule is to hide a link
+    the learner cannot act on, and `MYKOLA_AVAILABLE=False` already does exactly
+    this for the chat widget.
+    """
+    found = games.activity(slug, kind=games.GAMES_URL_KINDS)
+    if found is None or (found.kind == "reader" and not _generation_available()):
+        return None
+    return found
+
+
+# --- #237: writing a text out of the learner's own words ------------------
+#
+# The three ceilings, all tunable like #164's pair. They are not really about
+# the bill — a 150-word text costs an eighth of a cent — but about a loop (a
+# bot, or somebody leaning on the regenerate button) and about the sign-in
+# nudge.
+#
+#   GENERATION_ANON_LIMIT  — per browser session, held in the Flask session
+#     with no database behind it. A **nudge, not a spend cap**: clearing
+#     cookies resets it, exactly as #164 documents for its own counter. That is
+#     fine because the daily ceiling is the thing actually bounding the bill.
+#   GENERATION_USER_DAILY  — per account, per day, counted in a row.
+#   GENERATION_DAILY_LIMIT — everybody, per day, counted in a row. Anonymous
+#     texts count towards it too.
+#
+# 0 (or unset) disables any of them.
+GENERATION_ANON_LIMIT = _int_env("GENERATION_ANON_LIMIT", 1)
+GENERATION_USER_DAILY = _int_env("GENERATION_USER_DAILY", 10)
+GENERATION_DAILY_LIMIT = _int_env("GENERATION_DAILY_LIMIT", 100)
+
+# How many texts this browser session has been given, for the anonymous nudge.
+GENERATED_COUNT_KEY = "generated_texts"
+# The text itself, held so re-reading, flipping back and a stray refresh cost
+# nothing (#237's "generate once").
+#
+# The Flask session is a signed cookie with a ~4 KB ceiling that Werkzeug
+# enforces by silently dropping it — which would sign the learner out — and
+# games.py warns in as many words that a generated text may not fit. It does,
+# and the bound is `textgen.max_tokens()` rather than good luck: the longest
+# text the model is *allowed* to return is 600 tokens, and the worst case
+# measured — 400 words of deliberately incompressible text, a signed-in
+# identity and an eighteen-topic selection — serialises to 3.2 KB of the 4 KB.
+# Only the text and the words are kept; the highlighting is recomputed on each
+# read, which is a regex over a paragraph and cheaper than carrying it.
+GENERATED_TEXT_KEY = "generated_text"
+# The learner's "what it should be about", remembered like the selection.
+INSTRUCTION_KEY = "generated_about"
+
+GENERATION_SIGN_IN_PROMPT = (
+    "You've read your free text. Sign in with Google to write more.")
+GENERATION_USER_LIMIT_PROMPT = (
+    "You've written all your texts for today. Come back tomorrow for more.")
+GENERATION_BUSY_PROMPT = (
+    "KuantorFlow has written a lot of texts today. Please try again tomorrow.")
+
+
+def _generation_refusal():
+    """Why this visitor may not spend a generation, or None if they may.
+
+    **Called before the API call, never after** — #200 is the precedent and it
+    is exactly this shape: notes upload called Claude before the write guard, so
+    an anonymous visitor could spend API budget on a card that would then be
+    refused. Worse here, because this is the one activity that costs real money
+    every time it runs.
+
+    Returns `{"message": …, "sign_in": bool}` so the page can offer the button
+    that would actually help. A refusal for being blocked, or by the site-wide
+    ceiling, is not something signing in fixes.
+
+    **Claiming happens here**, which is why this is not a predicate like
+    `can_add_cards()`: asking and taking cannot be two steps, or two workers
+    both take the last slot.
+    """
+    if is_blocked():
+        return {"message": blocked_notice(), "sign_in": False}
+
+    user_id = session.get("user", {}).get("id")
+    if user_id is None:
+        used = session.get(GENERATED_COUNT_KEY, 0)
+        if GENERATION_ANON_LIMIT and used >= GENERATION_ANON_LIMIT:
+            applog.anonymous_limit_hit("generate", used, GENERATION_ANON_LIMIT)
+            return {"message": GENERATION_SIGN_IN_PROMPT, "sign_in": True}
+
+    try:
+        allowed, scope, used = claim_text_generation(
+            user_id, GENERATION_USER_DAILY, GENERATION_DAILY_LIMIT)
+    except Exception:
+        # Best-effort in the same direction as #164's counter: an unreachable
+        # database cannot enforce a ceiling, and it has already made the deck
+        # unreadable, so there are no words to write about anyway.
+        app.logger.exception("Could not count the generated text")
+        allowed, scope = True, None
+
+    if not allowed:
+        applog.anonymous_limit_hit(scope, used, GENERATION_USER_DAILY
+                                   if scope == "user" else GENERATION_DAILY_LIMIT)
+        return {
+            "message": (GENERATION_USER_LIMIT_PROMPT if scope == "user"
+                        else GENERATION_BUSY_PROMPT),
+            # Signing in is the way past the anonymous nudge, not past a
+            # ceiling an account has already reached or the site's own.
+            "sign_in": False,
+        }
+
+    session[GENERATED_COUNT_KEY] = session.get(GENERATED_COUNT_KEY, 0) + 1
+    return None
+
+
+def _held_generation():
+    """Whatever text this visitor is holding, ready to render, or None.
+
+    The highlighting is worked out here rather than stored: it is a regex over
+    a paragraph, and recomputing it costs less than carrying it in a cookie
+    that has a 4 KB ceiling to respect.
+
+    A failed generation is held too, and is not None — it has an `error` and no
+    text. Dropping it would leave the learner on the "write me a text" panel
+    with no idea that anything had been tried.
+    """
+    held = session.get(GENERATED_TEXT_KEY)
+    if not isinstance(held, dict) or not (held.get("text") or held.get("error")):
+        return None
+    segments, used, missing = games.mark_words(
+        held.get("text") or "", held.get("words") or [])
+    return dict(held, segments=segments, used=used, missing=missing)
+
+
+def _held_for(topics, length, instruction):
+    """The held text, but only if it is the one this request is asking for.
+
+    Keyed on what produced it — the topics, the length and the instruction — so
+    re-reading and a stray refresh are free while *changing* any of them offers
+    a fresh text instead of silently showing one about something else.
+    """
+    held = _held_generation()
+    if held is None:
+        return None
+    if (held.get("topics") != list(topics) or held.get("length") != length
+            or held.get("instruction") != instruction):
+        return None
+    return held
+
+
+def _read_a_text_round(activity, topics):
+    """A round of #237: Claude writes a passage using the learner's own words.
+
+    GET renders whatever is held and never spends anything; POST is the one
+    thing that calls the API, and it redirects back to the GET so a refresh
+    re-reads the text rather than writing a second one. Regeneration is that
+    same explicit POST, and it spends an allowance — otherwise the ceilings
+    mean nothing.
+    """
+    length = games.word_count(
+        request.values.get("words"),
+        games.remembered_word_count(session, activity.words),
+        activity.words)
+    instruction = textgen.clean_instruction(request.values.get("about"))
+    games.remember_word_count(session, length, activity.words)
+    session[INSTRUCTION_KEY] = instruction
+
+    def page(**extra):
+        return render_template(
+            "game_read_a_text.html", activity=activity, topics=topics,
+            words=length, instruction=instruction,
+            instruction_max=textgen.INSTRUCTION_MAX_CHARS,
+            topic_summary=_topic_summary(topics), **extra)
+
+    if request.method == "POST":
+        refusal = _generation_refusal()
+        if refusal:
+            # Whatever they are holding, not only a text matching this request:
+            # the instruction box may well be what they just changed, and the
+            # answer to "you cannot have another" is to leave the one they have
+            # on the screen rather than to clear it as well.
+            return page(held=_held_generation(), refusal=refusal)
+        cards = get_flashcards_by_topics(topics, cards_owner_filter())
+        chosen = textgen.words_for_text(cards, length)
+        if not chosen:
+            return page(held=None, refusal=None)
+        result = textgen.generate(chosen, instruction, length)
+        session[GENERATED_TEXT_KEY] = {
+            "text": result["text"], "words": result["words"],
+            "topics": list(topics), "length": length,
+            "instruction": instruction, "error": result["error"],
+        }
+        # Post/redirect/get: the text now lives in the session, so the address
+        # bar holds a plain GET that can be refreshed, shared and gone back to.
+        return redirect(url_for("game_play", game=activity.slug, topic=topics,
+                                words=length, about=instruction or None))
+
+    return page(held=_held_for(topics, length, instruction), refusal=None)
 
 
 def _round_stub(activity, topics):
@@ -2539,6 +2751,7 @@ GAME_ROUNDS = {activity.slug: _round_stub
                if activity.kind in games.GAMES_URL_KINDS}
 GAME_ROUNDS["scrambled"] = _scrambled_round
 GAME_ROUNDS["real_or_fake"] = _real_or_fake_round
+GAME_ROUNDS["read_a_text"] = _read_a_text_round
 
 
 @app.route("/games/<game>/play", methods=["GET", "POST"])
@@ -2553,7 +2766,7 @@ def game_play(game):
 
     Playing also remembers the selection, so the picker opens on it next time.
     """
-    activity = games.activity(game, kind=games.GAMES_URL_KINDS)
+    activity = _reachable_activity(game)
     round_view = GAME_ROUNDS.get(game)
     if activity is None or round_view is None:
         abort(404)

@@ -142,6 +142,37 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   printing the answer), and `pseudowords()` (#132's n-gram, trained on the whole
   visible deck rather than the selection because a trigram over twenty words
   hands those twenty back).
+  Since #237 it also owns the **word matcher** both the reader and #235 need:
+  `word_pattern()` / `find_word()` return the spans where a card's headword
+  appears in a piece of English, and `mark_words()` cuts a whole text into
+  `(run, is_word)` segments plus the used/missing lists. It is a **light stem
+  match, not lemmatisation** — regular inflections only (`resign`→`resigned`,
+  `apply`→`applies`, `acquit`→`acquitted`), an expression matched whole and
+  allowed to hold its object ("takes **it** for granted"), and derivations
+  deliberately *not* matched, because `worker` is not the card `work` and #235
+  would gap out an answer the card does not have. Built once on purpose: two
+  implementations would disagree within a month and fail in opposite directions
+  — #235 showing a sentence containing its own answer, #237 reporting a word as
+  unused while it is on the screen.
+- **`textgen.py`** (#237) — the only paid call this repo makes on its own, and
+  it follows `parsers._split_glued_translations()` rather than Mykola: a module
+  model constant, a client built at call time, bounded `max_tokens`, and a
+  `try` that logs its own failure through `applog`. **Not `MykolaAgent`** — that
+  is a conversation with a system prompt and card context; this is one
+  stateless call returning prose, and routing it through the agent would put a
+  generation feature inside the repo that owns the *companion*.
+  The prompt carries **the bare words and nothing else** — no explanation,
+  examples or translations — and the learner's free-text line is capped and
+  collapsed onto one line before it goes in (`clean_preferred_name()` in
+  ai_agent is the precedent). `max_tokens` is words × 1.5, not 1:1, or a
+  150-word request stops mid-sentence. **Highlighting is verified, not
+  requested**: the model is asked for plain prose and `games.mark_words()`
+  finds the words afterwards, so the page can say which ones actually appeared
+  instead of claiming a coverage nobody checked. Spending is guarded *before*
+  the call (#200) by `app._generation_refusal()`, and with no
+  `ANTHROPIC_API_KEY` the activity is not reachable at all — `_reachable_activity()`
+  404s it and the tile does not render, the same way `MYKOLA_AVAILABLE=False`
+  removes the chat widget.
 - **The games chassis** — `/games/<slug>` is the picker and `/games/<slug>/play`
   a round, dispatched through `GAME_ROUNDS` in `app.py`; a game is one entry
   there plus one in `ACTIVITIES`. **`/quiz` is a separate endpoint from
@@ -154,7 +185,16 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   and re-sampling on POST would mark answers against words nobody saw. Selection
   and round length live in the Flask session — a signed cookie with a ~4 KB
   ceiling Werkzeug enforces by silently dropping it, so only currently-visible
-  topic names go in and a generated text (#237) will need somewhere else.
+  topic names go in. #237's generated text goes in too, and the thing that
+  makes it safe is `textgen.max_tokens()`: the longest text the model is
+  *allowed* to return is 600 tokens, and the measured worst case — 400 words of
+  deliberately incompressible text, a signed-in identity and an eighteen-topic
+  selection — serialises to 3.2 KB of the 4 KB. Only the text and its words are
+  stored; the highlighting is recomputed on each read. Anything larger still
+  needs somewhere else to live. The round is **post/redirect/get** so a refresh
+  re-reads the held text rather than paying for a second one, and the held copy
+  is keyed on the topics, length and instruction that produced it, so changing
+  any of them offers a fresh text instead of silently showing an old one.
 - **Mykola widget** lives in `templates/base.html`; endpoints `/mykola/chat`,
   `/mykola/recap`. Its intelligence comes from the `ai_agent` package.
   **Agent tools are hosted here**: the agent defines them, this app injects the
@@ -174,7 +214,22 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   `flashcards`. Most steps are idempotent because the object they create can be
   looked up by name; a step that moves **data** carries a `Pending` probe
   instead — SQL that still returns rows while there is work left (#207's topic
-  backfill is the first).
+  backfill is the first). A brand-new **table** needs no migration at all — the
+  `schema.sql` pass creates it on an existing database too — which is why
+  #237's `text_generation_usage` is one edit rather than two.
+- **`text_generation_usage`** (#237) — generated texts per day: one row per
+  account, plus the row whose `user_id` is **0** counting everybody. Zero
+  rather than the NULL the ticket described, because MySQL treats NULLs in a
+  unique key as distinct — an upsert against a NULL `user_id` inserts a fresh
+  row every time instead of incrementing the first, and a `PRIMARY KEY` cannot
+  hold NULL at all. It has **no foreign key to `users`**, unlike every other
+  `user_id` in the file: these are day-scoped counters rather than attribution,
+  and one stale row that expires the same day beats another RESTRICT/CASCADE
+  decision on the account-deletion path (#165). `claim_text_generation()`
+  copies `claim_anonymous_message()`'s single statement so two workers cannot
+  both take the last slot, and claims the **account row first** — that way a
+  learner can spend one of their ten on a day the site is exhausted, rather
+  than a site-wide slot being burned for somebody already over their own limit.
 - **`topics`** (#207) — topics are a table, and `flashcards.topic_id` points at
   it. `flashcards.topic` is still written alongside, holding the **canonical**
   spelling from the topics row: it is what `ai_agent`'s `cards_db` still reads
@@ -310,3 +365,11 @@ behind, since the foreign key is what a later section feature will rely on:
 ```bash
 python -c "from utils import get_db_connection; c=get_db_connection(); u=c.cursor(); u.execute('SELECT COUNT(*) FROM topics WHERE section_id IS NULL'); print('topics with no section (want 0):', u.fetchone()[0])"
 ```
+
+For the **#237 deploy**, `apply_schema.py` is needed again after several
+pull-and-reload releases: the dry run should list exactly one pending step,
+`text_generation_usage`, and `=` against everything else. It creates an empty
+counter table and touches no existing row, so there is nothing to check
+afterwards beyond the script's own output. #237 also needs `ANTHROPIC_API_KEY`
+to be readable by the web app — it arrives through `ai_agent/.env`, the same
+way Mykola's does, and without it the activity simply does not appear.

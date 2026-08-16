@@ -52,6 +52,13 @@
                     <input type="number" name="words" class="picker-words-box"
                            min="{{ words_min }}" max="{{ words_max }}"
                            value="{{ words }}" inputmode="numeric">
+                    {# Said out loud rather than left to the browser to enforce
+                       after the fact (#237): a learner typing 20 into a box
+                       whose floor is 50 should be told the range, not silently
+                       clamped by the round. #}
+                    {% if words_hint %}
+                        <span class="picker-words-hint">{{ words_hint }}</span>
+                    {% endif %}
                 </label>
                 {# Enabled by the script once the selection is big enough. It
                    starts disabled so a browser with JavaScript off cannot
@@ -69,6 +76,23 @@
                the whole form, so a second copy could not show the same choice
                as the first — checking one would visibly clear the other. The
                word box above can be duplicated precisely because it cannot. #}
+            {# What the text should be about, and in what style (#237). On the
+               upper panel only, for the same reason the radios are: it is a
+               single value, and two boxes showing different halves of one
+               answer is worse than one box the learner has to scroll back to.
+               Optional — an empty line means the model picks its own subject. #}
+            {% if with_language and activity.asks_instruction %}
+                <div class="picker-about">
+                    <label class="picker-about-label" for="picker-about">
+                        What should it be about?
+                    </label>
+                    <input type="text" name="about" id="picker-about"
+                           class="picker-about-box" value="{{ instruction }}"
+                           maxlength="{{ instruction_max }}" autocomplete="off"
+                           placeholder="a letter of complaint to a hotel — optional">
+                </div>
+            {% endif %}
+
             {% if with_language and quiz_langs %}
                 <div class="picker-langs">
                     <span class="picker-langs-label">Translation to:</span>
