@@ -154,7 +154,8 @@ button {
 }
 button:hover { background: var(--blue-dark); }
 .form-row { display: flex; gap: 1rem; }
-.form-row > div { flex: 1; }
+/* `position` so a column can anchor its own hint (#298) — see `.form-hint`. */
+.form-row > div { flex: 1; position: relative; }
 
 /* Banners */
 .banner {
@@ -546,10 +547,27 @@ button:hover { background: var(--blue-dark); }
 .hint { color: var(--muted); font-size: 0.92rem; }
 /* A hint that belongs to the field above it rather than to the panel (#292):
    close under the row, so it reads as part of the Topic box rather than as a
-   caption for the whole form. The row ends exactly where its inputs do, so
-   this margin is what separates the two — a negative one puts the text inside
-   the field. */
-.form-hint { margin: 0.3rem 0 0.9rem; font-size: 0.86rem; }
+   caption for the whole form.
+
+   **Out of the row's flow** (#298). In flow it made its own column 37px taller,
+   and a row is as tall as its tallest column — so a caption under the *Topic*
+   box was pushing the button down under the *Word* box, and Look up & save sat
+   52px below its fields where Upload & save sat 14px below its own. Anchored
+   to the column instead, the row keeps the height it had before the hint
+   existed and both buttons sit at the 14px their own margin gives.
+
+   There is room in that band: the button is a short control on the left and
+   the hint is in the right-hand column, so they sit side by side rather than
+   on top of each other. The column it hangs from is positioned where the row
+   itself is defined, at the top of this file. */
+.form-hint {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 0.3rem 0 0;
+    font-size: 0.86rem;
+}
 
 /* About modal */
 .modal-overlay[hidden] { display: none; }
@@ -1104,6 +1122,11 @@ button:disabled:hover { background: #9db4c7; }
 
 @media (max-width: 600px) {
     .form-row { flex-direction: column; gap: 0; }
+    /* Stacked, the Topic box is the last field, so an out-of-flow hint would
+       land on the button (#298). Back into the flow, where it separates the
+       two — and the mismatch #298 is about cannot arise here anyway, since
+       both panels stack the same way. */
+    .form-hint { position: static; margin: 0.3rem 0 0; }
 
     .welcome-step { padding: 0.8rem; }
     .welcome-step h2 { font-size: 1.2rem; }
