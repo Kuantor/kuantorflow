@@ -499,9 +499,23 @@
                 // the remaining ones were never sent, so closing cancels them.
                 document.getElementById("proposal-close").addEventListener("click", close);
 
-                overlay.addEventListener("click", function (e) {
-                    if (e.target === overlay) close();
-                });
+                // **No click-outside-to-close here** (#296), unlike every other
+                // dialog on the page. Closing this one is destructive — the
+                // cross says so in as many words, "Close and discard the
+                // remaining cards" — and the cards behind it cost a lookup
+                // against two providers or a parsed file. A stray click did
+                // that silently.
+                //
+                // Nothing replaces it: the overlay is already fixed across the
+                // viewport, so the page behind cannot be reached anyway, and
+                // Mykola's widget sits above it (z-index 200 over 100) and
+                // keeps working, which is the one thing that should still be
+                // usable from here.
+                //
+                // Escape stays. It runs the same close, but it is a deliberate
+                // keypress rather than a stray click, it is what a keyboard
+                // user expects of a dialog, and the visible cross does the
+                // same job for everyone else.
                 document.addEventListener("keydown", function (e) {
                     if (e.key === "Escape" && !overlay.hidden) close();
                 });
