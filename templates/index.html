@@ -294,6 +294,23 @@
                 <p class="proposal-title">
                     {% if source_content %}Review the cards parsed from your file{% else %}Do you want to add the card(s) to the database?{% endif %}
                 </p>
+                {# Where the cards are going (#294). The popup carried every
+                   other fact about the card and not this one, and the topic was
+                   chosen two panels away, before a lookup that takes seconds.
+
+                   `proposed_topic` is the **resolved** topic, not the raw
+                   field: an empty box became `general` in app.py before this
+                   rendered, so what is named here is what will be written —
+                   which is the only place that default is now visible, #292
+                   having taken the old `general` placeholder for the chooser's
+                   own wording.
+
+                   Once for the popup rather than once per card: every card
+                   below carries the same hidden `topic`, and repeating it a
+                   dozen times would be noise. #}
+                {% if proposed_topic %}
+                    <p class="proposal-topic">Topic: <strong>{{ proposed_topic }}</strong></p>
+                {% endif %}
                 <div class="proposal-body">
                     {% if source_content %}
                         <div class="proposal-source">

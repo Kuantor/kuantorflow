@@ -727,6 +727,22 @@ body.welcome-active {
 /* Lookup review popup (proposed cards) */
 .proposal-dialog { width: min(92vw, 560px); max-width: none; }
 .proposal-title { font-size: 1.1rem; font-weight: 600; margin: 0 0 1rem; }
+/* The destination topic (#294). Sits between the title and the cards, and
+   takes the margin the title used to spend on that gap — the line is the
+   answer to "added where?", so it belongs against the question rather than
+   floating between the two.
+
+   Scoped to the dialog like the title's own rule beside it, and for the same
+   reason: `.modal-dialog p` sets a size and a margin for every paragraph in a
+   dialog, and a bare `.proposal-topic` loses to it on specificity — silently,
+   since the colours would still land and only the size would look wrong. */
+.proposal-dialog .proposal-title:has(+ .proposal-topic) { margin-bottom: 0.25rem; }
+.proposal-dialog .proposal-topic {
+    margin: 0 0 1rem;
+    font-size: 0.92rem;
+    color: var(--muted);
+}
+.proposal-dialog .proposal-topic strong { color: var(--blue-dark); }
 /* Popup-wide close cross (#146). Tucked inside the rounded corner rather than
    overhanging it, since the dialog can sit close to the viewport edge; the
    title keeps clear of it. Distinct (yellow, round) from the small grey
