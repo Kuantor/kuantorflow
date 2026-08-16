@@ -207,13 +207,17 @@
                     <input type="text" id="word-topic" name="topic"
                            list="topic-options" autocomplete="off"
                            placeholder="an existing topic, or a new name">
+                    {# Inside the Topic column, not under the row: the hint is
+                       about this field, and a full-width line under both of
+                       them reads as a note about the Word box as much as this
+                       one. The move dialog's sentence, minus its second half
+                       about moving. Said once for both panels (#292) — Upload
+                       notes is directly below with the same control, and
+                       repeating the line there would be noise rather than
+                       help. #}
+                    <p class="hint form-hint">Typing a topic that does not exist yet creates it.</p>
                 </div>
             </div>
-            {# The hint the move dialog carries, minus its second sentence,
-               which is about moving. Said once for both panels (#292): Upload
-               notes is directly below with the same control, and repeating the
-               line there would be noise rather than help. #}
-            <p class="hint form-hint">Typing a topic that does not exist yet creates it.</p>
             <button type="submit">Look up &amp; save</button>
         </form>
     </div>
