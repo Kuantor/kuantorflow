@@ -395,13 +395,69 @@ button:hover { background: var(--blue-dark); }
     font-size: 1.02rem;
     color: var(--blue-dark);
 }
-.topic-section:first-child { margin-top: 0.4rem; }
+/* The first heading in the panel sits closer to the panel's own title. A bare
+   heading takes the whole 0.4rem; a folded one (#288) takes what is left after
+   its summary's padding, so both start on the same line. */
+#browse-topics > .topic-section:first-child { margin-top: 0.4rem; }
+#browse-topics > :first-child > summary { padding-top: 0.4rem; }
 .topic-section::after {
     content: "";
     flex: 1;
     height: 2px;
     background: var(--blue);
     opacity: 0.55;
+}
+
+/* Folding a section away (#288).
+ *
+ * The heading is a <summary>'s content, so it is the click target and the
+ * focus stop for the whole row — the rule line included, which is what makes
+ * the target as wide as the section reads.
+ *
+ * The heading's spacing moves onto the summary, which is also the press
+ * target: one box doing both jobs makes the row 46px to hit rather than the
+ * heading's own 21px line, and the panel keeps the rhythm it had. Margins left
+ * on the heading would not do — inside a summary they no longer collapse the
+ * way they used to, and the sections would drift apart.
+ *
+ * The default disclosure triangle is removed and drawn again as a chevron
+ * *before* the text: the browser's marker sits outside the flex row and would
+ * break the rule line's alignment, and it is the one part of a <details> whose
+ * look is not otherwise ours. `list-style` covers Firefox, the
+ * ::-webkit-details-marker rule covers Safari, which ignores it. */
+.topic-fold > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 1.1rem 0 0.5rem;
+}
+.topic-fold > summary .topic-section { margin: 0; }
+.topic-fold > summary::-webkit-details-marker { display: none; }
+.topic-fold > summary:hover .topic-section { color: var(--blue); }
+.topic-fold > summary:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 3px;
+    border-radius: 8px;
+}
+/* Scoped to a fold rather than to `.topic-section`: the games picker groups its
+   topics under the same headings (#215) and folds nothing, so a chevron there
+   would offer a click that does not exist. */
+.topic-fold > summary .topic-section::before {
+    content: "";
+    flex: none;
+    width: 0.42rem;
+    height: 0.42rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    /* Pointing right when closed, down when open. Rotating rather than
+       swapping a glyph keeps the two states the same size, so the heading does
+       not shift as it turns. */
+    transform: rotate(-45deg);
+    transition: transform 0.15s ease;
+    opacity: 0.75;
+}
+.topic-fold[open] > summary .topic-section::before { transform: rotate(45deg); }
+@media (prefers-reduced-motion: reduce) {
+    .topic-fold > summary .topic-section::before { transition: none; }
 }
 
 /* Topic tiles (#184). Rounded rectangles rather than pills: #185 will give
