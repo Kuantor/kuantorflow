@@ -111,6 +111,16 @@
                     data-word="{{ card.word }}">&#8594;</button>
             <div class="word">{{ card.word }}
                 {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
+                {# Hear the word (#283). Hidden until speech.js has confirmed
+                   the browser can speak — a speaker icon that does nothing
+                   reads as a broken page, where an absent one reads as a site
+                   that simply has no such button. The label names the word,
+                   because forty identical icons are no help to a screen
+                   reader. #}
+                <button type="button" class="say" hidden
+                        data-say="{{ card.word }}"
+                        title="Hear it"
+                        aria-label="Pronounce {{ card.word }}">&#128266;</button>
             </div>
 
             {% if card.explanation_en %}

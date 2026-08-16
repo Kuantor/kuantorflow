@@ -1562,5 +1562,12 @@
         })();
     </script>
     {% endif %}
+
+    {# Speech (#268), loaded for every page rather than for the two that use it
+       today: it is a few hundred bytes, it wires itself only where a
+       [data-say] button exists, and the next caller — a pronounce button in
+       the review popup, on quiz results, or #272's listening game — then needs
+       markup and nothing else. #}
+    <script src="{{ url_for('static', filename='js/speech.js') }}" defer></script>
 </body>
 </html>
