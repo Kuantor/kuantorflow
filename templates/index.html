@@ -326,6 +326,29 @@
                                         aria-label="Remove this card">&times;</button>
                                 <div class="word">{{ card.word }}
                                     {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
+                                    {# Hear it before deciding to keep it (#301).
+                                       The same control as the topic page and the
+                                       deck (#283) — `data-say` is the whole
+                                       contract, and speech.js binds one
+                                       delegated listener for all of them.
+
+                                       `type="button"` matters more here than
+                                       anywhere else it is used: this card *is a
+                                       form*, and its submit button is Add. A
+                                       speaker defaulting to submit would save
+                                       the card instead of pronouncing it.
+                                       speech.js's capture-phase preventDefault
+                                       already stops that; this is the second
+                                       lock, not the only one.
+
+                                       Hidden until speech.js confirms the
+                                       browser can speak, and labelled with the
+                                       word, because a popup can hold a dozen of
+                                       these. #}
+                                    <button type="button" class="say" hidden
+                                            data-say="{{ card.word }}"
+                                            title="Hear it"
+                                            aria-label="Pronounce {{ card.word }}">&#128266;</button>
                                 </div>
                                 <input type="hidden" name="word" value="{{ card.word }}">
                                 <input type="hidden" name="pos" value="{{ card.pos or '' }}">
