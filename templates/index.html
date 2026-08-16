@@ -169,6 +169,28 @@
     </div>
     {% endif %}
 
+    {# One list of topics, shared by both save panels below (#292). A datalist
+       can be referenced by any number of inputs, and two copies of the same
+       options would drift the moment either was touched.
+
+       Written with the page rather than fetched: `sections` is what the tiles
+       above were just drawn from, so the options are **exactly** the topics
+       this learner can see — including under `individual_cards` (#127), which
+       filters that very query. The move dialog fetches /topics.json because a
+       topic page has no list to hand; this page does, so there is no request,
+       nothing empty on first open, and no JavaScript in the common case.
+
+       Outside `#browse-topics` on purpose: that block is wiped and rebuilt on
+       every chat save (#53), and this has to outlive it. Kept up to date there
+       instead, by refreshBrowseTopics() in base.html. #}
+    <datalist id="topic-options">
+        {% for section, topics in sections %}
+            {% for topic, _count in topics %}
+                <option value="{{ topic }}"></option>
+            {% endfor %}
+        {% endfor %}
+    </datalist>
+
     <div class="panel">
         {# The provider name follows the Settings choice (#20). #}
         <h2>Look up a word ({{ 'Bing Translator' if settings.translator == 'bing' else 'Google Translate' }})</h2>
@@ -182,9 +204,16 @@
                 </div>
                 <div>
                     <label for="word-topic">Topic</label>
-                    <input type="text" id="word-topic" name="topic" placeholder="general">
+                    <input type="text" id="word-topic" name="topic"
+                           list="topic-options" autocomplete="off"
+                           placeholder="an existing topic, or a new name">
                 </div>
             </div>
+            {# The hint the move dialog carries, minus its second sentence,
+               which is about moving. Said once for both panels (#292): Upload
+               notes is directly below with the same control, and repeating the
+               line there would be noise rather than help. #}
+            <p class="hint form-hint">Typing a topic that does not exist yet creates it.</p>
             <button type="submit">Look up &amp; save</button>
         </form>
     </div>
@@ -201,7 +230,11 @@
                 </div>
                 <div>
                     <label for="notes-topic">Topic</label>
-                    <input type="text" id="notes-topic" name="topic" placeholder="general">
+                    {# The same chooser and the same list as the panel above
+                       (#292) — no hint here, it is said once up there. #}
+                    <input type="text" id="notes-topic" name="topic"
+                           list="topic-options" autocomplete="off"
+                           placeholder="an existing topic, or a new name">
                 </div>
             </div>
             <button type="submit">Upload &amp; save</button>

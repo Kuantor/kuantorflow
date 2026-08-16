@@ -1185,6 +1185,36 @@
                 videoOverlay.hidden = true;
                 video.pause();
             }
+            function refreshTopicOptions(sections) {
+                // The two save panels share one datalist, rendered with the
+                // page (#292). A card saved from the chat can create a topic,
+                // and then the chooser is offering a list that is missing it.
+                //
+                // Rewritten only when the names actually differ: most chat
+                // saves land in a topic that already exists, and replacing the
+                // options for nothing would swap the list out from under a
+                // dropdown the learner may have open. Order counts as a
+                // difference — it is the order the options are shown in.
+                var list = document.getElementById("topic-options");
+                if (!list) return;          // every page except the index
+                var names = [];
+                sections.forEach(function (section) {
+                    section[1].forEach(function (topic) { names.push(topic[0]); });
+                });
+                var shown = Array.prototype.map.call(list.options,
+                    function (option) { return option.value; });
+                if (shown.length === names.length
+                        && shown.every(function (name, i) { return name === names[i]; })) {
+                    return;
+                }
+                while (list.firstChild) list.removeChild(list.firstChild);
+                names.forEach(function (name) {
+                    var option = document.createElement("option");
+                    option.value = name;
+                    list.appendChild(option);
+                });
+            }
+
             function refreshBrowseTopics() {
                 // Rebuild the index page's "Browse flashcards" tiles after
                 // Mykola saved a card from the chat (issue #53). The section
@@ -1197,6 +1227,9 @@
                     .then(function (data) {
                         var sections = data.sections || [];
                         var anyTopics = sections.some(function (s) { return s[1].length; });
+                        // Before the early return below: an empty deck is also
+                        // an answer about what the chooser should offer (#292).
+                        refreshTopicOptions(sections);
                         while (box.firstChild) box.removeChild(box.firstChild);
                         if (!anyTopics) {
                             var hint = document.createElement("p");
