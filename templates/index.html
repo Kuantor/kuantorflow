@@ -77,12 +77,11 @@
            Deferred, the panel would open in full and collapse a moment later —
            a flicker on every visit, on the tallest thing on the page. #}
         <script src="{{ url_for('static', filename='js/browse_folds.js') }}"></script>
-        <form method="GET" onsubmit="window.location='/flashcards/' + encodeURIComponent(this.topic.value); return false;">
-            <label for="browse-topic">Or type a topic name</label>
-            <input type="text" id="browse-topic" name="topic" required
-                   placeholder="Type a topic name">
-            <button type="submit">Show flashcards</button>
-        </form>
+        {# The typed topic box was here until #290. Every topic worth opening is
+           a tile — with a picture (#223), a count, and a section that folds
+           (#288) — so typing a name you can already see was the slower way to
+           the same page. `/flashcards/<topic>` still answers: this removed a
+           way in, not the page. #}
     </div>
 
     {# The ways in (#253). Deliberately **outside `#browse-topics`** above:
