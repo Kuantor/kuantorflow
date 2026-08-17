@@ -569,6 +569,41 @@ def save_flashcard(entry, added_by_user_id=None):
 EDITABLE_FIELDS = tuple(f for f in FLASHCARD_FIELDS if f != "topic")
 
 
+def duplicate_topic(word, pos):
+    """The topic holding the card that blocks this word + part of speech (#308).
+
+    `find_duplicate()` below answers *who owns* the blocking card, which is what
+    #186 needs to say whether the learner can even see it. This answers *where
+    it is*, which is what Mykola needs to stop sending somebody to a topic the
+    card was never filed under: duplicate detection is global (#101) while
+    topics are not, so "already saved" and "saved where you asked" are different
+    facts.
+
+    Kept beside `find_duplicate()` rather than widening its tuple: that shape is
+    stubbed by the edit-path tests, and a third element only one caller reads
+    would break them for a message nicety. The **match must stay identical** to
+    `find_duplicate()`'s and `save_flashcard()`'s — collation-driven and
+    NULL-safe on `pos` — or this would name the topic of a card that is not the
+    one that did the blocking.
+
+    None when there is no such card, which a caller reached through a skipped
+    save should never see; it is the honest answer for a row deleted in the
+    moment between the two queries.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT topic FROM flashcards WHERE word = %s AND pos <=> %s LIMIT 1",
+            (word, pos),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+
 def find_duplicate(word, pos, exclude_id=None):
     """The card that already holds this word + part of speech, or None (#101).
 
