@@ -201,8 +201,18 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   callable that touches the database (`card_saver` → `_save_card_from_chat`,
   `name_saver` → `_save_preferred_name_from_chat`, ai_agent#62). Injection is
   feature-detected in `get_mykola()` so the repos deploy in either order, and a
-  saver refuses by **raising** — the agent turns that into an error the model
-  relays in character.
+  saver refuses by **raising** — that includes a save skipped as a duplicate
+  (#308), which used to return quietly and had Mykola confirming a card that
+  was never written, into a topic it is not in.
+  **What he knows about the app is injected the same way** (#310):
+  `MYKOLA_KNOWLEDGE` hands `docs/user-guide.md` to the agent, which indexes it
+  beside its own knowledge. The guide is the single source — ai_agent
+  deliberately describes this app nowhere, because the copy it used to keep
+  drifted until it was answering "why can't I add cards?" from a description
+  written before #125. So **a feature change that a learner would notice is a
+  guide change**, and the guide's `###` headings are its retrieval units: one
+  heading per feature, since a section covering four activities scores too low
+  on a question about any one of them to be found.
 - **`schema.sql` + `apply_schema.py`** — `schema.sql` holds `CREATE TABLE` only
   and describes a **fresh** database; every change to an **existing** one is a
   `Step` in `apply_schema.py`'s `MIGRATIONS` (#180). Adding a column is

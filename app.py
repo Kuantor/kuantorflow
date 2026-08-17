@@ -1161,6 +1161,20 @@ def _save_preferred_name_from_chat(name):
     return name
 
 
+# What Mykola reads to know the app he lives in (#310). The learner's guide,
+# and not a second description written for him: it is maintained here beside
+# the app it describes, reviewed like any other change, and shipped to learners
+# as a PDF — so it is already kept true, and a copy in ai_agent would be one
+# more thing to remember to update. There used to be such a copy, and it
+# drifted until it was answering "why can't I add cards?" from a description
+# written before sign-in was required to write at all.
+#
+# A list, because this is the seam through which anything else the app knows
+# about itself would arrive. Paths that do not exist are skipped by the agent
+# in silence.
+MYKOLA_KNOWLEDGE = [Path(__file__).parent / "docs" / "user-guide.md"]
+
+
 def get_mykola():
     """Lazily build the MykolaAgent (loads the knowledge base) on first use."""
     global _mykola_agent
@@ -1184,6 +1198,8 @@ def get_mykola():
             kwargs["topic_reader"] = _topics_for_chat
         if "card_reader" in accepted:                     # ai_agent#68
             kwargs["card_reader"] = _cards_for_chat
+        if "knowledge_docs" in accepted:                  # #310
+            kwargs["knowledge_docs"] = MYKOLA_KNOWLEDGE
         _mykola_agent = MykolaAgent(**kwargs)
     return _mykola_agent
 
