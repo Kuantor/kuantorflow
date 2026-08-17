@@ -39,6 +39,7 @@ from utils import (
     claim_text_generation,
     delete_flashcard,
     delete_user,
+    duplicate_topic,
     resolve_user_cards,
     flashcard_word_exists,
     get_db_connection,
@@ -1081,16 +1082,56 @@ def mykola_chat_page():
 def _save_card_from_chat(entry):
     """Card saver injected into the agent: persists a flashcard Mykola was
     asked to add in chat, through the same save_flashcard mechanism as the
-    Look up & save flow (issue: ai_agent#20). A duplicate word+pos is
-    skipped by save_flashcard (issue #101); Mykola still reports the card,
-    which is accurate either way — it is in the database.
+    Look up & save flow (issue: ai_agent#20).
 
     An anonymous visitor's card is refused (#125) by _save_and_log raising:
     the agent turns an exception from its card_saver into an error the model
     relays, so Mykola says he cannot save it and why, instead of claiming a
-    card that was never written."""
-    _save_and_log(entry, source="Mykola chat")
-    return entry
+    card that was never written.
+
+    **A skipped duplicate raises too** (#308). It used to return quietly, on
+    the grounds that the card is in the database either way — which is true,
+    and is not what the learner was told. They asked for it in *this* topic,
+    duplicate detection is global while topics are not (#101), and the card
+    can sit under a topic they never mentioned or, with #127 on, under
+    somebody else's account where they cannot find it at all. Returning
+    normally is what the agent reads as success: `_run_add_flashcard()`
+    reports `saved` for any call that does not raise and ignores what the
+    saver returns. So the false confirmation was manufactured here, not by
+    the model — whose instructions already say never to claim a card was
+    saved unless the tool returned success.
+
+    Raising rather than returning a status keeps this to one repo and works
+    against the ai_agent already deployed, which is the seam CLAUDE.md
+    documents: a saver refuses by raising, and Mykola relays it in character.
+    """
+    if _save_and_log(entry, source="Mykola chat"):
+        return entry
+
+    # Stated as fact and nothing else. The message is relayed by the model, so
+    # anything resembling an offer becomes a promise: an earlier draft ended
+    # "you can move it if they would rather", and Mykola has no move tool —
+    # which would have been this very bug wearing a different coat.
+    word = entry.get("word") or "that word"
+    named = f"'{word}' ({entry['pos']})" if entry.get("pos") else f"'{word}'"
+
+    # #186's question, asked with #186's own code: is the blocking card even
+    # visible to this learner? If not, its topic is not ours to name.
+    hidden = duplicate_notice([entry])
+    if hidden:
+        raise RuntimeError(
+            f"{named} is already saved, so no second copy was added. {hidden}")
+    where = None
+    try:
+        where = duplicate_topic(entry.get("word"), entry.get("pos"))
+    except Exception:
+        # A dead database costs the topic name, not the correction itself —
+        # saying "already saved" without it still beats claiming it was.
+        app.logger.exception("Could not find where the duplicate is filed")
+    if where:
+        raise RuntimeError(f"{named} is already saved under the topic "
+                           f"'{where}', so no second copy was added.")
+    raise RuntimeError(f"{named} is already saved, so no second copy was added.")
 
 
 def _save_preferred_name_from_chat(name):
