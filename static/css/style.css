@@ -1249,9 +1249,20 @@ button:disabled:hover { background: #9db4c7; }
     background: var(--blue);
     color: #fff;
 }
+/* As tall as the text beside it (ai_agent#56). The caption runs to three lines
+   — the name and two of "your distinguished English companion" — which makes
+   the text block 2.8rem, and the avatar was 2.2rem of that with the rest left
+   empty. Matching the two fills the header without making it any taller.
+
+   A fixed size rather than `align-self: stretch` with `aspect-ratio: 1`, which
+   looks like the self-maintaining version of exactly this and is not: the
+   avatar's width is taken out of the text column, so a taller avatar narrows
+   the caption, which wraps to more lines, which raises the header, which grows
+   the avatar again. Measured rather than reasoned about — it settles at a
+   260px avatar in a 282px header. */
 .mykola-header img {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2.8rem;
+    height: 2.8rem;
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid #fff;
