@@ -64,11 +64,28 @@ On a card you added you can **edit** any field, **move** it to another topic, or
 
 The *Card deck* link at the top of a topic opens the same cards as a **deck**: one at a time, click to flip between the English side and the translation, arrows to move through the pile, and a *Flip animation* switch if you would rather it did not turn.
 
-## Practising
+## Practising: the games and activities
+
+### The games, in one list
+
+There are six activities in the *Practise your words* panel on the front page — most of them games, and four of them ready to play now:
+
+| Game | What you do |
+| --- | --- |
+| **Quiz** | Type the translation of a word. |
+| **Real or fake** | Decide which words are real and which the app invented. |
+| **Scrambled** | Rebuild a word whose middle letters were shuffled. |
+| **Generate a text** | Read a passage written from your own words. |
+| *Multiple choice* | Not built yet — pick the right answer from four. |
+| *Fill the gap* | Not built yet — guess the word missing from its own example sentence. |
+
+The last two games are declared but not finished. Their tiles are visible and greyed on the front page, so you can see what is coming without being able to click into an empty room.
+
+Each game is described below, and they all start the same way, from the picker.
 
 ### Choosing what to practise
 
-Every activity starts with the same picker: tick the topics you want, choose **how many words** the round should ask, and start. Whole sections can be ticked at once, and the running total tells you how much you have selected before you commit to it.
+Every game starts with the same picker: tick the topics you want, choose **how many words** the round should ask, and start. Whole sections can be ticked at once, and the running total tells you how much you have selected before you commit to it.
 
 The choice is remembered for next time, and the round's address is a plain link you can bookmark or share. Every topic page carries the same activities in a row along the top, already narrowed to that topic.
 
@@ -80,11 +97,11 @@ Answers are marked generously — any accepted translation counts, case and spac
 
 ### Real or fake
 
-Half the words are yours and half were invented by a model trained on your own deck, and you decide which is which. The invented ones are built to look like plausible English rather than nonsense, so it is a real test of what you recognise.
+A game of spotting invented words. Half the words are yours and half were invented by a model trained on your own deck, and you decide which is which. The invented ones are built to look like plausible English rather than nonsense, so it is a real test of what you recognise.
 
 ### Scrambled
 
-The middle letters of a word are shuffled and you put it back together. The first and last letters stay, so the shape you recognise survives. Words too short to scramble are left out of the round rather than shown unchanged, and the page says how many that was.
+A game of unscrambling: the middle letters of a word are shuffled and you put it back together. The first and last letters stay, so the shape you recognise survives. Words too short to scramble are left out of the round rather than shown unchanged, and the page says how many that was.
 
 ### Generate a text
 
@@ -93,10 +110,6 @@ The one activity that **writes** rather than tests. Pick topics, optionally say 
 The words you are studying appear **in bold**, and underneath is the honest account: which of them the text actually used, and which it did not. They are found by searching the finished text, not by asking the model to mark its own work, so the list is checked rather than claimed.
 
 A text is kept for the session, so re-reading it, going back to it or refreshing the page costs nothing; writing a new one is a button you press deliberately. Signed out you get one text, and then an invitation to sign in; signed in, ten a day.
-
-### Not yet built
-
-Two activities are declared but not finished: *Multiple choice* and *Fill the gap*, which will hide a word inside one of its own example sentences. Their tiles are visible and greyed, so you can see what is coming without being able to click into an empty room.
 
 ## Mykola, your study companion
 
