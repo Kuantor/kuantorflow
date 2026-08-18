@@ -147,9 +147,12 @@ def build_prompt(words, instruction, length):
         "tenses, an object inside a phrase — rather than forcing the exact "
         f"form given:\n\n{listed}"
         f"{about}\n\n"
-        "Reply with the text itself and nothing else: no title, no preamble, "
-        "no closing remark, no list of the words used, and no markdown, bold "
-        "or other formatting."
+        "Give the text a short title — four or five words — on its own first "
+        "line, then a blank line, then the text itself. The title does not "
+        "count towards the length.\n\n"
+        "Reply with the title and the text and nothing else: no preamble, no "
+        "closing remark, no list of the words used, and no markdown, bold or "
+        "other formatting."
     )
 
 
@@ -167,13 +170,85 @@ def _ask_claude(prompt, length):
         block.text for block in message.content if block.type == "text").strip()
 
 
+# A title is four or five words; anything much longer is the model having
+# written a sentence where a title was asked for. Twelve is the cut-off — wide
+# enough for a real headline ("Local man acquitted in warehouse arson case" is
+# seven), narrow enough that a first sentence fails it.
+TITLE_MAX_WORDS = 12
+
+# What is stored, in case a model returns something enormous on one line. The
+# session is a signed cookie with a measured 800 bytes of headroom (#237), and a
+# title has no business using much of it.
+TITLE_MAX_CHARS = 120
+
+
+def split_title(reply):
+    """`(title, body)` from the model's reply, or `("", reply)`.
+
+    The prompt asks for a title on the first line, and the model obliges in
+    several shapes: bare, `# Heading`, `Title: something`, or wrapped in
+    quotes. This is the only place that knows about any of that.
+
+    **It gives up rather than guessing.** A first line that is plainly the
+    start of the passage — long, or ending in a full stop — is left where it
+    is, because losing the opening sentence of the text is a worse failure than
+    showing no title. Same when nothing would be left over: a one-line reply is
+    the text, not a title with no text.
+    """
+    head, _, rest = (reply or "").strip().partition("\n")
+    body = rest.strip()
+    if not body:
+        return "", (reply or "").strip()
+
+    title = head.strip().lstrip("#").strip()
+    for label in ("title:", "titled:"):
+        if title.lower().startswith(label):
+            title = title[len(label):].strip()
+    # Straight and curly, both kinds: a model asked for a title sometimes
+    # quotes it, and which quote character it reaches for is not predictable.
+    for quote in ('"', "'", "“", "”"):
+        title = title.strip(quote)
+    title = title.strip()
+
+    if not title or len(title.split()) > TITLE_MAX_WORDS:
+        return "", (reply or "").strip()
+    if title.endswith((".", "!", "?")):
+        return "", (reply or "").strip()
+    return title[:TITLE_MAX_CHARS], body
+
+
+def mark(title, text, words):
+    """Find `words` in the title and the body, in one place.
+
+    Shared by `generate()` and the round's re-read of a held text, because they
+    must agree: the marking is recomputed on every read rather than stored
+    (#237), so two implementations would be two answers to "was this word
+    used".
+
+    **The title counts.** A word appearing only in the title is used — the
+    learner reads the title, and reporting it as unused while it sits in bold
+    two lines above would be the unverified claim #237 exists to avoid.
+    """
+    title_segments, in_title, _ = games.mark_words(title or "", words)
+    segments, in_body, _ = games.mark_words(text or "", words)
+    seen = set(in_title) | set(in_body)
+    return {
+        "title_segments": title_segments,
+        "segments": segments,
+        "used": [w for w in words if w in seen],
+        "missing": [w for w in words if w not in seen],
+    }
+
+
 def generate(words, instruction, length, ask=None):
     """Write the text and find the words in it.
 
     Returns a dict the round can hold and the page can render:
 
+        title     the text's own title, or "" when the reply had none
         text      the prose, as the model wrote it
-        segments  `(run, is_word)` pairs — see `games.mark_words()`
+        segments  `(run, is_word)` pairs for the body — see `mark()`
+        title_segments  the same for the title
         used      the supplied words the text turned out to contain
         missing   the ones it did not
         words     everything that was supplied, so the page can say so
@@ -202,16 +277,16 @@ def generate(words, instruction, length, ask=None):
         except Exception as e:       # noqa: BLE001 - reported, never raised
             text, error = "", e
 
-    segments, used, missing = games.mark_words(text, words)
+    title, text = split_title(text)
+    marked = mark(title, text, words)
     applog.text_generated(
-        model=TEXT_MODEL, supplied=len(words), used=len(used),
+        model=TEXT_MODEL, supplied=len(words), used=len(marked["used"]),
         length=length, elapsed_ms=timer.ms, error=error)
 
     return {
+        "title": title,
         "text": text,
-        "segments": segments,
-        "used": used,
-        "missing": missing,
+        **marked,
         "words": list(words),
         # The exception is logged in full; the page gets a sentence. What went
         # wrong at Anthropic is not the learner's business and is often their

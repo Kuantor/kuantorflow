@@ -1994,6 +1994,18 @@ button:disabled:hover { background: #9db4c7; }
     font-size: 1.05rem;
     max-width: 38rem;
 }
+/* The text's own title (#315). `white-space: normal` because the panel around
+   it is `pre-wrap`: without this the heading would keep the template's own
+   indentation and sit oddly inset from the prose beneath it. */
+.reader-title {
+    white-space: normal;
+    margin: 0 0 0.9rem;
+    font-size: 1.3rem;
+    line-height: 1.3;
+    color: var(--blue-dark);
+    max-width: 38rem;
+}
+
 /* The learner's own word, found by matching rather than by trusting the model
    (#237). Weight alone is the highlight, with the yellow behind it just warm
    enough to scan for — a full-strength var(--yellow) on every twelfth word
