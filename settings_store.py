@@ -54,6 +54,10 @@ DEFAULTS = {
     # issue #113 — the language the quiz opens in (the in-page switch still
     # lets the user take it in any visible language).
     "quiz_lang": "ukrainian",
+    # issue #235 — how many cards a round of Fill the gap deals. A setting
+    # rather than a literal because ten is a guess about attention, not a fact;
+    # a selection with fewer playable cards than this deals what it has.
+    "gapped_deck_size": 10,
     # ai_agent#54 — hours of silence after which Mykola's chat is restarted
     # (his recap of the last exchanges opens the fresh one). 0 = never.
     "restart_chat_interval": 2,
@@ -93,6 +97,11 @@ CHOICES = {
 # offers 1–24 hours; 0 is the separate "never restart" state its checkbox sets.
 RANGES = {
     "restart_chat_interval": (0, 24),
+    # Five is the shortest thing worth calling a round; fifty is where one
+    # stops being finishable in a sitting (#235). sanitize() already validates
+    # anything in here through _whole_number(), so this entry is the whole
+    # validation.
+    "gapped_deck_size": (5, 50),
 }
 
 BOOLEAN_KEYS = tuple(k for k, v in DEFAULTS.items()

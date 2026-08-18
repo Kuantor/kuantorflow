@@ -321,7 +321,6 @@ ACTIVITIES = {
             min_cards=1,
             too_small="Tick at least one topic to start.",
             tagline="Guess the missing word",
-            ticket="#235",
         ),
         Activity(
             slug="read_a_text",
@@ -773,3 +772,63 @@ def mark_words(text, words):
     if at < len(text):
         segments.append((text[at:], False))
     return segments, used, missing
+
+
+# --- cutting a word out of its own example (#235) ------------------------
+#
+# The card deck shows a word and reveals its meaning; this shows one of the
+# card's own example sentences with that word cut out, and reveals the word.
+#
+# It rests entirely on `find_word()` above, which is why that was built as a
+# shared helper rather than inside #237: a naive `sentence.replace(word, ...)`
+# finds nothing in "He resigned from the board" and leaves the sentence whole,
+# which hands the learner the answer.
+
+# A fixed run, never one sized to the answer. A gap as long as the word is a
+# free hint, and the flip is supposed to be the reveal. Cheap to lengthen if it
+# turns out to be too hard in practice.
+GAP = "______"
+
+
+def gap_sentence(sentence, word):
+    """`sentence` with `word` cut out, or **None** if it is not in there.
+
+    **Every** occurrence goes, not just the first. A sentence that uses the
+    word twice would otherwise print the answer beside its own gap, which is
+    the one thing this game must never do — and it is why the caller can treat
+    None as "not eligible" without also having to check what came back.
+
+    A multi-word expression is one gap rather than one per word, because
+    `find_word()` matches it whole (object and all: "takes **it** for
+    granted").
+    """
+    spans = find_word(sentence, word)
+    if not spans:
+        return None
+    out, at = [], 0
+    for start, end in spans:
+        out.append(sentence[at:start])
+        out.append(GAP)
+        at = end
+    out.append(sentence[at:])
+    return "".join(out)
+
+
+def gapped_example(examples, word, rng=None):
+    """One of `examples` with `word` cut out, or **None** if none will do.
+
+    The examples are tried in random order, so a card with three usable
+    sentences is not the same question every round.
+
+    A card whose examples never contain its own headword is simply not
+    playable — #225 gave cards their English examples, and 86 of production's
+    503 cards still have none at all. The caller moves on to another card
+    rather than showing a sentence with nothing cut out of it.
+    """
+    usable = [str(s).strip() for s in (examples or []) if str(s or "").strip()]
+    (rng or random).shuffle(usable)
+    for sentence in usable:
+        gapped = gap_sentence(sentence, word)
+        if gapped:
+            return gapped
+    return None

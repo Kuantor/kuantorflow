@@ -1,0 +1,154 @@
+{% extends "deck.html" %}
+
+{% block title %}{{ activity.name }} | KuantorFlow{% endblock %}
+
+{#
+   A round of #235: one of a card's own example sentences with the word cut
+   out of it, and the flip reveals the word.
+
+   The deck, the flip and its animation are deck.html's, shared with #78's
+   card deck rather than copied — two flip implementations would diverge the
+   first time either was touched. This page is the faces and the scoring.
+
+   The scoring is **self-marked and never written down**: nothing compares a
+   guess to the answer, because the guess is never typed, and #233's rule that
+   a game recording a score is a write does not bite here — the count dies
+   with the page.
+#}
+{% block deck_crumbs %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+    </p>
+{% endblock %}
+
+{% block deck_title %}{{ activity.name }}{% endblock %}
+
+{% block deck_intro %}
+    <div class="panel panel--tight">
+        <p>Read the sentence and work out the missing word, then flip the card
+           to see it.
+        {% if cards and cards|length < wanted %}
+            {# Said here rather than only on the last card: a round of six when
+               the setting says ten is a question the learner has at the start,
+               not at the end. #}
+            <span class="hint">Only {{ cards|length }} card{{ '' if cards|length == 1 else 's' }}
+                in this round — that is all we could make from this selection.</span>
+        {% endif %}
+        </p>
+    </div>
+{% endblock %}
+
+{% block deck_empty %}
+    <div class="panel">
+        <p>No card in this selection has an example sentence to hide a word in.</p>
+        <p class="hint">A card can only be played here if one of its English
+           examples actually contains its own word — so a card with no examples,
+           or whose examples never use the headword, sits this one out.
+           {% if settings.individual_cards %}<em>Use only individual cards</em>
+           is on, so anyone else&rsquo;s are hidden.{% endif %}</p>
+    </div>
+{% endblock %}
+
+{% block deck_toolbar %}
+    <span class="gap-score">Remembered: <b id="gap-count">0</b></span>
+{% endblock %}
+
+{% block deck_front %}
+    <p class="gap-sentence">{{ card.sentence }}</p>
+    <div class="deck-hint">Click to flip</div>
+{% endblock %}
+
+{% block deck_back %}
+    <div class="deck-word">{{ card.word }}
+        {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
+    </div>
+    {% if card.explanation_en %}
+        <p class="deck-explanation">{{ card.explanation_en }}</p>
+    {% elif card.translation %}
+        <div class="lang">{{ card.translation_label }}</div>
+        <p class="deck-translation">{{ card.translation }}</p>
+    {% endif %}
+    {# Ticked by the learner, after flipping. Nothing checks it against
+       anything -- that is what self-marked means. #}
+    <label class="gap-remember">
+        <input type="checkbox" class="gap-remember-box">
+        I remember it
+    </label>
+{% endblock %}
+
+{% block deck_below %}
+    <div class="gap-actions">
+        {# Always available, not only on the last card: somebody who has had
+           enough should still get to see how they did. #}
+        <button type="button" id="gap-finish">Finish game</button>
+    </div>
+{% endblock %}
+
+{% block deck_extra_style %}
+    <style>
+        /* The sentence is the question, so it gets the room the word gets on
+           a card-deck front -- but set smaller, because it is a sentence and
+           not a headline. */
+        .gap-sentence {
+            font-size: 1.25rem; line-height: 1.6; color: var(--ink);
+            margin: 0; max-width: 30rem;
+        }
+        .gap-score {
+            background: rgba(20,40,60,0.45);
+            padding: 0.3rem 0.6rem; border-radius: 999px; font-size: 0.9rem;
+        }
+        .gap-remember {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            margin-top: 0.9rem; cursor: pointer;
+            font-size: 0.95rem; color: var(--muted);
+        }
+        .gap-remember input { width: 1rem; height: 1rem; cursor: pointer; }
+        .gap-actions { display: flex; justify-content: center; margin-top: 1rem; }
+        #gap-finish { margin-top: 0; }
+        .gap-result { text-align: center; }
+        .gap-result .score { font-size: 1.4rem; }
+    </style>
+{% endblock %}
+
+{% block deck_extra_script %}
+    <script>
+        (function () {
+            var deck = document.getElementById("deck");
+            if (!deck) return;
+            var boxes = Array.prototype.slice.call(
+                deck.querySelectorAll(".gap-remember-box"));
+            var count = document.getElementById("gap-count");
+            var finish = document.getElementById("gap-finish");
+
+            function remembered() {
+                return boxes.filter(function (b) { return b.checked; }).length;
+            }
+            boxes.forEach(function (box) {
+                box.addEventListener("change", function () {
+                    count.textContent = remembered();
+                });
+            });
+
+            finish.addEventListener("click", function () {
+                var score = remembered();
+                var panel = document.createElement("div");
+                panel.className = "panel gap-result";
+                panel.innerHTML =
+                    '<p class="score">You remembered <strong>' + score +
+                    "</strong> of " + boxes.length + ".</p>";
+                var again = document.createElement("p");
+                again.className = "crumbs";
+                again.innerHTML =
+                    '<a href="{{ url_for("index") }}">&larr; Home</a>' +
+                    '<a href="{{ url_for("game_play", game=activity.slug, topic=topics) }}">Play again</a>';
+                panel.appendChild(again);
+                // Replaces the deck rather than sitting under it: the round is
+                // over, and leaving the cards on screen invites carrying on.
+                deck.parentNode.insertBefore(panel, deck);
+                // The Finish button lives inside #deck, so this takes it too.
+                deck.remove();
+            });
+        })();
+    </script>
+{% endblock %}

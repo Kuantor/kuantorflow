@@ -140,6 +140,28 @@
                        visible — the quiz uses it automatically.</p>
                 </fieldset>
 
+                {# How many cards a round of Fill the gap deals (#235).
+                   A number box rather than a slider: the range is wide (5-50)
+                   and a learner picking a round length has a number in mind,
+                   where the restart interval below is a vaguer "after a
+                   while". Out-of-range values fall back to the default in
+                   sanitize(), so the box cannot store nonsense. #}
+                <fieldset class="settings-group">
+                    <legend>Fill the gap round</legend>
+                    <label class="settings-number">
+                        Cards per round
+                        <input type="number" name="gapped_deck_size"
+                               min="{{ gapped_deck_range[0] }}"
+                               max="{{ gapped_deck_range[1] }}" step="1"
+                               value="{{ settings.gapped_deck_size }}"
+                               inputmode="numeric"
+                               {% if settings_read_only %}disabled{% endif %}>
+                    </label>
+                    <p class="settings-hint settings-group-hint">Between
+                       {{ gapped_deck_range[0] }} and {{ gapped_deck_range[1] }}.
+                       A selection with fewer playable cards deals what it has.</p>
+                </fieldset>
+
                 {# Automatic chat restart (ai_agent#54): after this long
                    without a message, Mykola reviews the last exchanges and
                    starts a fresh conversation. The checkbox is the stored
@@ -608,6 +630,7 @@
                         show_ukrainian: settingsForm.show_ukrainian.checked,
                         show_russian: settingsForm.show_russian.checked,
                         quiz_lang: settingsForm.quiz_lang.value,
+                        gapped_deck_size: Number(settingsForm.gapped_deck_size.value),
                         mykola_fast_thinking: settingsForm.mykola_fast_thinking.checked,
                         mykola_typewriter: settingsForm.mykola_typewriter.checked,
                         // checked "never" is stored as 0 (ai_agent#54)
