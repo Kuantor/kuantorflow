@@ -142,7 +142,7 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   printing the answer), and `pseudowords()` (#132's n-gram, trained on the whole
   visible deck rather than the selection because a trigram over twenty words
   hands those twenty back).
-  Since #237 it also owns the **word matcher** both the reader and #235 need:
+  Since #237 it also owns the **word matcher** the reader and #235 both use:
   `word_pattern()` / `find_word()` return the spans where a card's headword
   appears in a piece of English, and `mark_words()` cuts a whole text into
   `(run, is_word)` segments plus the used/missing lists. It is a **light stem
@@ -154,6 +154,22 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   implementations would disagree within a month and fail in opposite directions
   — #235 showing a sentence containing its own answer, #237 reporting a word as
   unused while it is on the screen.
+  #235 is the second caller: `gap_sentence()` cuts the word out of one of its
+  own examples and `gapped_example()` finds an example it can be cut from,
+  returning **None** when it cannot — which is the eligibility rule, since a
+  sentence shown ungapped hands over the answer. **Every** occurrence goes, not
+  only the first: one stored example really can hold two sentences using the
+  word, and gapping one of them would print the answer beside its own blank.
+- **`templates/deck.html`** (#78, generalised by #235) — the flip deck: the
+  card, its animation, the paging and the per-device animation toggle. It was
+  all inside `cards.html`, whose comment said the animation is scoped under
+  `#deck` to stay local to that activity; that stayed true and stopped being
+  the right shape when a second activity wanted the same deck with different
+  faces. A page extending it fills `deck_front` / `deck_back`, which are
+  **`scoped`** blocks — without that keyword Jinja hands them no loop variables
+  and both faces render empty. Presses on a control inside a face (the speaker
+  button, #235's checkbox) do not flip the card, which is why the faces may
+  carry controls at all.
 - **`textgen.py`** (#237) — the only paid call this repo makes on its own, and
   it follows `parsers._split_glued_translations()` rather than Mykola: a module
   model constant, a client built at call time, bounded `max_tokens`, and a

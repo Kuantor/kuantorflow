@@ -68,7 +68,7 @@ The *Card deck* link at the top of a topic opens the same cards as a **deck**: o
 
 ### The games, in one list
 
-There are six activities in the *Practise your words* panel on the front page — most of them games, and four of them ready to play now:
+There are six activities in the *Practise your words* panel on the front page — most of them games, and five of them ready to play now:
 
 | Game | What you do |
 | --- | --- |
@@ -76,10 +76,10 @@ There are six activities in the *Practise your words* panel on the front page �
 | **Real or fake** | Decide which words are real and which the app invented. |
 | **Scrambled** | Rebuild a word whose middle letters were shuffled. |
 | **Generate a text** | Read a passage written from your own words. |
+| **Fill the gap** | Guess the word missing from one of its own example sentences. |
 | *Multiple choice* | Not built yet — pick the right answer from four. |
-| *Fill the gap* | Not built yet — guess the word missing from its own example sentence. |
 
-The last two games are declared but not finished. Their tiles are visible and greyed on the front page, so you can see what is coming without being able to click into an empty room.
+*Multiple choice* is declared but not finished. Its tile is visible and greyed on the front page, so you can see what is coming without being able to click into an empty room.
 
 Each game is described below, and they all start the same way, from the picker.
 
@@ -102,6 +102,14 @@ A game of spotting invented words. Half the words are yours and half were invent
 ### Scrambled
 
 A game of unscrambling: the middle letters of a word are shuffled and you put it back together. The first and last letters stay, so the shape you recognise survives. Words too short to scramble are left out of the round rather than shown unchanged, and the page says how many that was.
+
+### Fill the gap
+
+A game of guessing a word from its own dictionary example. The front of each card is a real example sentence with the word cut out of it; flip the card to see the word, with its English explanation — or its translation, when the card has no explanation.
+
+You mark yourself: tick **I remember it** on the ones you knew, and the count in the corner keeps score. **Finish game** is there from the first card, not only the last, so you can stop whenever you like and still see how you did. Nothing is recorded — the score goes when the page does.
+
+A card can only appear here if one of its examples actually contains its own word, so a card with no examples sits the game out and a round can be shorter than you asked for. It says so when that happens. How many cards a round deals is yours to set — see *Cards per round* in Settings.
 
 ### Generate a text
 
@@ -145,6 +153,7 @@ If you have been away for a few hours he starts a fresh conversation and opens i
 | Explanatory dictionary | Oxford or Merriam-Webster. |
 | Ukrainian / Russian | Hide a language everywhere: on the cards and in Mykola's answers. |
 | Quiz language | The language a quiz opens in. The in-page switch still takes it in the other. |
+| Cards per round | How many cards *Fill the gap* deals, between 5 and 50. Ten by default. |
 | Restart chat after | Hours of silence before Mykola starts a fresh conversation with a recap. Zero means never. |
 | Fast thinking | Mykola deliberates less and answers shorter and quicker. On by default. |
 | Type his answer out | His reply is typed out as it arrives instead of landing in chunks. On by default. |

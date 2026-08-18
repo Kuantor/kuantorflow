@@ -1415,7 +1415,13 @@ def inject_settings():
     """Expose the active settings to every template (issue #86) — the seam the
     Settings UI (#13), dictionary choice (#20) and language switches (#46)
     will read from."""
-    return {"settings": current_settings()}
+    return {
+        "settings": current_settings(),
+        # The bounds the Settings popup puts on #235's round-length box, read
+        # from the store that validates it rather than written into the markup
+        # — the box and sanitize() must agree, and one source is how.
+        "gapped_deck_range": settings_store.RANGES["gapped_deck_size"],
+    }
 
 
 # --- topic icons (#223) -----------------------------------------------------
@@ -2794,6 +2800,70 @@ def _real_or_fake_round(activity, topics):
         games_min=games.MIN_INVENTED_LENGTH)
 
 
+def _gap_translation(prefs):
+    """Which translation #235 reveals, as `(field, label)` or `(None, None)`.
+
+    The identity's **`quiz_lang`** (#113) rather than the card deck's
+    Ukrainian-first rule, because this is a question being answered rather than
+    a card being browsed — and #113 already exists, already defaults to
+    Ukrainian, and already knows what to do when the preferred language is
+    hidden in Settings (#46/#79). Two rules for one question drift apart, so
+    this reuses that one instead of inventing a second.
+
+    Both languages hidden is not an error: the reveal falls back to the
+    explanation, and failing that to the word alone, which was the answer.
+    """
+    visible = _visible_quiz_langs(prefs)
+    if not visible:
+        return None, None
+    preferred = QUIZ_LANG_CODES.get(prefs["quiz_lang"], "ukr")
+    code = preferred if preferred in visible else next(iter(visible))
+    return f"translation_{code}", visible[code]
+
+
+def _fill_the_gap_round(activity, topics):
+    """A round of #235: a word cut out of one of its own example sentences.
+
+    **Eligibility is asked of the cards, not of the picker.** `min_cards` is the
+    cheap check the picker can answer from its counts; whether a card has an
+    example containing its own headword can only be answered here, with the
+    cards in hand. Of production's 503 cards, 86 have no English examples at
+    all, and a card whose examples never use its own word is just as unplayable
+    — so a topic can be perfectly full and still yield a short round.
+
+    Nothing here is written down. The score is the learner's own ticking, held
+    in the page and gone when they leave it (#233's rule about a game that
+    records a score does not apply to a game that records nothing).
+    """
+    prefs = current_settings()
+    wanted = prefs["gapped_deck_size"]
+    field, label = _gap_translation(prefs)
+
+    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    random.shuffle(cards)
+
+    questions = []
+    for card in cards:
+        if len(questions) >= wanted:
+            break
+        word = (card.get("word") or "").strip()
+        sentence = games.gapped_example(card.get("examples_en"), word)
+        if not sentence:
+            continue
+        questions.append({
+            "word": word,
+            "pos": card.get("pos"),
+            "sentence": sentence,
+            "explanation_en": card.get("explanation_en"),
+            "translation": card.get(field) if field else None,
+            "translation_label": label,
+        })
+
+    return render_template(
+        "game_fill_the_gap.html", activity=activity, topics=topics,
+        cards=questions, wanted=wanted)
+
+
 def _answer_index(key):
     """Sort answer_<n> fields back into the order they were asked."""
     tail = key.rsplit("_", 1)[-1]
@@ -2809,6 +2879,7 @@ GAME_ROUNDS = {activity.slug: _round_stub
 GAME_ROUNDS["scrambled"] = _scrambled_round
 GAME_ROUNDS["real_or_fake"] = _real_or_fake_round
 GAME_ROUNDS["read_a_text"] = _read_a_text_round
+GAME_ROUNDS["fill_the_gap"] = _fill_the_gap_round
 
 
 @app.route("/games/<game>/play", methods=["GET", "POST"])
