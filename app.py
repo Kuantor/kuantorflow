@@ -2592,9 +2592,12 @@ def _held_generation():
     held = session.get(GENERATED_TEXT_KEY)
     if not isinstance(held, dict) or not (held.get("text") or held.get("error")):
         return None
-    segments, used, missing = games.mark_words(
-        held.get("text") or "", held.get("words") or [])
-    return dict(held, segments=segments, used=used, missing=missing)
+    # textgen.mark() rather than games.mark_words() directly: the title counts
+    # towards a word being used (#315), and that rule has to be the same one
+    # generate() applied or a refresh would change the answer.
+    return dict(held, **textgen.mark(held.get("title") or "",
+                                     held.get("text") or "",
+                                     held.get("words") or []))
 
 
 def _held_for(topics, length, instruction):
@@ -2651,6 +2654,7 @@ def _read_a_text_round(activity, topics):
             return page(held=None, refusal=None)
         result = textgen.generate(chosen, instruction, length)
         session[GENERATED_TEXT_KEY] = {
+            "title": result["title"],
             "text": result["text"], "words": result["words"],
             "topics": list(topics), "length": length,
             "instruction": instruction, "error": result["error"],

@@ -115,7 +115,7 @@ A card can only appear here if one of its examples actually contains its own wor
 
 The one activity that **writes** rather than tests. Pick topics, optionally say what the text should be about — *a letter of complaint to a hotel*, *a news report*, *a conversation between two colleagues* — choose a length between 50 and 400 words, and read a passage built from a dozen or so of your own words.
 
-The words you are studying appear **in bold**, and underneath is the honest account: which of them the text actually used, and which it did not. They are found by searching the finished text, not by asking the model to mark its own work, so the list is checked rather than claimed.
+The passage comes with a title of its own, and the words you are studying appear **in bold** — in the title as well as the text. Underneath is the honest account: which of them the text actually used, and which it did not. They are found by searching the finished text, not by asking the model to mark its own work, so the list is checked rather than claimed.
 
 A text is kept for the session, so re-reading it, going back to it or refreshing the page costs nothing; writing a new one is a button you press deliberately. Signed out you get one text, and then an invitation to sign in; signed in, ten a day.
 

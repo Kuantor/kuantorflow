@@ -94,6 +94,17 @@
            them. Each run is printed as text and escaped by Jinja: the model's
            output never becomes markup. #}
         <div class="panel reader-text">
+            {# The text's own title (#315), when the reply had one. Marked for
+               the learner's words exactly as the body is, because a word that
+               appears only up here is still a word they read. #}
+            {#- Whitespace is stripped on every tag here, not for tidiness: the
+                panel is `pre-wrap`, so any newline or indentation this block
+                left behind would render as a visible gap above the text. -#}
+            {%- if held.title -%}<h2 class="reader-title">
+                {%- for run, marked in held.title_segments -%}
+                    {%- if marked %}<strong class="reader-word">{{ run }}</strong>{% else %}{{ run }}{% endif -%}
+                {%- endfor -%}
+            </h2>{%- endif -%}
             {%- for run, marked in held.segments -%}
                 {%- if marked %}<strong class="reader-word">{{ run }}</strong>{% else %}{{ run }}{% endif -%}
             {%- endfor -%}
