@@ -795,11 +795,29 @@ def real_distractors(answer, pool, count, rng=None):
 def question_options(answer, pool, spare=(), known=(), rng=None):
     """The four answers to one question, shuffled, or **None**.
 
-    One typo of the correct answer (#131) and two other real words from the
-    deck — the mix #130 settled on. Not three typos, which would make the round
-    a spelling test and put three misspellings of the word being learned on the
-    screen at once; not three real words either, which throws away the near
-    miss that makes the question worth pausing over.
+    Three real words from the deck, one of which is then **mistyped** (#131).
+
+    **The misspelling is never made from the correct answer.** The first version
+    always made it from the answer, which made the round winnable with no
+    English at all: `customs` beside `vustoms` is a near-identical pair, and the
+    correctly spelled half of such a pair is always the one being asked for.
+    Find the twins, pick the tidy one, score full marks. Drawing the source
+    from all four options was tried next and only made that rarer — a tell that
+    fires on a fifth of the questions is still a tell — so the answer is now
+    excluded outright and no pair ever appears.
+
+    The known cost, accepted deliberately: a misspelled option is therefore
+    always a wrong one, so spotting it eliminates a single answer and turns a
+    guess from one-in-four into one-in-three. That is a far smaller edge than
+    the pair gave away — it narrows the field instead of naming the answer —
+    and it is the price of the slip carrying no information about which option
+    is right.
+
+    `avoid=options` is load-bearing rather than tidiness. Substitution and
+    transposition both preserve length, so a typo of a *distractor* can collide
+    with the answer whenever the two are the same length — `beat` slips to
+    `bear` — and that would put the correct answer on the page twice, once
+    marked wrong.
 
     `pool` is the selection's own words and `spare` is the wider deck, drawn on
     only when the selection cannot fill the question. A four-card topic would
@@ -813,12 +831,6 @@ def question_options(answer, pool, spare=(), known=(), rng=None):
     rng = rng or random
     options = [answer]
 
-    slip = typo(answer, avoid=options, known=known, rng=rng)
-    if slip:
-        options.append(slip)
-
-    # Whatever the typo did not supply is made up in real words, so a word too
-    # short to mistype still produces a full question.
     for source in (pool, spare):
         if len(options) >= OPTIONS:
             break
@@ -829,6 +841,23 @@ def question_options(answer, pool, spare=(), known=(), rng=None):
 
     if len(options) < OPTIONS:
         return None
+
+    # Each wrong answer in turn, in a random order, until one of them can be
+    # mistyped: a distractor may be too short, or every slip of it may be real
+    # English. All three staying correctly spelled is a perfectly good question,
+    # so this gives up rather than reaching for the one word it must not touch.
+    #
+    # `options[0]` is the answer and is never a source and never a target --
+    # the two are the same rule here, since a slip replaces the word it was
+    # made from.
+    wrong = list(range(1, len(options)))
+    rng.shuffle(wrong)
+    for index in wrong:
+        slip = typo(options[index], avoid=options, known=known, rng=rng)
+        if slip:
+            options[index] = slip
+            break
+
     rng.shuffle(options)
     return options
 

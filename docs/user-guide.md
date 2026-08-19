@@ -97,7 +97,9 @@ Answers are marked generously — any accepted translation counts, case and spac
 
 You are shown a Ukrainian or Russian translation and you **pick the English word** out of four. Which language the prompts are in is chosen in the picker, alongside the topics, and the whole round is graded when you submit it.
 
-The three wrong answers are not random noise. One of them is a misspelling of the right answer, generated from the keyboard — an adjacent key, or two letters in the wrong order — so it looks exactly like a slip you might have made yourself. The other two are real words from your own deck, preferring ones spelled similarly to the answer where your deck happens to have any. The idea is that every option is worth a second look.
+The wrong answers are not random noise. They are real words from your own deck, preferring ones spelled similarly to the answer where your deck happens to have any — and **one of the four options is misspelled**, generated from the keyboard as an adjacent key or two letters in the wrong order, so it looks exactly like a slip you might have made yourself.
+
+The misspelled option is always one of the **wrong** answers — the right one is never the word that gets mistyped. An earlier version did mistype it, and that gave the whole game away: the odd-looking word sat next to its correctly spelled twin, and the tidy twin was always the answer.
 
 Cards with no translation in the language you chose are left out of the round, and the page says how many that was.
 
