@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} | KuantorFlow{% endblock %}
+
+{#
+   A round of #130. A Ukrainian or Russian translation, and four English words
+   to choose between: the right one, one misspelling of it generated from the
+   keyboard (#131), and two other real words from the deck.
+
+   Graded on submit rather than question by question, like every other game
+   here — one page, one form, no JavaScript, and a URL that can be shared.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+    </p>
+    <h1 class="page-title">{{ activity.name }}</h1>
+
+    {% if results is none %}
+        {% if no_language %}
+            <div class="panel">
+                <p>There is no language to be tested in.</p>
+                {# Both languages hidden in Settings (#46/#79/#111), the same
+                   dead end the quiz reaches — and worded the way the quiz
+                   words it, since it is the same setting and the same fix. #}
+                <p class="hint">This game shows a translation and asks for the
+                   English word, so it needs Ukrainian or Russian to be
+                   visible. Enable at least one in Settings.</p>
+            </div>
+        {% elif not questions %}
+            <div class="panel">
+                <p>There aren&rsquo;t enough words here for a round yet.</p>
+                <p class="hint">Each question needs four different answers, so
+                   this game needs at least four cards with a
+                   {{ lang_name }} translation in the topics you chose.
+                   {% if settings.individual_cards %}<em>Use only individual
+                   cards</em> is on, so anyone else&rsquo;s are hidden.{% endif %}</p>
+            </div>
+        {% else %}
+            <div class="panel panel--tight">
+                <p>Choose the English word for each
+                   {{ lang_name }} one
+                   ({{ questions|length }} question{{ '' if questions|length == 1 else 's' }}):
+                {# Two different shortfalls, and a learner who ticked forty
+                   topics and was asked twelve questions should be able to tell
+                   which one happened. The picker counts cards, not cards this
+                   game can use. #}
+                {% if untranslated %}
+                    <span class="hint">{{ untranslated }}
+                    card{{ '' if untranslated == 1 else 's' }} here
+                    {{ 'has' if untranslated == 1 else 'have' }} no
+                    {{ lang_name }} translation, so
+                    {{ 'it is' if untranslated == 1 else 'they are' }} not asked.</span>
+                {% endif %}
+                {% if unbuildable %}
+                    <span class="hint">{{ unbuildable }}
+                    {{ 'word' if unbuildable == 1 else 'words' }} could not be
+                    given four different answers.</span>
+                {% endif %}
+                </p>
+            </div>
+
+            <form method="POST">
+                {% for question in questions %}
+                    <div class="panel question">
+                        <div class="word">{{ loop.index }}. {{ question.prompt }}
+                            {% if question.pos %}<span class="pos">{{ question.pos }}</span>{% endif %}
+                        </div>
+                        {# The option text is the value, so grading needs
+                           nothing but the card id and what was picked — the
+                           right answer is in the database, and the three wrong
+                           ones do not have to survive the round. #}
+                        <div class="verdict verdict--stacked">
+                            {% for option in question.options %}
+                                <label>
+                                    <input type="radio"
+                                           name="answer_{{ question.id }}"
+                                           value="{{ option }}"
+                                           {{ 'required' if loop.first }}>
+                                    {{ option }}
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+                <button type="submit">Check answers</button>
+            </form>
+        {% endif %}
+
+    {% else %}
+        <p class="score">Score: {{ score }} / {{ results|length }}</p>
+        {% for r in results %}
+            <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
+                <div class="word">{{ loop.index }}. {{ r.prompt }}
+                    {% if r.pos %}<span class="pos">{{ r.pos }}</span>{% endif %}
+                </div>
+                <p>Your answer: {{ r.user_answer or '&mdash;'|safe }}</p>
+                {% if not r.correct %}
+                    <p class="expected">Correct answer: {{ r.word }}</p>
+                {% endif %}
+            </div>
+        {% endfor %}
+        {# A way out as well as a way round again: a learner reading their score
+           is at the bottom of ten answers, and the row at the top of the page
+           is a scroll away. #}
+        <p class="crumbs">
+            <a href="{{ url_for('index') }}">&larr; Home</a>
+            <a href="{{ url_for('game_play', game=activity.slug, topic=topics, words=words) }}">Play again</a>
+        </p>
+    {% endif %}
+{% endblock %}

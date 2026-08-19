@@ -1903,6 +1903,12 @@ button:disabled:hover { background: #9db4c7; }
     cursor: pointer;
 }
 .verdict input { width: 1.05rem; height: 1.05rem; }
+/* #130's four answers, stacked rather than in a row. A modifier on `.verdict`
+   and not a class of its own: the label mechanics — the flex row, the gap, the
+   hit area around the radio — are identical, and the only difference is that
+   four English words do not fit across a phone the way "Real / Invented"
+   does. Two blocks would drift the first time one of them is tuned. */
+.verdict--stacked { flex-direction: column; gap: 0.45rem; }
 
 /* Activities with no round yet (#261). Greyed rather than removed: the tile
    staying on the page is what makes the set of activities legible — a learner
