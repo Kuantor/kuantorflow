@@ -795,11 +795,29 @@ def real_distractors(answer, pool, count, rng=None):
 def question_options(answer, pool, spare=(), known=(), rng=None):
     """The four answers to one question, shuffled, or **None**.
 
-    One typo of the correct answer (#131) and two other real words from the
-    deck — the mix #130 settled on. Not three typos, which would make the round
-    a spelling test and put three misspellings of the word being learned on the
-    screen at once; not three real words either, which throws away the near
-    miss that makes the question worth pausing over.
+    Three real words from the deck, one of which is then **mistyped** (#131).
+
+    **Which word gets mistyped is drawn from all four**, the right answer among
+    them. The first version always mistyped the answer, and that made the round
+    winnable with no English at all: `customs` beside `vustoms` is a
+    near-identical pair, and the correctly spelled half of such a pair is always
+    the one being asked for. Find the twins, pick the tidy one.
+
+    Drawing the source uniformly means the answer supplies the slip about a
+    quarter of the time instead of always. Worth being clear about what that
+    does and does not fix: on the questions where the answer *is* the source the
+    pair still gives itself away exactly as before, so this makes the tell rarer
+    rather than weaker. What it buys is that a learner cannot run the trick as a
+    strategy — three questions in four have no pair to find, and a habit of
+    hunting for one is wasted effort. Excluding the answer entirely would remove
+    the tell outright, at the cost of the opposite one: a page that never pairs
+    is a page where a misspelling always marks a wrong answer.
+
+    `avoid=options` is load-bearing rather than tidiness. Substitution and
+    transposition both preserve length, so a typo of a *distractor* can collide
+    with the answer whenever the two are the same length — `beat` slips to
+    `bear` — and that would put the correct answer on the page twice, once
+    marked wrong.
 
     `pool` is the selection's own words and `spare` is the wider deck, drawn on
     only when the selection cannot fill the question. A four-card topic would
@@ -813,12 +831,6 @@ def question_options(answer, pool, spare=(), known=(), rng=None):
     rng = rng or random
     options = [answer]
 
-    slip = typo(answer, avoid=options, known=known, rng=rng)
-    if slip:
-        options.append(slip)
-
-    # Whatever the typo did not supply is made up in real words, so a word too
-    # short to mistype still produces a full question.
     for source in (pool, spare):
         if len(options) >= OPTIONS:
             break
@@ -829,6 +841,27 @@ def question_options(answer, pool, spare=(), known=(), rng=None):
 
     if len(options) < OPTIONS:
         return None
+
+    # Every option in turn, in a random order, until one of them can be
+    # mistyped: a word may be too short, or every slip of it may be real
+    # English. All four staying correctly spelled is a perfectly good question,
+    # so this can simply give up rather than forcing a slip from somewhere.
+    #
+    # The slip always lands in a *wrong* slot, whichever word it was made from.
+    # Overwriting the answer with a misspelling of itself would leave the
+    # question with nothing correct to pick, so when the answer is the source
+    # its typo displaces a distractor -- which is what puts the pair on the
+    # page, deliberately, a quarter of the time.
+    sources = list(range(len(options)))
+    rng.shuffle(sources)
+    for source in sources:
+        slip = typo(options[source], avoid=options, known=known, rng=rng)
+        if not slip:
+            continue
+        target = source if source else rng.randrange(1, len(options))
+        options[target] = slip
+        break
+
     rng.shuffle(options)
     return options
 
