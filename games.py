@@ -794,18 +794,32 @@ def real_distractors(answer, pool, count, rng=None):
 
 # How often a question misspells 0, 1, 2 or 3 of its four options (#319).
 #
-# Weighted toward none: four correctly spelled words is the plainest form of the
-# game, and a slip should read as an occasional intrusion rather than the norm.
+# Weighted heavily toward none: four correctly spelled words is the plain form
+# of the game, and a slip reads as an occasional intrusion rather than the norm.
 # It also means a learner cannot assume a slip is present, which is what stops
 # "find the odd-looking word" being a routine rather than a judgement.
 #
-# The three case is a known cost, taken deliberately. Since the answer is always
-# spelled correctly, three slips leave it the only clean word on the page — so
-# that tenth of questions is a free mark, and it supplies about a quarter of what
-# a learner with no vocabulary at all can score (40% overall, against 33% when
-# every question had exactly one slip). It buys the occasional wildly misspelled
-# page, which is a texture the game has no other way to produce.
-MISSPELLED_WEIGHTS = (40, 30, 20, 10)
+# Seven in ten questions have no slip at all, and the rest halve away from
+# there. That ratio is what keeps the misspellings cheap: **every slip on the
+# page is an option a learner can strike off without knowing the word**, since
+# a misspelling is never the correct spelling of the answer. That inference
+# cannot be designed away — it is true of any version of this game that
+# misspells anything — so the only thing that bounds it is how often a slip is
+# there at all.
+#
+# What a learner with no vocabulary scores, striking off every slip and
+# guessing among the rest:
+#
+#     40 / 30 / 20 / 10   40.0%    (one slip per question on average)
+#     exactly one, always 33.3%    (what #130 shipped)
+#     70 / 15 / 10 / 5    32.5%    (this -- half a slip per question)
+#
+# The three case stays in at a twentieth. Since the answer is always spelled
+# correctly, three slips leave it the only clean word on the page, so those
+# questions are a free mark — but at 5% they cost a point and a half of that
+# 32.5%, and they buy the occasional wildly misspelled page, which is a texture
+# the game has no other way to produce.
+MISSPELLED_WEIGHTS = (70, 15, 10, 5)
 
 # How often the answer goes to the front of the queue of words that might be
 # mistyped, ahead of the wrong options.
