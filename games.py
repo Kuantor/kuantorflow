@@ -792,72 +792,165 @@ def real_distractors(answer, pool, count, rng=None):
     return (close + far)[:count]
 
 
+# How often a question misspells 0, 1, 2 or 3 of its four options (#319).
+#
+# Weighted toward none: four correctly spelled words is the plainest form of the
+# game, and a slip should read as an occasional intrusion rather than the norm.
+# It also means a learner cannot assume a slip is present, which is what stops
+# "find the odd-looking word" being a routine rather than a judgement.
+#
+# The three case is a known cost, taken deliberately. Since the answer is always
+# spelled correctly, three slips leave it the only clean word on the page — so
+# that tenth of questions is a free mark, and it supplies about a quarter of what
+# a learner with no vocabulary at all can score (40% overall, against 33% when
+# every question had exactly one slip). It buys the occasional wildly misspelled
+# page, which is a texture the game has no other way to produce.
+MISSPELLED_WEIGHTS = (40, 30, 20, 10)
+
+# Among the slips in a question, how often the word being mistyped is the
+# **correct answer** rather than a wrong one.
+#
+# This number is the whole of #319's point and it has to be near a half. A slip
+# is shown beside the word it was made from, so the page holds a near-identical
+# pair — and the pair is only uninformative if its tidily spelled half is the
+# answer about as often as it is a wrong option. Sourcing uniformly from the
+# words on the page would make the answer the source a third of the time, and a
+# learner who noticed could bet against the tidy half twice as often as for it.
+ANSWER_SOURCE_CHANCE = 0.5
+
+
+def misspelled_count(rng=None):
+    """How many of a question's options to misspell — 0 to 3 (#319).
+
+    Drawn per **question**, not per round: two questions in the same round
+    differ, which is what keeps the count from being something a learner can
+    read off the first question and rely on for the rest.
+    """
+    rng = rng or random
+    return (rng or random).choices(
+        range(len(MISSPELLED_WEIGHTS)), weights=MISSPELLED_WEIGHTS)[0]
+
+
+def _real_words(answer, pool, spare, count, rng):
+    """Up to `count` real words to build a question from, closest first.
+
+    `pool` before `spare` so a selection furnishes its own question where it
+    can, and `real_distractors()` for both so #130's preference for words
+    spelled like the answer survives.
+    """
+    words = real_distractors(answer, pool, count, rng=rng)
+    if len(words) < count:
+        taken = {answer.casefold()} | {w.casefold() for w in words}
+        words += real_distractors(
+            answer, [w for w in spare if (w or "").casefold() not in taken],
+            count - len(words), rng=rng)
+    return words
+
+
+def _one_slip(answer, shown, hidden, taken, used, known, rng):
+    """One misspelling and the word it was made from, or `(None, None)`.
+
+    A word **already on the page** is tried first, because that is the pair
+    #319 wants: `custody` beside `custodt` reads exactly like `customs` beside
+    `vustoms`, so the shape stops meaning "the tidy one is the answer". The
+    answer takes the front of that queue about half the time (see
+    `ANSWER_SOURCE_CHANCE`), which is what balances the two kinds of pair.
+
+    `hidden` is real words that are *not* shown, tried only when nothing on the
+    page can be mistyped. That is not a rare fallback: with three slips wanted
+    there is only one clean word on the page to make them from, so two of them
+    have to come from here.
+
+    `used` stops one word supplying two slips — two misspellings of `appraisal`
+    side by side is a pair of a different and much sillier kind.
+    """
+    on_page = [w for w in shown if w not in used]
+    rng.shuffle(on_page)
+    if answer not in used:
+        if rng.random() < ANSWER_SOURCE_CHANCE:
+            on_page.insert(0, answer)
+        else:
+            on_page.append(answer)
+    off_page = [w for w in hidden if w not in used]
+    rng.shuffle(off_page)
+
+    for source in on_page + off_page:
+        slip = typo(source, avoid=taken, known=known, rng=rng)
+        if slip:
+            return slip, source
+    return None, None
+
+
 def question_options(answer, pool, spare=(), known=(), rng=None):
     """The four answers to one question, shuffled, or **None**.
 
-    Three real words from the deck, one of which is then **mistyped** (#131).
+    Real words from the deck, of which **0 to 3 are misspelled** (#319) by
+    #131's keyboard model — and a slip is shown beside the word it was made
+    from, which may be the correct answer.
 
-    **The misspelling is never made from the correct answer.** The first version
-    always made it from the answer, which made the round winnable with no
-    English at all: `customs` beside `vustoms` is a near-identical pair, and the
-    correctly spelled half of such a pair is always the one being asked for.
-    Find the twins, pick the tidy one, score full marks. Drawing the source
-    from all four options was tried next and only made that rarer — a tell that
-    fires on a fifth of the questions is still a tell — so the answer is now
-    excluded outright and no pair ever appears.
+    The history is worth keeping, because two plausible-looking versions of this
+    were wrong in opposite directions. #130 shipped mistyping the answer every
+    time, which made the round winnable with no English at all: every page held
+    a near-identical pair and the tidily spelled half was always what was asked
+    for. Excluding the answer removed the pair, but only by making the
+    interesting shape never happen — and left a smaller tell in its place, that
+    a misspelled option was reliably a wrong one.
 
-    The known cost, accepted deliberately: a misspelled option is therefore
-    always a wrong one, so spotting it eliminates a single answer and turns a
-    guess from one-in-four into one-in-three. That is a far smaller edge than
-    the pair gave away — it narrows the field instead of naming the answer —
-    and it is the price of the slip carrying no information about which option
-    is right.
+    Showing the source beside its slip is what makes the pair *harmless* rather
+    than absent. `customs`/`vustoms` and `custody`/`custodt` are the same shape
+    and mean opposite things, so a learner reading a pair learns nothing from
+    it.
 
-    `avoid=options` is load-bearing rather than tidiness. Substitution and
-    transposition both preserve length, so a typo of a *distractor* can collide
-    with the answer whenever the two are the same length — `beat` slips to
-    `bear` — and that would put the correct answer on the page twice, once
-    marked wrong.
+    **The answer's correct spelling is always on the page.** A slip of the
+    answer is an extra option, never a replacement, or the question would have
+    nothing right to pick — which is also why three slips hand the answer over:
+    it is then the only correctly spelled word there.
 
-    `pool` is the selection's own words and `spare` is the wider deck, drawn on
-    only when the selection cannot fill the question. A four-card topic would
-    otherwise offer the same three wrong answers every time, and a learner
-    notices that in about two questions.
+    The count is a **target, not a guarantee**. A word may be too short to
+    mistype (`MIN_TYPO_LENGTH`) or every variant of it may be real English
+    rejected through `vocabulary()`, and a question that comes out with fewer
+    slips than it drew is simply a plainer question. Any slot a slip could not
+    fill is topped up with a real word.
 
     None when four distinct options cannot be built at all, which is the
-    eligibility rule: a question with three options is a different, easier
-    game, and dealing one silently would make the score mean two things.
+    eligibility rule: a three-option question is a different, easier game, and
+    dealing one silently would make the score mean two things.
     """
     rng = rng or random
-    options = [answer]
+    wanted = misspelled_count(rng)
 
-    for source in (pool, spare):
+    # Enough real words for every wrong slot, plus a reserve to make slips from
+    # and to fall back on when one cannot be made. Twice the question is ample
+    # and costs nothing -- these are strings already in memory.
+    reserve = _real_words(answer, pool, spare, 2 * OPTIONS, rng)
+    if len(reserve) < OPTIONS - 1:
+        return None
+
+    # The clean wrong options come off the front, so they are the ones spelled
+    # most like the answer (#130). What is left is available to mistype.
+    clean = reserve[:OPTIONS - 1 - wanted]
+    hidden = reserve[len(clean):]
+
+    options = [answer] + list(clean)
+    used = set()
+    while len(options) < OPTIONS:
+        slip, source = _one_slip(answer, clean, hidden, options, used, known, rng)
+        if slip is None:
+            break
+        used.add(source)
+        options.append(slip)
+
+    # A slip that could not be made leaves a hole. Filling it with a real word
+    # is what turns "three slips wanted, one available" into a plainer question
+    # rather than a shorter one.
+    for word in hidden:
         if len(options) >= OPTIONS:
             break
-        taken = {o.casefold() for o in options}
-        options += real_distractors(
-            answer, [w for w in source if (w or "").casefold() not in taken],
-            OPTIONS - len(options), rng=rng)
+        if word.casefold() not in {o.casefold() for o in options}:
+            options.append(word)
 
     if len(options) < OPTIONS:
         return None
-
-    # Each wrong answer in turn, in a random order, until one of them can be
-    # mistyped: a distractor may be too short, or every slip of it may be real
-    # English. All three staying correctly spelled is a perfectly good question,
-    # so this gives up rather than reaching for the one word it must not touch.
-    #
-    # `options[0]` is the answer and is never a source and never a target --
-    # the two are the same rule here, since a slip replaces the word it was
-    # made from.
-    wrong = list(range(1, len(options)))
-    rng.shuffle(wrong)
-    for index in wrong:
-        slip = typo(options[index], avoid=options, known=known, rng=rng)
-        if slip:
-            options[index] = slip
-            break
-
     rng.shuffle(options)
     return options
 
