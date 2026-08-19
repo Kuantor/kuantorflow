@@ -807,16 +807,38 @@ def real_distractors(answer, pool, count, rng=None):
 # page, which is a texture the game has no other way to produce.
 MISSPELLED_WEIGHTS = (40, 30, 20, 10)
 
-# Among the slips in a question, how often the word being mistyped is the
-# **correct answer** rather than a wrong one.
+# How often the answer goes to the front of the queue of words that might be
+# mistyped, ahead of the wrong options.
 #
-# This number is the whole of #319's point and it has to be near a half. A slip
-# is shown beside the word it was made from, so the page holds a near-identical
-# pair — and the pair is only uninformative if its tidily spelled half is the
-# answer about as often as it is a wrong option. Sourcing uniformly from the
-# words on the page would make the answer the source a third of the time, and a
-# learner who noticed could bet against the tidy half twice as often as for it.
-ANSWER_SOURCE_CHANCE = 0.5
+# A slip is shown beside the word it was made from, so the page holds a
+# near-identical pair, and what matters is which half of that pair is the
+# answer. Sourcing uniformly from the words on the page would make it the
+# answer about a third of the time, and a learner who noticed could bet
+# against the tidy half twice as often as for it.
+#
+# **This is a knob, not the resulting rate.** The coin decides queue position
+# rather than the outcome: a word that cannot be mistyped is skipped, and with
+# three slips wanted the answer is the only word on the page to make the first
+# one from. Measured over the deck, the nominal value runs about six points
+# below the share of pairs it actually produces —
+#
+#     nominal   pairs whose tidy half is the answer
+#      0.50                 56.0%
+#      0.35                 49.8%
+#      0.30                 48.0%
+#      0.20                 44.3%
+#
+# 0.30 puts the answer just under half, which is deliberate: it is the word the
+# learner is trying to learn, and a misspelling of it is the one slip on the
+# page that could teach them the wrong spelling. A wrong option carries no such
+# risk, so the two are not worth mistyping equally often.
+#
+# Not lower than this, though. The gap is what a learner gains by assuming the
+# tidy half of a pair is wrong, and it turns in their favour as the answer
+# supplies fewer of the pairs: worth -2.3 points at 0.50, -0.1 at 0.35, +0.5
+# here, and +2.4 by 0.15. Near half in either direction the bet is worthless,
+# which is the property being bought.
+ANSWER_SOURCE_CHANCE = 0.30
 
 
 def misspelled_count(rng=None):
