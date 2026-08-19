@@ -99,7 +99,9 @@ You are shown a Ukrainian or Russian translation and you **pick the English word
 
 The wrong answers are not random noise. They are real words from your own deck, preferring ones spelled similarly to the answer where your deck happens to have any — and **one of the four options is misspelled**, generated from the keyboard as an adjacent key or two letters in the wrong order, so it looks exactly like a slip you might have made yourself.
 
-The misspelled option is always one of the **wrong** answers — the right one is never the word that gets mistyped. An earlier version did mistype it, and that gave the whole game away: the odd-looking word sat next to its correctly spelled twin, and the tidy twin was always the answer.
+**How many options are misspelled changes from question to question** — usually none at all, now and then one or two, and rarely three. Most questions are four correctly spelled words, so you cannot assume there is an odd-looking word to find.
+
+When there is one, it usually sits **right beside the word it was made from**, and that word can be a wrong answer or the right one — wrong ones slightly more often, so that a misspelling of the word you are actually learning is the rarer case. `customs` next to `vustoms` and `custody` next to `custodt` look identical as a shape and mean opposite things, so a near-identical pair tells you nothing about which of the two is being asked for. The only way through is to know the word.
 
 Cards with no translation in the language you chose are left out of the round, and the page says how many that was.
 
