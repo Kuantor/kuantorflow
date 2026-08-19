@@ -797,21 +797,21 @@ def question_options(answer, pool, spare=(), known=(), rng=None):
 
     Three real words from the deck, one of which is then **mistyped** (#131).
 
-    **Which word gets mistyped is drawn from all four**, the right answer among
-    them. The first version always mistyped the answer, and that made the round
-    winnable with no English at all: `customs` beside `vustoms` is a
-    near-identical pair, and the correctly spelled half of such a pair is always
-    the one being asked for. Find the twins, pick the tidy one.
+    **The misspelling is never made from the correct answer.** The first version
+    always made it from the answer, which made the round winnable with no
+    English at all: `customs` beside `vustoms` is a near-identical pair, and the
+    correctly spelled half of such a pair is always the one being asked for.
+    Find the twins, pick the tidy one, score full marks. Drawing the source
+    from all four options was tried next and only made that rarer — a tell that
+    fires on a fifth of the questions is still a tell — so the answer is now
+    excluded outright and no pair ever appears.
 
-    Drawing the source uniformly means the answer supplies the slip about a
-    quarter of the time instead of always. Worth being clear about what that
-    does and does not fix: on the questions where the answer *is* the source the
-    pair still gives itself away exactly as before, so this makes the tell rarer
-    rather than weaker. What it buys is that a learner cannot run the trick as a
-    strategy — three questions in four have no pair to find, and a habit of
-    hunting for one is wasted effort. Excluding the answer entirely would remove
-    the tell outright, at the cost of the opposite one: a page that never pairs
-    is a page where a misspelling always marks a wrong answer.
+    The known cost, accepted deliberately: a misspelled option is therefore
+    always a wrong one, so spotting it eliminates a single answer and turns a
+    guess from one-in-four into one-in-three. That is a far smaller edge than
+    the pair gave away — it narrows the field instead of naming the answer —
+    and it is the price of the slip carrying no information about which option
+    is right.
 
     `avoid=options` is load-bearing rather than tidiness. Substitution and
     transposition both preserve length, so a typo of a *distractor* can collide
@@ -842,25 +842,21 @@ def question_options(answer, pool, spare=(), known=(), rng=None):
     if len(options) < OPTIONS:
         return None
 
-    # Every option in turn, in a random order, until one of them can be
-    # mistyped: a word may be too short, or every slip of it may be real
-    # English. All four staying correctly spelled is a perfectly good question,
-    # so this can simply give up rather than forcing a slip from somewhere.
+    # Each wrong answer in turn, in a random order, until one of them can be
+    # mistyped: a distractor may be too short, or every slip of it may be real
+    # English. All three staying correctly spelled is a perfectly good question,
+    # so this gives up rather than reaching for the one word it must not touch.
     #
-    # The slip always lands in a *wrong* slot, whichever word it was made from.
-    # Overwriting the answer with a misspelling of itself would leave the
-    # question with nothing correct to pick, so when the answer is the source
-    # its typo displaces a distractor -- which is what puts the pair on the
-    # page, deliberately, a quarter of the time.
-    sources = list(range(len(options)))
-    rng.shuffle(sources)
-    for source in sources:
-        slip = typo(options[source], avoid=options, known=known, rng=rng)
-        if not slip:
-            continue
-        target = source if source else rng.randrange(1, len(options))
-        options[target] = slip
-        break
+    # `options[0]` is the answer and is never a source and never a target --
+    # the two are the same rule here, since a slip replaces the word it was
+    # made from.
+    wrong = list(range(1, len(options)))
+    rng.shuffle(wrong)
+    for index in wrong:
+        slip = typo(options[index], avoid=options, known=known, rng=rng)
+        if slip:
+            options[index] = slip
+            break
 
     rng.shuffle(options)
     return options
