@@ -19,23 +19,11 @@
     <h1 class="page-title">{{ activity.name }}</h1>
 
     {% if results is none %}
-        {% if not items or not fake_count or not real_count %}
-            <div class="panel">
-                <p>There aren&rsquo;t enough words here for a round yet.</p>
-                {# Two different shortages, and the learner can act on both.
-                   The invented half needs a deck big enough to model; the real
-                   half needs words in the topics they ticked. #}
-                <p class="hint">This game needs a few hundred words in the deck
-                   to invent convincing ones from, and at least a handful of
-                   real words &mdash; of {{ games_min }} letters or more &mdash;
-                   in the topics you chose.
-                   {% if settings.individual_cards %}<em>Use only individual
-                   cards</em> is on, so anyone else&rsquo;s are hidden.{% endif %}</p>
-            </div>
-        {% else %}
             <div class="panel panel--tight">
                 <p>Which of these are real English words?
-                   ({{ items|length }} to judge)</p>
+                   ({{ items|length }} to judge)
+                {% include "_shortfall.html" with context %}
+                </p>
             </div>
 
             <form method="POST">
@@ -57,7 +45,6 @@
                 {% endfor %}
                 <button type="submit">Check answers</button>
             </form>
-        {% endif %}
 
     {% else %}
         <p class="score">Score: {{ score }} / {{ results|length }}</p>

@@ -35,6 +35,9 @@
             <span class="hint">Only {{ cards|length }} card{{ '' if cards|length == 1 else 's' }}
                 in this round — that is all we could make from this selection.</span>
         {% endif %}
+        {# How many, above; *why*, here. The two answer different questions and
+           a learner short of cards usually wants both (#266). #}
+        {% include "_shortfall.html" with context %}
         </p>
     </div>
 {% endblock %}

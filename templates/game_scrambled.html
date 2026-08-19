@@ -19,27 +19,13 @@
     <h1 class="page-title">{{ activity.name }}</h1>
 
     {% if results is none %}
-        {% if not questions %}
-            <div class="panel">
-                <p>No words here can be scrambled yet.</p>
-                {# A word needs four letters and two different ones in the
-                   middle before shuffling it can produce anything other than
-                   itself. A small topic of short words really can have none. #}
-                <p class="hint">A word needs at least four letters, with two
-                   different letters between the first and the last.
-                   {% if settings.individual_cards %}<em>Use only individual
-                   cards</em> is on, so anyone else&rsquo;s are hidden.{% endif %}</p>
-            </div>
-        {% else %}
+        {# A round with nothing to ask never reaches here since #266: the route
+           renders game_cannot_run.html instead, so the "no words can be
+           scrambled" branch that used to live here is gone rather than dead. #}
             <div class="panel panel--tight">
                 <p>Type each word with its letters put back in order
                    ({{ questions|length }} word{{ '' if questions|length == 1 else 's' }}):
-                {% if skipped %}
-                    <span class="hint">{{ skipped }}
-                    {{- ' word was' if skipped == 1 else ' words were' }} too short
-                    to scramble, so {{ 'it is' if skipped == 1 else 'they are' }}
-                    not asked.</span>
-                {% endif %}
+                {% include "_shortfall.html" with context %}
                 </p>
             </div>
 
@@ -60,7 +46,6 @@
                 {% endfor %}
                 <button type="submit">Check answers</button>
             </form>
-        {% endif %}
 
     {% else %}
         <p class="score">Score: {{ score }} / {{ results|length }}</p>

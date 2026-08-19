@@ -18,26 +18,6 @@
     <h1 class="page-title">{{ activity.name }}</h1>
 
     {% if results is none %}
-        {% if no_language %}
-            <div class="panel">
-                <p>There is no language to be tested in.</p>
-                {# Both languages hidden in Settings (#46/#79/#111), the same
-                   dead end the quiz reaches — and worded the way the quiz
-                   words it, since it is the same setting and the same fix. #}
-                <p class="hint">This game shows a translation and asks for the
-                   English word, so it needs Ukrainian or Russian to be
-                   visible. Enable at least one in Settings.</p>
-            </div>
-        {% elif not questions %}
-            <div class="panel">
-                <p>There aren&rsquo;t enough words here for a round yet.</p>
-                <p class="hint">Each question needs four different answers, so
-                   this game needs at least four cards with a
-                   {{ lang_name }} translation in the topics you chose.
-                   {% if settings.individual_cards %}<em>Use only individual
-                   cards</em> is on, so anyone else&rsquo;s are hidden.{% endif %}</p>
-            </div>
-        {% else %}
             <div class="panel panel--tight">
                 <p>Choose the English word for each
                    {{ lang_name }} one
@@ -46,13 +26,7 @@
                    topics and was asked twelve questions should be able to tell
                    which one happened. The picker counts cards, not cards this
                    game can use. #}
-                {% if untranslated %}
-                    <span class="hint">{{ untranslated }}
-                    card{{ '' if untranslated == 1 else 's' }} here
-                    {{ 'has' if untranslated == 1 else 'have' }} no
-                    {{ lang_name }} translation, so
-                    {{ 'it is' if untranslated == 1 else 'they are' }} not asked.</span>
-                {% endif %}
+                {% include "_shortfall.html" with context %}
                 {% if unbuildable %}
                     <span class="hint">{{ unbuildable }}
                     {{ 'word' if unbuildable == 1 else 'words' }} could not be
@@ -86,7 +60,6 @@
                 {% endfor %}
                 <button type="submit">Check answers</button>
             </form>
-        {% endif %}
 
     {% else %}
         <p class="score">Score: {{ score }} / {{ results|length }}</p>

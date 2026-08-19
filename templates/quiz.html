@@ -68,12 +68,7 @@
                The picker counts cards; a card with no translation in this
                language cannot be asked, and without this the difference looks
                like the word limit or a bug. #}
-            {% if untranslated %}
-                <span class="hint">{{ untranslated }}
-                {{- ' card in this selection has' if untranslated == 1 else ' cards in this selection have' }}
-                no {{ lang_name }} translation, so
-                {{ 'it is' if untranslated == 1 else 'they are' }} not asked.</span>
-            {% endif %}
+            {% include "_shortfall.html" with context %}
             </p>
         </div>
         <form method="POST" action="{{ self_url(lang) }}">
