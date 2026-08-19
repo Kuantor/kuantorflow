@@ -68,18 +68,16 @@ The *Card deck* link at the top of a topic opens the same cards as a **deck**: o
 
 ### The games, in one list
 
-There are six activities in the *Practise your words* panel on the front page — most of them games, and five of them ready to play now:
+There are six activities in the *Practise your words* panel on the front page — most of them games, and all six ready to play now:
 
 | Game | What you do |
 | --- | --- |
 | **Quiz** | Type the translation of a word. |
+| **Multiple choice** | Pick the English word for a translation, out of four. |
 | **Real or fake** | Decide which words are real and which the app invented. |
 | **Scrambled** | Rebuild a word whose middle letters were shuffled. |
 | **Generate a text** | Read a passage written from your own words. |
 | **Fill the gap** | Guess the word missing from one of its own example sentences. |
-| *Multiple choice* | Not built yet — pick the right answer from four. |
-
-*Multiple choice* is declared but not finished. Its tile is visible and greyed on the front page, so you can see what is coming without being able to click into an empty room.
 
 Each game is described below, and they all start the same way, from the picker.
 
@@ -94,6 +92,14 @@ The choice is remembered for next time, and the round's address is a plain link 
 You are shown a word and you **type the translation**. There is no multiple choice: producing a word is harder than recognising one, and it holds much better.
 
 Answers are marked generously — any accepted translation counts, case and spacing are ignored, and *ё* and *е* are treated alike — and a wrong answer shows you what was expected. A switch in the page takes the same quiz in your other language.
+
+### Multiple choice
+
+You are shown a Ukrainian or Russian translation and you **pick the English word** out of four. Which language the prompts are in is chosen in the picker, alongside the topics, and the whole round is graded when you submit it.
+
+The three wrong answers are not random noise. One of them is a misspelling of the right answer, generated from the keyboard — an adjacent key, or two letters in the wrong order — so it looks exactly like a slip you might have made yourself. The other two are real words from your own deck, preferring ones spelled similarly to the answer where your deck happens to have any. The idea is that every option is worth a second look.
+
+Cards with no translation in the language you chose are left out of the round, and the page says how many that was.
 
 ### Real or fake
 

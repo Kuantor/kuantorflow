@@ -2868,6 +2868,131 @@ def _fill_the_gap_round(activity, topics):
         cards=questions, wanted=wanted)
 
 
+# Distinct words a selection needs before it can supply its own wrong answers
+# (#130). Three questions' worth of distractors plus the answers they belong
+# to: below that, the same handful of words comes back every question. Twelve
+# is a judgement about when repetition stops being noticeable, not a measured
+# number -- the deck's own topics hold twenty each, so this only ever fires on
+# a small hand-made one.
+MIN_SELF_SUFFICIENT_POOL = 12
+
+
+def _multiple_choice_round(activity, topics):
+    """A round of #130: a translation, and four English words to choose from.
+
+    The prompt is the card's Ukrainian or Russian translation and the answer is
+    its English headword, which is the one direction this ships with. The
+    reverse — an English word above four Ukrainian answers — is not built here:
+    409 of the deck's 502 Ukrainian translations are comma-separated lists
+    rather than words, so four of them stacked as options is unreadable, and
+    that is a rendering question nobody has answered yet.
+
+    **Which language the prompt is in is the quiz's question, answered by the
+    quiz's code.** `picks_language` puts the choice in the picker and
+    `_quiz_lang()` resolves it, including the case where the preferred language
+    is hidden in Settings (#46/#79). A second rule for the same question would
+    drift from the first inside a month.
+    """
+    prefs = current_settings()
+    langs = _visible_quiz_langs(prefs)
+    words = games.word_count(request.args.get("words"),
+                             games.remembered_word_count(session))
+    page = {"activity": activity, "topics": topics, "words": words,
+            "lang_name": None}
+
+    if not langs:
+        # Both languages hidden (#46/#79). There is no prompt to show, so
+        # there is no round — the same dead end the quiz reaches, said here.
+        return render_template("game_multiple_choice.html", questions=[],
+                               results=None, score=None, untranslated=0,
+                               unbuildable=0, no_language=True, **page)
+
+    lang = _quiz_lang(prefs, langs)
+    field = f"translation_{lang}"
+    page["lang_name"] = QUIZ_LANGS[lang]
+
+    in_selection = get_flashcards_by_topics(topics, cards_owner_filter())
+    answerable = [c for c in in_selection
+                  if c.get(field) and (c.get("word") or "").strip()]
+
+    if request.method == "POST":
+        # Grade the questions that were asked, read back from the submitted
+        # field names — the quiz's rule, and here for the same reason: the
+        # draw is random and the distractors are generated per round, so a
+        # fresh draw would mark answers against options nobody saw.
+        #
+        # Graded against `answerable` rather than the deduplicated draw, so
+        # grading never depends on the dedupe landing the same way twice.
+        by_id = {str(card["id"]): card for card in answerable}
+        results = []
+        for key in request.form:
+            if not key.startswith("answer_"):
+                continue
+            card = by_id.pop(key[len("answer_"):], None)
+            if card is None:          # pop, so a repeated field cannot
+                continue              # ask the same question twice
+            given = (request.form.get(key) or "").strip()
+            results.append({
+                "prompt": card[field],
+                "word": card["word"],
+                "pos": card.get("pos"),
+                "user_answer": given,
+                "correct": given.casefold() == card["word"].casefold(),
+            })
+        return render_template(
+            "game_multiple_choice.html", questions=None, results=results,
+            score=sum(1 for r in results if r["correct"]),
+            untranslated=0, unbuildable=0, no_language=False, **page)
+
+    # One card per English word. #101 keeps a card per word *and part of
+    # speech*, so `work` as a noun and as a verb are two cards — and asking
+    # both would show the same four options twice, the second time as a free
+    # mark. `real_or_fake` deduplicates for the same reason.
+    unique, seen = [], set()
+    for card in answerable:
+        if card["word"].strip().casefold() not in seen:
+            seen.add(card["word"].strip().casefold())
+            unique.append(card)
+    pool = [card["word"].strip() for card in unique]
+
+    # The wider deck, fetched **only when the selection cannot furnish its own
+    # wrong answers**. A one-topic selection of five cards would otherwise
+    # offer the same four words in a different order every question, which a
+    # learner spots immediately. Everything larger already has more real words
+    # than a round can use, and a second full-deck query per round to prove
+    # that is a query nobody needs.
+    spare, wider = [], in_selection
+    if len(pool) < MIN_SELF_SUFFICIENT_POOL:
+        wider = get_flashcards_by_topics(
+            games.visible_topic_names(_visible_sections()),
+            cards_owner_filter())
+        spare = [(c.get("word") or "").strip() for c in wider
+                 if (c.get("word") or "").strip()]
+
+    # Real English, used to throw away a "typo" that landed on a real word —
+    # `design` is one slip from `resign` (#132 built this for the same job).
+    known = games.vocabulary(wider)
+
+    questions = []
+    for card in games.sample(unique, words):
+        options = games.question_options(card["word"].strip(), pool,
+                                         spare=spare, known=known)
+        if options is None:
+            continue
+        questions.append({
+            "id": card["id"],
+            "prompt": card[field],
+            "pos": card.get("pos"),
+            "options": options,
+        })
+
+    return render_template(
+        "game_multiple_choice.html", questions=questions, results=None,
+        score=None, no_language=False,
+        untranslated=len(in_selection) - len(answerable),
+        unbuildable=min(len(unique), words) - len(questions), **page)
+
+
 def _answer_index(key):
     """Sort answer_<n> fields back into the order they were asked."""
     tail = key.rsplit("_", 1)[-1]
@@ -2884,6 +3009,7 @@ GAME_ROUNDS["scrambled"] = _scrambled_round
 GAME_ROUNDS["real_or_fake"] = _real_or_fake_round
 GAME_ROUNDS["read_a_text"] = _read_a_text_round
 GAME_ROUNDS["fill_the_gap"] = _fill_the_gap_round
+GAME_ROUNDS["multiple_choice"] = _multiple_choice_round
 
 
 @app.route("/games/<game>/play", methods=["GET", "POST"])

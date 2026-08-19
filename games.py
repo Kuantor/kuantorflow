@@ -285,12 +285,16 @@ ACTIVITIES = {
             kind="game",
             picker_heading="Choose the topics to be tested on",
             # Four answers to a question, so four cards before one can be
-            # built. The exact rule -- four *distinct* translations -- is
-            # #130's, asked on its own page where it has the cards.
+            # built. The exact rule -- four distinct options, one of them a
+            # generated misspelling -- is #130's, asked on its own page where
+            # it has the cards.
             min_cards=4,
             too_small="Tick topics holding at least four cards.",
             tagline="Pick from four",
-            ticket="#130",
+            # The prompt is a translation, so which language it is in is a
+            # choice worth making before the words are drawn -- the same
+            # question the quiz asks, answered by the same code (#113).
+            picks_language=True,
         ),
         Activity(
             slug="real_or_fake",
@@ -606,6 +610,227 @@ def pseudowords(words, count, rng=None, order=NGRAM_ORDER, known=()):
         found.append(word)
     return found
 
+
+# --- typos a learner would actually make (#131) --------------------------
+#
+# #130 needs wrong answers that are *tempting*, and the cheapest source of a
+# tempting wrong answer is the mistake the learner would have made themselves:
+# a finger landing one key over, or two letters arriving in the wrong order.
+#
+# A physical model rather than a hand-written neighbour table, because the
+# table is thirty lines of data nobody can proofread and the geometry is four.
+# Each row of a QWERTY keyboard is offset from the one above it — that is the
+# stagger you can see looking down at the keys — so a key's neighbours are the
+# ones whose centres are within a key's width of its own.
+#
+# English only. #130 shows a Ukrainian or Russian word and asks for the English
+# one, so every option is English and every typo is made on a QWERTY keyboard;
+# a ЙЦУКЕН model would be a second table with nothing reading it. It arrives
+# with the reverse direction, if that is ever built.
+QWERTY_ROWS = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
+
+# How far each row sits to the right of the one above, in key widths. These are
+# the real offsets of a standard keyboard: `a` sits under the gap between `q`
+# and `w`, and `z` under the gap between `a` and `s`, which is what makes
+# `a`→`q` a likelier slip than `a`→`e`.
+ROW_OFFSETS = (0.0, 0.25, 0.75)
+
+# How far apart two key centres can be and still count as touching. Just over
+# one key width, not exactly one: the keys either side of a letter in its own
+# row are *exactly* 1.0 away, and they are the neighbours that matter most, so
+# a strict `< 1.0` would drop `a`→`s` while keeping `a`→`q`.
+KEY_REACH = 1.05
+
+
+def _keyboard():
+    """letter -> the letters whose keys touch it."""
+    centres = {}
+    for row, letters in enumerate(QWERTY_ROWS):
+        for column, letter in enumerate(letters):
+            centres[letter] = (row, column + ROW_OFFSETS[row] + 0.5)
+    near = {}
+    for letter, (row, x) in centres.items():
+        near[letter] = tuple(
+            other for other, (other_row, other_x) in centres.items()
+            if other != letter and abs(other_row - row) <= 1
+            and abs(other_x - x) < KEY_REACH)
+    return near
+
+
+KEYBOARD = _keyboard()
+
+# Below this, a typo stops being a typo. `aid` mistyped is `sid` or `aif`, and
+# four options that short read as four unrelated words rather than as one word
+# and three near misses — the effect #131 exists to produce. The caller takes
+# another real word instead, which is why this is a floor and not an error.
+MIN_TYPO_LENGTH = 4
+
+
+def typos(word):
+    """Every one-slip misspelling of `word`, in no particular order.
+
+    Two slips, which are the two #131 names: a finger on the neighbouring key,
+    and two letters typed in the wrong order. Both are *single* edits, so every
+    result is one Damerau-Levenshtein step from the word — the lower half of
+    #130's "1–2 edits", and the half that actually looks like a mistake. Two
+    edits from a nine-letter word is usually just a different word.
+
+    Single tokens only: an expression's spaces are never mistyped, and a
+    transposition buried in "take for granted" is invisible at a glance.
+    Returns [] rather than raising for anything it cannot slip, so the caller
+    falls back instead of having to check first.
+    """
+    word = (word or "").strip()
+    if len(word) < MIN_TYPO_LENGTH or not word.isalpha():
+        return []
+
+    found = []
+    lowered = word.lower()
+    for index, letter in enumerate(lowered):
+        for neighbour in KEYBOARD.get(letter, ()):
+            found.append(word[:index] + neighbour + word[index + 1:])
+    for index in range(len(word) - 1):
+        if lowered[index] == lowered[index + 1]:
+            # Swapping a double letter gives the word back — the trap
+            # `scramble()` guards against for the same reason: an option
+            # identical to the answer would be on screen twice, once marked
+            # right and once wrong.
+            continue
+        found.append(word[:index] + word[index + 1] + word[index]
+                     + word[index + 2:])
+    return found
+
+
+def typo(word, avoid=(), known=(), rng=None):
+    """One misspelling of `word` that is safe to show, or **None**.
+
+    `avoid` is what is already on the page; `known` is real English, and
+    `vocabulary()`'s output serves — which is what #132 built it for. A typo
+    that lands on a real word is rejected because it stops being a typo:
+    offered beside the answer it is just a second English word, and if it
+    happens to be a synonym it is a second *correct* answer.
+
+    None when nothing survives, which the caller reads as "take another real
+    word" rather than as a failure.
+    """
+    blocked = {str(item).casefold() for item in avoid}
+    blocked.add(word.casefold())
+    real = {str(item).casefold() for item in known}
+    candidates = [t for t in typos(word)
+                  if t.casefold() not in blocked and t.casefold() not in real]
+    if not candidates:
+        return None
+    return (rng or random).choice(candidates)
+
+
+# --- building one multiple-choice question (#130) ------------------------
+
+
+def edit_distance(first, second, cap=None):
+    """Levenshtein distance, stopped early once it passes `cap`.
+
+    Hand-written rather than a dependency: this is the whole of it, and the
+    alternative is another package in `requirements.txt` for fifteen lines.
+
+    `cap` is what makes it cheap enough to run over the whole deck per
+    question. #130 only ever asks "is this within two edits", and for most
+    pairs the length difference settles that before a row is computed.
+    """
+    first, second = first.casefold(), second.casefold()
+    if cap is not None and abs(len(first) - len(second)) > cap:
+        return cap + 1
+    previous = list(range(len(second) + 1))
+    for i, a in enumerate(first, 1):
+        current = [i] + [0] * len(second)
+        for j, b in enumerate(second, 1):
+            current[j] = min(previous[j] + 1, current[j - 1] + 1,
+                             previous[j - 1] + (a != b))
+        if cap is not None and min(current) > cap:
+            return cap + 1
+        previous = current
+    return previous[-1]
+
+
+# What "1–2 edits" means when picking a real word out of the deck. Two, as #130
+# asks — but see `real_distractors()` for why it is a preference and never a
+# requirement.
+CLOSE_EDITS = 2
+
+# How many answers a question offers, the correct one among them.
+OPTIONS = 4
+
+
+def real_distractors(answer, pool, count, rng=None):
+    """Real words from the deck to offer beside `answer`, closest first.
+
+    #130 asks for real card-set words within 1–2 edits and treats synthesis as
+    the fallback. Measured against the deck, that is the wrong way round: of
+    423 distinct headwords, 49 have even one other word within two edits and
+    **two** have three. So this prefers a close word where one exists — #130's
+    rule, honoured wherever it can fire — and fills the rest at random rather
+    than reporting that it could not.
+
+    Random is not a poor substitute. A wrong answer only has to be a real word
+    the learner has met and can reject on meaning; being spelled like the
+    answer makes it harder to eliminate at a glance, not more instructive.
+    """
+    rng = rng or random
+    seen = {answer.casefold()}
+    unique = []
+    for word in pool:
+        word = (word or "").strip()
+        if word and word.casefold() not in seen:
+            seen.add(word.casefold())
+            unique.append(word)
+
+    close, far = [], []
+    for word in unique:
+        near = edit_distance(word, answer, CLOSE_EDITS) <= CLOSE_EDITS
+        (close if near else far).append(word)
+    rng.shuffle(close)
+    rng.shuffle(far)
+    return (close + far)[:count]
+
+
+def question_options(answer, pool, spare=(), known=(), rng=None):
+    """The four answers to one question, shuffled, or **None**.
+
+    One typo of the correct answer (#131) and two other real words from the
+    deck — the mix #130 settled on. Not three typos, which would make the round
+    a spelling test and put three misspellings of the word being learned on the
+    screen at once; not three real words either, which throws away the near
+    miss that makes the question worth pausing over.
+
+    `pool` is the selection's own words and `spare` is the wider deck, drawn on
+    only when the selection cannot fill the question. A four-card topic would
+    otherwise offer the same three wrong answers every time, and a learner
+    notices that in about two questions.
+
+    None when four distinct options cannot be built at all, which is the
+    eligibility rule: a question with three options is a different, easier
+    game, and dealing one silently would make the score mean two things.
+    """
+    rng = rng or random
+    options = [answer]
+
+    slip = typo(answer, avoid=options, known=known, rng=rng)
+    if slip:
+        options.append(slip)
+
+    # Whatever the typo did not supply is made up in real words, so a word too
+    # short to mistype still produces a full question.
+    for source in (pool, spare):
+        if len(options) >= OPTIONS:
+            break
+        taken = {o.casefold() for o in options}
+        options += real_distractors(
+            answer, [w for w in source if (w or "").casefold() not in taken],
+            OPTIONS - len(options), rng=rng)
+
+    if len(options) < OPTIONS:
+        return None
+    rng.shuffle(options)
+    return options
 
 # --- finding a headword inside real English (#235, #237) -----------------
 #
