@@ -84,9 +84,6 @@
                matters more than it looks — without it a chip inside a form is
                a submit button, and the first tap would send the round. */
             (function () {
-                var form = document.querySelector("form");
-                if (!form) return;
-
                 function sync(question) {
                     var line = question.querySelector(".rebuild-line");
                     var words = Array.prototype.map.call(
@@ -96,7 +93,18 @@
                         words.join(" ");
                 }
 
-                form.addEventListener("click", function (event) {
+                // Delegated on the **document**, not on "the form".
+                // `document.querySelector("form")` returns the *first* form in
+                // the page, and base.html renders the settings popup's form
+                // hundreds of lines above where this page's content lands --
+                // so the listener went on that one and no chip ever moved.
+                // (Writing that block tag literally here broke the template:
+                // a Jinja tag inside a JS comment is still a Jinja tag.)
+                // Nothing
+                // here needs a form: the handler finds its question from the
+                // chip that was pressed, which is also how speech.js reaches
+                // its buttons.
+                document.addEventListener("click", function (event) {
                     var chip = event.target.closest && event.target.closest(".chip");
                     if (!chip) return;
                     var question = chip.closest(".rebuild");
