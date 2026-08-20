@@ -463,6 +463,84 @@ def activity(slug, kind=None):
     return found
 
 
+# --- one typed-answer path (#267) ----------------------------------------
+#
+# Four rounds take a typed answer -- the quiz, scrambled, and wave two's spell
+# it and listen and type -- and before this there were two copies of "read back
+# what was asked" and two different ideas of what counts as the same answer.
+
+# Punctuation a learner types around an answer without meaning it: a trailing
+# full stop, quotes pasted with the word, a stray comma. Stripped from both
+# ends and not from the middle, because `don't` and `well-being` are spellings
+# and `resign.` is a habit.
+ANSWER_PUNCTUATION = ".,;:!?\"'`()[]{}«»…-–—"
+
+
+def normalise_answer(text):
+    """A typed answer reduced to what it actually says (#267).
+
+    Trimmed, casefolded, inner whitespace collapsed, hyphens folded to spaces,
+    surrounding punctuation stripped. The cases are all things a learner really
+    types, and marking any of them wrong teaches nothing about English:
+
+        "Resign "            -> "resign"
+        "take  for granted"  -> "take for granted"
+        "resign."            -> "resign"
+        "well being"         -> "well being"   (and so does "well-being")
+
+    **`resigned` does not become `resign`.** Nothing here touches the middle of
+    a word, because that is a different word and these are spelling games. The
+    line this draws is between how a phrase was *typed* and how it was
+    *spelled*, and only the first is forgiven.
+
+    Deliberately not language-specific. The quiz's Cyrillic `ё`/`е` fold belongs
+    to a stored *translation* and stays on the quiz's own path, applied over
+    this rather than inside it -- an English headword has no `ё` in it, and a
+    rule that fires for one caller does not belong in the shared one.
+    """
+    folded = str(text or "").replace("-", " ").replace("‑", " ")
+    parts = [p.strip(ANSWER_PUNCTUATION) for p in folded.split()]
+    return " ".join(p for p in parts if p).casefold()
+
+
+def same_answer(given, expected):
+    """Whether a typed answer matches, both sides normalised the same way.
+
+    Both sides, which is the point: the stored word can carry a hyphen or a
+    double space just as easily as the typed one, and normalising only what the
+    learner wrote would mark `well-being` wrong for a card spelled that way.
+    """
+    return normalise_answer(given) == normalise_answer(expected)
+
+
+def asked(form, by_id, prefix="answer_"):
+    """The items that were on the page, in the order their fields arrived.
+
+    A round is a **random sample**, so re-drawing on POST would grade answers
+    against words nobody saw. The submitted field names are the only record of
+    what was asked, and this is the one place that reads them back.
+
+    In submission order rather than database order, because the results list is
+    numbered and a learner reading "3. wrong" has to find the third question
+    they answered, not the third alphabetically.
+
+    **Popped, not fetched.** A repeated field -- a doubled submit, a hand-built
+    POST -- would otherwise ask the same question twice and score it twice.
+
+    `form` is any mapping that iterates its keys in submission order and
+    `by_id` is `{key: item}`, both plain data, so this needs no request context
+    and no database to test.
+    """
+    found = []
+    remaining = dict(by_id)
+    for key in form:
+        if not key.startswith(prefix):
+            continue
+        item = remaining.pop(key[len(prefix):], None)
+        if item is not None:
+            found.append(item)
+    return found
+
 # --- which cards a game can actually use (#266) --------------------------
 
 

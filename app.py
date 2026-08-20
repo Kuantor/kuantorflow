@@ -2717,22 +2717,20 @@ def _scrambled_round(activity, topics):
     cards = get_flashcards_by_topics(topics, cards_owner_filter())
 
     if request.method == "POST":
-        # Grade what was asked, in the order it was asked — the same rule the
-        # quiz follows, and for the same reason: the round is a random sample.
-        by_id = {str(card["id"]): card for card in cards}
+        # Both halves shared since #267: which questions were asked, and what
+        # counts as the same answer. The second is the one that changed — a
+        # trailing full stop, a doubled space and a hyphen typed as a space are
+        # now forgiven, none of which taught a learner anything when marked
+        # wrong.
         results = []
-        for key in request.form:
-            if not key.startswith("answer_"):
-                continue
-            card = by_id.pop(key[len("answer_"):], None)
-            if card is None:
-                continue
-            given = (request.form.get(key) or "").strip()
+        for card in games.asked(request.form,
+                                {str(c["id"]): c for c in cards}):
+            given = (request.form.get(f"answer_{card['id']}") or "").strip()
             results.append({
                 "word": card["word"],
                 "scrambled": request.form.get(f"scrambled_{card['id']}", ""),
                 "user_answer": given,
-                "correct": given.casefold() == card["word"].casefold(),
+                "correct": games.same_answer(given, card["word"]),
             })
         return render_template(
             "game_scrambled.html", activity=activity, topics=topics,
@@ -3049,7 +3047,15 @@ def _multiple_choice_round(activity, topics):
 
 
 def _answer_index(key):
-    """Sort answer_<n> fields back into the order they were asked."""
+    """Sort answer_<n> fields back into the order they were asked.
+
+    Real-or-fake is the one typed-answer-shaped round #267 deliberately left
+    out of `games.asked()`. Its items are **invented words with no row behind
+    them**, so its fields are keyed by position rather than by card id, and
+    there is nothing to look up. Folding it in would mean telling the shared
+    helper which of two shapes it is being used in, and a helper that has to be
+    told that is two functions wearing a hat.
+    """
     tail = key.rsplit("_", 1)[-1]
     return int(tail) if tail.isdigit() else -1
 
@@ -3187,23 +3193,17 @@ def _run_quiz(topics, heading, self_url, back, words):
 
     results = score = None
     if request.method == "POST":
-        # Grade the questions that were **asked**, not a fresh draw. The round
-        # is a random sample, so re-sampling here would mark answers against
-        # words the learner never saw. The submitted field names say which
-        # cards were on the page, and they are the only record of it — which is
-        # also why this needs no server-side state between the two requests.
-        # In the order they were **asked**, which is the order the fields were
-        # submitted — not the order the database returned them. The results
-        # list is numbered, and a learner reading "3. wrong" has to find the
-        # third question they answered, not the third alphabetically.
-        by_id = {str(card["id"]): card for card in cards}
-        cards = []
-        for key in request.form:
-            if not key.startswith("answer_"):
-                continue
-            card = by_id.pop(key[len("answer_"):], None)
-            if card is not None:      # pop, so a repeated field cannot
-                cards.append(card)    # ask the same question twice
+        # Grade the questions that were **asked**, not a fresh draw — the rule
+        # and the reasoning now live in games.asked() (#267), which scrambled
+        # and wave two's typed rounds share.
+        #
+        # The *comparison* deliberately stays here. A quiz answer is matched
+        # against a stored translation, which is a comma-separated list of
+        # synonyms (`_answer_variants()`) and can carry a Cyrillic `ё` — both
+        # facts about a translation and neither one about an English headword,
+        # so games.normalise_answer() has no business knowing them.
+        cards = games.asked(request.form,
+                            {str(card["id"]): card for card in cards})
         results = []
         for card in cards:
             user_answer = (request.form.get(f"answer_{card['id']}") or "").strip()
