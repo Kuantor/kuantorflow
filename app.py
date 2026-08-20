@@ -3290,6 +3290,84 @@ def _spell_it_round(activity, topics):
         hint=hint, dropped=dropped)
 
 
+def _rebuild_the_sentence_round(activity, topics):
+    """A round of #271: one example sentence, its words shuffled.
+
+    **Not #133 with bigger pieces.** Scrambled trains spelling; this trains
+    *word order*, which is where Ukrainian- and Russian-speaking learners
+    actually lose marks — both first languages permit orders English does not,
+    so a sentence that feels natural to write comes out wrong. It is the one
+    exercise in either wave aimed squarely at that gap.
+
+    **Tap to place, not drag and drop.** Drag is the obvious interaction and
+    the expensive one: pointer events, a touch fallback and a keyboard path,
+    and it is the part most likely to be subtly broken on a phone. The chips
+    are ordinary `<button>` elements, so a mouse, a finger and a keyboard all
+    work with no code for any of them.
+
+    **Graded on the server**, from the assembled string in a hidden field —
+    the interaction being in the browser is not a reason to move correctness
+    there.
+
+    Nothing is written to the database.
+    """
+    words = games.word_count(request.args.get("words"),
+                             games.remembered_word_count(session))
+    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+
+    if request.method == "POST":
+        results = []
+        for card in games.asked(request.form,
+                                {str(c["id"]): c for c in cards}):
+            given = (request.form.get(f"answer_{card['id']}") or "").strip()
+            # The sentence travels with the answer: which example was drawn and
+            # how it was shuffled are both random, so nothing here could be
+            # rebuilt from the card.
+            sentence = request.form.get(f"sentence_{card['id']}", "")
+            results.append({
+                "word": card["word"],
+                "sentence": sentence,
+                "given": given,
+                # **The assembled string, not chip positions.** That falls out
+                # of the duplicate-token case and gets it right for free: a
+                # sentence containing `the` twice has two genuinely
+                # interchangeable chips, and grading by position would mark one
+                # of two identical words wrong for sitting in the other's slot.
+                # #267's normalisation on both sides, so a doubled space
+                # between chips cannot fail a correct sentence.
+                "correct": bool(sentence) and games.same_answer(given, sentence),
+            })
+        return render_template(
+            "game_rebuild_the_sentence.html", activity=activity, topics=topics,
+            questions=None, results=results, words=words, dropped=0,
+            score=sum(1 for r in results if r["correct"]))
+
+    usable, dropped = games.playable(
+        cards, lambda card: games.rebuildable(card.get("examples_en")))
+
+    if not usable:
+        return _cannot_run(
+            activity, topics,
+            "None of these cards has a sentence to rebuild.",
+            "This game shuffles the words of a real example sentence, so it "
+            f"needs cards with an English example of {games.SENTENCE_MIN} to "
+            f"{games.SENTENCE_MAX} words.")
+
+    questions = []
+    for card, (sentence, chips) in games.sample(usable, words):
+        questions.append({
+            "id": card["id"],
+            "word": card["word"],
+            "sentence": sentence,
+            "chips": chips,
+        })
+
+    return render_template(
+        "game_rebuild_the_sentence.html", activity=activity, topics=topics,
+        questions=questions, results=None, score=None, words=words,
+        dropped=dropped)
+
+
 def _answer_index(key):
     """Sort answer_<n> fields back into the order they were asked.
 
@@ -3318,6 +3396,7 @@ GAME_ROUNDS["multiple_choice"] = _multiple_choice_round
 GAME_ROUNDS["listen_and_type"] = _listen_and_type_round
 GAME_ROUNDS["odd_one_out"] = _odd_one_out_round
 GAME_ROUNDS["spell_it"] = _spell_it_round
+GAME_ROUNDS["rebuild_the_sentence"] = _rebuild_the_sentence_round
 
 
 @app.route("/games/<game>/play", methods=["GET", "POST"])

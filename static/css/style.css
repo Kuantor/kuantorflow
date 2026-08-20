@@ -325,6 +325,37 @@ button:hover { background: var(--blue-dark); }
    and stop being countable at all. */
 .spell-mask { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .spell-meaning { margin: 0.4rem 0 0; color: var(--ink); }
+
+/* #271's chips. Buttons that read as words rather than as controls -- the
+   thing being tapped is a word, and a row of blue rectangles would look like a
+   toolbar. */
+.chip {
+    display: inline-block;
+    border: 1px solid var(--line, #cfd8e3);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    margin: 0.2rem 0.25rem 0.2rem 0;
+    font: inherit;
+    font-size: 1rem;
+    /* A comfortable finger target without making a ten-word sentence three
+       rows tall on a phone. */
+    min-height: 2.2rem;
+    cursor: pointer;
+}
+.chip:hover, .chip:focus-visible { border-color: var(--accent, #2f6fa8); }
+/* The line the sentence is built on. It keeps its height while empty, so the
+   pool does not jump up the page on the first tap and land the second chip
+   where the learner's finger already was. */
+.rebuild-line {
+    min-height: 3rem;
+    padding: 0.3rem;
+    margin: 0.5rem 0;
+    border-bottom: 2px solid var(--line, #cfd8e3);
+}
+.rebuild-pool { margin-top: 0.6rem; }
+.rebuild-pool .chip { background: var(--panel-alt, #f2f5f9); }
 /* The question number leads a row that also holds a button and a text box, so
    here `.word` is a label rather than the block heading it is in every other
    game's results -- scoped to this row rather than changed globally. */

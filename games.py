@@ -408,7 +408,6 @@ ACTIVITIES = {
             too_small="Tick at least one topic to start.",
             tagline="Put the words back in order",
             needs="an example sentence of five to fifteen words",
-            ticket="#271",
         ),
         Activity(
             slug="listen_and_type",
@@ -1509,6 +1508,95 @@ def mark_words(text, words):
         segments.append((text[at:], False))
     return segments, used, missing
 
+
+# --- putting a sentence back in order (#271) ------------------------------
+#
+# **This is not #133 with bigger pieces.** Scrambled shuffles letters inside a
+# word and trains spelling; this shuffles words inside a sentence and trains
+# *word order*, which is where Ukrainian- and Russian-speaking learners
+# actually lose marks -- both first languages permit orders English does not,
+# so a sentence that feels perfectly natural to write comes out wrong.
+
+# A sentence has to be the right size to be a puzzle. Four words is not one;
+# twenty-five is an afternoon.
+SENTENCE_MIN = 5
+SENTENCE_MAX = 15
+
+# The marks that end a sentence rather than belonging to a word. Stripped,
+# because a full stop travelling with the last token marks it as the last
+# token -- half the giveaway, removed for nothing.
+TERMINAL = ".!?…"
+
+
+def sentence_tokens(sentence):
+    """The words of `sentence` as chips, or **None** if it will not do.
+
+    **Internal punctuation stays attached to its token.** A comma inside a
+    clause is part of where that clause goes, and moving it separately is how a
+    real sentence becomes a wrong one -- so `.split()` is the whole tokeniser,
+    deliberately.
+
+    **The terminal mark comes off.** It is punctuation rather than a word, and
+    a chip reading `problems.` announces itself as the end of the sentence.
+
+    **The opening capital stays.** Lowercasing the first token would mangle
+    every sentence that opens with a proper noun or *I*, and the app cannot
+    reliably tell which those are. A learner who uses the capital to find the
+    start has still had to order everything after it, which is the exercise --
+    a known hint is better than a clever rule that prints `she` as `She`
+    somewhere in the middle of the pool.
+    """
+    text = str(sentence or "").strip().rstrip(TERMINAL).strip()
+    tokens = text.split()
+    if not (SENTENCE_MIN <= len(tokens) <= SENTENCE_MAX):
+        return None
+    return tokens
+
+
+def shuffle_tokens(tokens, rng=None):
+    """`tokens` in a different order, or **None** if they cannot differ.
+
+    None rather than the original, which is the same subtlety `scramble()`
+    documents: a pool that happens to come out in the right order is a question
+    whose answer is already on screen, and returning it would leave the caller
+    to notice.
+
+    Vanishingly unlikely for a real sentence -- it needs every token identical
+    -- but the loop is bounded rather than trusting that.
+    """
+    rng = rng or random
+    if len(set(tokens)) < 2:
+        return None
+    for _ in range(20):
+        shuffled = list(tokens)
+        rng.shuffle(shuffled)
+        if shuffled != list(tokens):
+            return shuffled
+    return None
+
+
+def rebuildable(examples, rng=None):
+    """`(sentence, chips)` from the first usable example, or **None**.
+
+    `sentence` is the answer -- the tokens joined with single spaces, which is
+    what the assembled string is compared against -- and `chips` is the pool.
+
+    The examples are tried in random order, so a card with three usable
+    sentences is not the same question every round; #225 gave cards their
+    English examples and 86 of production's 503 have none at all, so plenty of
+    cards yield nothing here and the caller moves on.
+    """
+    rng = rng or random
+    usable = [str(s).strip() for s in (examples or []) if str(s or "").strip()]
+    rng.shuffle(usable)
+    for candidate in usable:
+        tokens = sentence_tokens(candidate)
+        if not tokens:
+            continue
+        chips = shuffle_tokens(tokens, rng)
+        if chips:
+            return " ".join(tokens), chips
+    return None
 
 # --- the meaning, and how the word starts (#270) --------------------------
 #

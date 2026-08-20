@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} | KuantorFlow{% endblock %}
+
+{#
+   A round of #271 — one real example sentence with its words shuffled.
+
+   Not #133 with bigger pieces: scrambled trains spelling, this trains *word
+   order*, which is where Ukrainian- and Russian-speaking learners actually
+   lose marks.
+
+   **Tap to place, not drag and drop.** Every chip is an ordinary `<button>`,
+   which is the whole accessibility story: a mouse click, a finger tap and
+   Enter or Space on a focused button all fire the same handler, and the
+   browser gives focus order, focus rings and touch targets for free. Drag
+   would need pointer events, a touch fallback and a keyboard path — three
+   implementations of one gesture, and the one most likely to be quietly broken
+   on a phone.
+
+   Grading stays on the server: the assembled sentence goes into a hidden field
+   and is compared there.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+    </p>
+    <h1 class="page-title">{{ activity.name }}</h1>
+
+    {% if results is none %}
+        <div class="panel panel--tight">
+            <p>Put the words back into the right order. Tap a word to place it,
+               and tap a placed word to send it back
+               ({{ questions|length }} sentence{{ '' if questions|length == 1 else 's' }}).
+            {% include "_shortfall.html" with context %}
+            </p>
+        </div>
+
+        <noscript>
+            <div class="panel">
+                <p>This game needs JavaScript to move the words.</p>
+            </div>
+        </noscript>
+
+        <form method="POST">
+            {% for question in questions %}
+                {% set q = loop.index %}
+                <div class="panel question rebuild" data-card="{{ question.id }}">
+                    <div class="word">{{ q }}.
+                        <span class="pos">{{ question.word }}</span>
+                    </div>
+                    {# The answer travels with the submission: which example was
+                       drawn and how it was shuffled are both random, so nothing
+                       here could be rebuilt from the card on POST. #}
+                    <input type="hidden" name="sentence_{{ question.id }}"
+                           value="{{ question.sentence }}">
+                    <input type="hidden" name="answer_{{ question.id }}"
+                           class="rebuild-answer" value="">
+
+                    <div class="rebuild-line" aria-live="polite"
+                         aria-label="Your sentence"></div>
+                    <div class="rebuild-pool">
+                        {% for chip in question.chips %}
+                            <button type="button" class="chip">{{ chip }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+            <button type="submit">Check answers</button>
+        </form>
+
+        <script>
+            /* Tap to place. One delegated click handler for the whole form —
+               a chip in the pool moves to the line, a chip on the line goes
+               back to the pool, and the hidden field is rewritten from the
+               line after every move.
+
+               Rebuilt from the DOM rather than tracked in a variable: the
+               line *is* the state, so there is nothing to keep in step with
+               it and no way for the two to disagree.
+
+               Ordinary buttons, so Enter and Space already work and no
+               keyboard handling appears here. `type="button"` on every chip
+               matters more than it looks — without it a chip inside a form is
+               a submit button, and the first tap would send the round. */
+            (function () {
+                function sync(question) {
+                    var line = question.querySelector(".rebuild-line");
+                    var words = Array.prototype.map.call(
+                        line.querySelectorAll(".chip"),
+                        function (chip) { return chip.textContent.trim(); });
+                    question.querySelector(".rebuild-answer").value =
+                        words.join(" ");
+                }
+
+                // Delegated on the **document**, not on "the form".
+                // `document.querySelector("form")` returns the *first* form in
+                // the page, and base.html renders the settings popup's form
+                // hundreds of lines above where this page's content lands --
+                // so the listener went on that one and no chip ever moved.
+                // (Writing that block tag literally here broke the template:
+                // a Jinja tag inside a JS comment is still a Jinja tag.)
+                // Nothing
+                // here needs a form: the handler finds its question from the
+                // chip that was pressed, which is also how speech.js reaches
+                // its buttons.
+                document.addEventListener("click", function (event) {
+                    var chip = event.target.closest && event.target.closest(".chip");
+                    if (!chip) return;
+                    var question = chip.closest(".rebuild");
+                    if (!question) return;
+                    var onLine = chip.parentNode.classList.contains("rebuild-line");
+                    question.querySelector(onLine ? ".rebuild-pool"
+                                                  : ".rebuild-line").appendChild(chip);
+                    sync(question);
+                    // Focus follows the chip, so a keyboard user is not thrown
+                    // back to the top of the form after every move.
+                    chip.focus();
+                });
+            })();
+        </script>
+
+    {% else %}
+        <p class="score">Score: {{ score }} / {{ results|length }}</p>
+        {% for r in results %}
+            <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
+                <div class="word">{{ loop.index }}.
+                    <span class="pos">{{ r.word }}</span>
+                </div>
+                <p>You built: {{ r.given or '—' }}</p>
+                {% if not r.correct %}
+                    <p class="expected">It was written: {{ r.sentence }}</p>
+                {% endif %}
+            </div>
+        {% endfor %}
+        <p class="crumbs">
+            <a href="{{ url_for('index') }}">&larr; Home</a>
+            <a href="{{ url_for('game_play', game=activity.slug, topic=topics, words=words) }}">Play again</a>
+        </p>
+    {% endif %}
+{% endblock %}
