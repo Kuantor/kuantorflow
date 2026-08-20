@@ -2667,6 +2667,21 @@ def _read_a_text_round(activity, topics):
     return page(held=_held_for(topics, length, instruction), refusal=None)
 
 
+def _cannot_run(activity, topics, heading, explanation=None):
+    """The page a round shows instead of dealing one it cannot deal (#266).
+
+    #233's rule is that "can this run?" is answered in the picker; this is the
+    part that rule always needed and no shipped game could reach, because the
+    picker answers it from *counts* and two questions live below that -- whether
+    enough topics are ticked, and whether any of their cards carry what the game
+    needs. Neither is a 404 and neither is an empty round: the learner asked for
+    something reasonable and is told which of the two it was.
+    """
+    return render_template("game_cannot_run.html", activity=activity,
+                           topics=topics, heading=heading,
+                           explanation=explanation)
+
+
 def _round_stub(activity, topics):
     """The round an activity will have, before it has one (#253).
 
@@ -2722,18 +2737,25 @@ def _scrambled_round(activity, topics):
         return render_template(
             "game_scrambled.html", activity=activity, topics=topics,
             questions=None, results=results, words=words,
-            score=sum(1 for r in results if r["correct"]), skipped=0)
+            score=sum(1 for r in results if r["correct"]), dropped=0)
 
-    playable = []
-    for card in cards:
-        puzzle = games.scramble_entry(card["word"])
-        if puzzle:
-            playable.append({"id": card["id"], "word": card["word"],
-                             "scrambled": puzzle})
+    # The rule returns the puzzle rather than a yes, which is what keeps one
+    # call doing both jobs (#266): asking whether a word can be scrambled and
+    # then scrambling it would spend the draw twice and shuffle a different
+    # word than it tested.
+    usable, dropped = games.playable(
+        cards, lambda card: games.scramble_entry(card["word"]))
+    if not usable:
+        return _cannot_run(
+            activity, topics, "No words here can be scrambled yet.",
+            "A word needs at least four letters, with two different letters "
+            "between the first and the last.")
+    questions = [{"id": card["id"], "word": card["word"], "scrambled": puzzle}
+                 for card, puzzle in usable]
     return render_template(
         "game_scrambled.html", activity=activity, topics=topics, words=words,
-        questions=games.sample(playable, words), results=None, score=None,
-        skipped=len(cards) - len(playable))
+        questions=games.sample(questions, words), results=None, score=None,
+        dropped=dropped)
 
 
 def _real_or_fake_round(activity, topics):
@@ -2769,22 +2791,26 @@ def _real_or_fake_round(activity, topics):
                             "correct": said == really})
         return render_template(
             "game_real_or_fake.html", activity=activity, topics=topics,
-            items=None, results=results, words=words,
+            items=None, results=results, words=words, dropped=0,
             score=sum(1 for r in results if r["correct"]))
 
-    def playable(card):
+    def usable(card):
         word = (card.get("word") or "").strip()
         return (word.isalpha() and len(word) >= games.MIN_INVENTED_LENGTH
                 and " " not in word)
 
+    in_selection = get_flashcards_by_topics(topics, cards_owner_filter())
+    kept, dropped = games.playable(in_selection, usable)
     # Deduplicated: #101 keeps one card per word *and part of speech*, so a
     # word that is both a noun and a verb is two cards, and the same word twice
-    # on the page is a free mark and looks like a mistake.
+    # on the page is a free mark and looks like a mistake. Counted as dropped
+    # too -- to the learner it is one more card of theirs that is not asked.
     selected, seen = [], set()
-    for card in get_flashcards_by_topics(topics, cards_owner_filter()):
-        if playable(card) and card["word"].lower() not in seen:
+    for card, _ in kept:
+        if card["word"].lower() not in seen:
             seen.add(card["word"].lower())
             selected.append(card["word"])
+    dropped += len(kept) - len(selected)
     everything = get_flashcards_by_topics(
         games.visible_topic_names(_visible_sections()), cards_owner_filter())
 
@@ -2794,12 +2820,18 @@ def _real_or_fake_round(activity, topics):
         known=games.vocabulary(everything))
     reals = games.sample(selected, words - len(fakes))
 
+    if not reals:
+        return _cannot_run(
+            activity, topics,
+            "There aren't enough real words here for a round yet.",
+            f"This game needs words of {games.MIN_INVENTED_LENGTH} letters or "
+            "more, written as a single word, in the topics you chose.")
     items = ([{"word": w, "real": True} for w in reals]
              + [{"word": w, "real": False} for w in fakes])
     random.shuffle(items)
     return render_template(
         "game_real_or_fake.html", activity=activity, topics=topics,
-        items=items, results=None, score=None, words=words,
+        items=items, results=None, score=None, words=words, dropped=dropped,
         real_count=len(reals), fake_count=len(fakes),
         games_min=games.MIN_INVENTED_LENGTH)
 
@@ -2846,14 +2878,24 @@ def _fill_the_gap_round(activity, topics):
     cards = get_flashcards_by_topics(topics, cards_owner_filter())
     random.shuffle(cards)
 
+    # The rule returns the gapped sentence, not a yes: finding an example that
+    # contains its own headword and cutting the word out of it are one question
+    # (#266), and asking twice would draw a different example the second time.
+    usable, dropped = games.playable(
+        cards,
+        lambda card: games.gapped_example(card.get("examples_en"),
+                                          (card.get("word") or "").strip()))
+    if not usable:
+        return _cannot_run(
+            activity, topics,
+            "No cards here have an example that uses their own word.",
+            "This game hides a word inside one of its own example sentences, "
+            "so a card with no examples — or none that use the word — sits "
+            "this one out.")
+
     questions = []
-    for card in cards:
-        if len(questions) >= wanted:
-            break
+    for card, sentence in usable[:wanted]:
         word = (card.get("word") or "").strip()
-        sentence = games.gapped_example(card.get("examples_en"), word)
-        if not sentence:
-            continue
         questions.append({
             "word": word,
             "pos": card.get("pos"),
@@ -2865,7 +2907,7 @@ def _fill_the_gap_round(activity, topics):
 
     return render_template(
         "game_fill_the_gap.html", activity=activity, topics=topics,
-        cards=questions, wanted=wanted)
+        cards=questions, wanted=wanted, dropped=dropped)
 
 
 # Distinct words a selection needs before it can supply its own wrong answers
@@ -2901,19 +2943,26 @@ def _multiple_choice_round(activity, topics):
             "lang_name": None}
 
     if not langs:
-        # Both languages hidden (#46/#79). There is no prompt to show, so
-        # there is no round — the same dead end the quiz reaches, said here.
-        return render_template("game_multiple_choice.html", questions=[],
-                               results=None, score=None, untranslated=0,
-                               unbuildable=0, no_language=True, **page)
+        # Both languages hidden (#46/#79). There is no prompt to show, so there
+        # is no round. Since #266 that is the shared page rather than a branch
+        # in this game's template: "the selection cannot produce a round" is one
+        # situation with several causes, and each game rendering it its own way
+        # is what #266 set out to stop.
+        return _cannot_run(
+            activity, topics, "There is no language to be tested in.",
+            "This game shows a translation and asks for the English word, so "
+            "it needs Ukrainian or Russian to be visible. Enable at least one "
+            "in Settings.")
 
     lang = _quiz_lang(prefs, langs)
     field = f"translation_{lang}"
     page["lang_name"] = QUIZ_LANGS[lang]
 
     in_selection = get_flashcards_by_topics(topics, cards_owner_filter())
-    answerable = [c for c in in_selection
-                  if c.get(field) and (c.get("word") or "").strip()]
+    usable, untranslated = games.playable(
+        in_selection,
+        lambda card: bool(card.get(field)) and bool((card.get("word") or "").strip()))
+    answerable = [card for card, _ in usable]
 
     if request.method == "POST":
         # Grade the questions that were asked, read back from the submitted
@@ -2942,7 +2991,7 @@ def _multiple_choice_round(activity, topics):
         return render_template(
             "game_multiple_choice.html", questions=None, results=results,
             score=sum(1 for r in results if r["correct"]),
-            untranslated=0, unbuildable=0, no_language=False, **page)
+            dropped=0, unbuildable=0, **page)
 
     # One card per English word. #101 keeps a card per word *and part of
     # speech*, so `work` as a noun and as a verb are two cards — and asking
@@ -2986,10 +3035,16 @@ def _multiple_choice_round(activity, topics):
             "options": options,
         })
 
+    if not questions:
+        return _cannot_run(
+            activity, topics,
+            "There aren't enough words here for a round yet.",
+            "Each question needs four different answers, so this game needs at "
+            f"least four cards with a {page['lang_name']} translation in the "
+            "topics you chose.")
     return render_template(
         "game_multiple_choice.html", questions=questions, results=None,
-        score=None, no_language=False,
-        untranslated=len(in_selection) - len(answerable),
+        score=None, dropped=untranslated,
         unbuildable=min(len(unique), words) - len(questions), **page)
 
 
@@ -3032,6 +3087,24 @@ def game_play(game):
         request.args.getlist("topic"),
         games.visible_topic_names(_visible_sections()))
     games.remember_selection(session, topics)
+    # Checked here rather than in each round, so every game inherits it, and
+    # checked at all because the picker is not the only way in: a hand-typed or
+    # shared `?topic=` reaches this URL without passing the Start button that
+    # would have been disabled (#266).
+    if not topics:
+        # No topics at all, which is its own situation rather than a shortfall:
+        # every activity needs at least one, so saying "needs at least 1 topics"
+        # would be arithmetic where a sentence was wanted.
+        return _cannot_run(
+            activity, topics, "No topics are selected.",
+            "Pick the topics you want to play over and this round will deal "
+            "from them.")
+    if len(topics) < activity.min_topics:
+        return _cannot_run(
+            activity, topics,
+            f"{activity.name} needs at least {activity.min_topics} topics, "
+            f"and {'only one is' if len(topics) == 1 else 'none is'} selected.",
+            activity.too_few_topics)
     return round_view(activity, topics)
 
 
@@ -3085,13 +3158,18 @@ def _run_quiz(topics, heading, self_url, back, words):
     """
     prefs = current_settings()
     langs = _visible_quiz_langs(prefs)
+    # `activity` rides along for #266's shared shortfall sentence, which reads
+    # `needs` off it. The quiz's own page predates the chassis and never needed
+    # it before -- it takes a `heading` because /quiz/<topic> names one topic
+    # and /quiz names several, which the declaration cannot say.
     common = {"heading": heading, "self_url": self_url, "back": back,
-              "langs": langs, "topic_summary": _topic_summary(topics)}
+              "langs": langs, "topic_summary": _topic_summary(topics),
+              "activity": games.ACTIVITIES["quiz"]}
     if not langs:
         # Both languages hidden in Settings (#46/#79) — nothing to quiz on.
         return render_template(
             "quiz.html", cards=[], lang=None, lang_name=None,
-            results=None, **dict(common, langs={}))
+            results=None, dropped=0, **dict(common, langs={}))
 
     lang = _quiz_lang(prefs, langs)
     field = f"translation_{lang}"
@@ -3103,8 +3181,9 @@ def _run_quiz(topics, heading, self_url, back, words):
     # cards in production have no Ukrainian and 38 no Russian, so this is a
     # number people will actually meet.
     in_selection = get_flashcards_by_topics(topics, cards_owner_filter())
-    cards = [c for c in in_selection if c.get(field)]
-    untranslated = len(in_selection) - len(cards)
+    usable, untranslated = games.playable(in_selection,
+                                          lambda card: card.get(field))
+    cards = [card for card, _ in usable]
 
     results = score = None
     if request.method == "POST":
@@ -3148,7 +3227,7 @@ def _run_quiz(topics, heading, self_url, back, words):
 
     return render_template(
         "quiz.html", cards=cards, lang=lang, lang_name=QUIZ_LANGS[lang],
-        results=results, score=score, untranslated=untranslated, **common)
+        results=results, score=score, dropped=untranslated, **common)
 
 
 @app.route("/quiz/<topic>", methods=["GET", "POST"])

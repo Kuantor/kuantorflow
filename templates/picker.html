@@ -110,7 +110,13 @@
 
     <form method="GET" action="{{ start_url }}" id="topic-picker"
           data-min-cards="{{ activity.min_cards }}"
-          data-too-small="{{ activity.too_small }}">
+          data-too-small="{{ activity.too_small }}"
+          {# #266: a second reason Start can be disabled, in its own unit.
+             "tick topics holding at least four cards" and "tick at least two
+             topics" send a learner to different parts of this page, so they
+             are two messages rather than one cleverer one. #}
+          data-min-topics="{{ activity.min_topics }}"
+          data-too-few-topics="{{ activity.too_few_topics }}">
 
         {{ actions(with_language=true) }}
 
@@ -165,6 +171,8 @@
 
             var minCards = parseInt(form.dataset.minCards, 10) || 1;
             var tooSmall = form.dataset.tooSmall;
+            var minTopics = parseInt(form.dataset.minTopics, 10) || 1;
+            var tooFewTopicsMsg = form.dataset.tooFewTopics;
             // Two of each, above and below the list. Everything below writes
             // to all of them, so the copies cannot disagree about whether the
             // selection is playable.
@@ -207,16 +215,28 @@
                     return sum + (parseInt(t.dataset.count, 10) || 0);
                 }, 0);
 
+                // Two shortfalls, and the topic one is named first: a
+                // learner who has ticked one topic for a game needing two is
+                // told to tick another, not told how many cards they have.
+                var tooFewTopics = chosen.length < minTopics;
+                var tooFewCards = cards < minCards;
+
                 var line;
                 if (!chosen.length) {
-                    line = tooSmall;
+                    line = tooFewTopics && tooFewTopicsMsg ? tooFewTopicsMsg : tooSmall;
                 } else {
                     line = chosen.length + (chosen.length === 1 ? " topic, " : " topics, ") +
-                        cards + (cards === 1 ? " card" : " cards") +
-                        (cards < minCards ? " — " + tooSmall : "");
+                        cards + (cards === 1 ? " card" : " cards");
+                    if (tooFewTopics && tooFewTopicsMsg) {
+                        line += " — " + tooFewTopicsMsg;
+                    } else if (tooFewCards) {
+                        line += " — " + tooSmall;
+                    }
                 }
                 totalLines.forEach(function (el) { el.textContent = line; });
-                starts.forEach(function (b) { b.disabled = cards < minCards; });
+                starts.forEach(function (b) {
+                    b.disabled = tooFewCards || tooFewTopics;
+                });
             }
 
             groups.forEach(function (group) {

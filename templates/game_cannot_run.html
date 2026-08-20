@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} | KuantorFlow{% endblock %}
+
+{#
+   A round that cannot be dealt, said out loud (#266).
+
+   Two things reach here and they are the same page because they are the same
+   moment: a selection with too few *topics* for the game, and a selection whose
+   cards none of them carry what the game needs. Neither is an error and neither
+   is a 404 — the learner asked for something reasonable and the deck could not
+   supply it, so the page says which and puts the picker one click away.
+
+   The picker opens with this selection already ticked, and needs nothing passed
+   to it to do so: `game_play` remembers the selection before dispatching to the
+   round, so by the time this renders it is what the picker will read back.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+    </p>
+    <h1 class="page-title">{{ activity.name }}</h1>
+
+    <div class="panel">
+        <p>{{ heading }}</p>
+        {% if explanation %}<p class="hint">{{ explanation }}</p>{% endif %}
+        {% if settings.individual_cards %}
+            <p class="hint"><em>Use only individual cards</em> is on, so anyone
+               else&rsquo;s are hidden.</p>
+        {% endif %}
+        <p><a href="{{ url_for('game_picker', game=activity.slug) }}">Choose different topics</a></p>
+    </div>
+{% endblock %}

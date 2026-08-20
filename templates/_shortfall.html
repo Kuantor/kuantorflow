@@ -1,0 +1,21 @@
+{#
+   "n of the cards you chose can't be used for this game" — said once, here,
+   for every round (#266).
+
+   Three rounds had grown their own version of this sentence with three field
+   names and three phrasings, and wave two would have made it seven. The reason
+   for saying it at all is the one the quiz wrote down first: the picker counted
+   *cards*, so a learner who ticked forty-one and was asked twelve has no way to
+   tell a filter from a bug.
+
+   Takes `dropped` (how many the round could not use) and `activity`, whose
+   `needs` supplies the reason in the game's own words. Renders nothing when
+   nothing was dropped, so a caller can include it unconditionally.
+#}
+{% if dropped %}
+    <span class="hint">{{ dropped }}
+        {{- ' card' if dropped == 1 else ' cards' }} here
+        {{ 'is' if dropped == 1 else 'are' }} not usable for this game{% if activity.needs %},
+        which needs {{ activity.needs }}{% endif %}, so
+        {{ 'it is' if dropped == 1 else 'they are' }} not asked.</span>
+{% endif %}

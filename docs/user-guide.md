@@ -68,7 +68,7 @@ The *Card deck* link at the top of a topic opens the same cards as a **deck**: o
 
 ### The games, in one list
 
-There are six activities in the *Practise your words* panel on the front page — most of them games, and all six ready to play now:
+There are ten activities on the front page — most of them games. **Six are ready to play now**, and four more are on the way:
 
 | Game | What you do |
 | --- | --- |
@@ -78,6 +78,12 @@ There are six activities in the *Practise your words* panel on the front page �
 | **Scrambled** | Rebuild a word whose middle letters were shuffled. |
 | **Generate a text** | Read a passage written from your own words. |
 | **Fill the gap** | Guess the word missing from one of its own example sentences. |
+| *Odd one out* | Not built yet — three words from one topic and a stranger; spot the stranger. |
+| *Spell it* | Not built yet — you are shown what a word means and how it starts, and you type it. |
+| *Rebuild the sentence* | Not built yet — the words of an example sentence, shuffled; put them back in order. |
+| *Listen and type* | Not built yet — the word is spoken and you write it down. |
+
+The four that are not built yet still have tiles on the front page, greyed out. You can see what is coming; you just cannot click into an empty room yet.
 
 Each game is described below, and they all start the same way, from the picker.
 
@@ -86,6 +92,14 @@ Each game is described below, and they all start the same way, from the picker.
 Every game starts with the same picker: tick the topics you want, choose **how many words** the round should ask, and start. Whole sections can be ticked at once, and the running total tells you how much you have selected before you commit to it.
 
 The choice is remembered for next time, and the round's address is a plain link you can bookmark or share. Every topic page carries the same activities in a row along the top, already narrowed to that topic.
+
+**Start stays greyed out until your selection is big enough**, and the message beside it says what is missing — sometimes more cards, sometimes more topics. *Odd one out* needs at least two topics however many cards they hold, because the odd word has to come from somewhere else.
+
+### A round can be shorter than you expected
+
+Some games need more from a card than others: *Spell it* needs an English explanation, *Rebuild the sentence* and *Fill the gap* need example sentences, and the quiz and *Multiple choice* need a translation in the language you picked. Not every card has all of those.
+
+So a round will sometimes ask fewer questions than the number you set, and when that happens **it says so and tells you what was missing** — the cards are not gone, they just cannot be used for that particular game. If none of the cards you chose can be used, the round says that instead of showing you an empty page, and offers the picker back with your topics still ticked.
 
 ### Quiz
 

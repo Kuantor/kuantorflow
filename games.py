@@ -229,6 +229,12 @@ class Activity:
     wanting four distinct answers, #235 wanting an example that contains its own
     word -- asks that question on its own page, where it has them. Both messages
     are real; neither is a copy of the other.
+
+    #266 gives that split a name and two fields. `needs` says in words what a
+    card must carry, for the one sentence a round prints when it dropped some;
+    `min_topics` is the check `min_cards` cannot express at all, since three
+    words from one topic and a stranger from another is unbuildable out of a
+    single ticked topic however many cards it holds.
     """
 
     slug: str
@@ -256,6 +262,25 @@ class Activity:
     # `Words` above. Questions asked, for everything that asks questions; #237
     # overrides it because its number is words of prose.
     words: Words = QUIZ_WORDS
+    # How many **topics** a round needs, where `min_cards` counts cards (#266).
+    # A separate field rather than a cleverer `min_cards`, because the two are
+    # different units and give different advice: "tick topics holding at least
+    # four cards" and "tick at least two topics" send a learner to different
+    # parts of the same page, and one number cannot say either reliably.
+    #
+    # One by default, so every activity that existed before #266 is unchanged
+    # and a new game inherits no constraint it has not asked for -- the rule
+    # `picks_language` already follows.
+    min_topics: int = 1
+    # What the picker says when too few *topics* are ticked. Only read when
+    # `min_topics` is above one, so an activity that does not care leaves it
+    # empty rather than writing a sentence nobody will see.
+    too_few_topics: str = ""
+    # What a card must carry for this game to use it, in words, for the one
+    # sentence a round prints when it had to drop some (#266). Empty means
+    # every card qualifies -- odd one out asks nothing of a card beyond its
+    # word and its topic -- and then the sentence never appears.
+    needs: str = ""
     # Whether the picker offers the free-text line describing what the round
     # should be about (#237). Only a round that *writes* something has anything
     # to do with it, which is why it is off by default: a quiz has no use for
@@ -278,6 +303,7 @@ ACTIVITIES = {
             too_small="Tick at least one topic to start the quiz.",
             picks_language=True,
             tagline="Type the translation",
+            needs="a translation in the language you chose",
         ),
         Activity(
             slug="multiple_choice",
@@ -291,6 +317,7 @@ ACTIVITIES = {
             min_cards=4,
             too_small="Tick topics holding at least four cards.",
             tagline="Pick from four",
+            needs="a translation in the language you chose",
             # The prompt is a translation, so which language it is in is a
             # choice worth making before the words are drawn -- the same
             # question the quiz asks, answered by the same code (#113).
@@ -307,6 +334,7 @@ ACTIVITIES = {
             min_cards=4,
             too_small="Tick topics holding at least four cards.",
             tagline="Spot the invented word",
+            needs="a single word of seven letters or more",
         ),
         Activity(
             slug="scrambled",
@@ -316,6 +344,7 @@ ACTIVITIES = {
             min_cards=1,
             too_small="Tick at least one topic to start.",
             tagline="Unscramble the letters",
+            needs="four letters or more, with two different ones in the middle",
         ),
         Activity(
             slug="fill_the_gap",
@@ -325,6 +354,65 @@ ACTIVITIES = {
             min_cards=1,
             too_small="Tick at least one topic to start.",
             tagline="Guess the missing word",
+            needs="an example sentence that uses the word itself",
+        ),
+        # --- wave two (#265), registered as stubs by #266 -----------------
+        #
+        # Each carries `ticket`, so the tile greys (#261), the picker and the
+        # topic-page row fill in, and the stub page names who will build it --
+        # all before a round exists. The game tickets state these values; this
+        # only writes them down.
+        Activity(
+            slug="odd_one_out",
+            name="Odd one out",
+            kind="game",
+            picker_heading="Choose the topics to find the stranger among",
+            # Three words from one topic and an intruder from another, so a
+            # home topic needs three cards and there must be somewhere else to
+            # draw the stranger from. The card count is the weaker half of
+            # that; `min_topics` is the half `min_cards` cannot say at all.
+            min_cards=4,
+            too_small="Tick topics holding at least four cards.",
+            min_topics=2,
+            too_few_topics="Tick at least two topics — the odd word out has to "
+                           "come from somewhere else.",
+            tagline="Spot the stranger",
+            # Nothing beyond a word and the topic it lives in, which is why
+            # this is the one wave-two game that needs no card-level rule.
+            ticket="#269",
+        ),
+        Activity(
+            slug="spell_it",
+            name="Spell it",
+            kind="game",
+            picker_heading="Choose the topics to spell words from",
+            min_cards=1,
+            too_small="Tick at least one topic to start.",
+            tagline="Meaning in, spelling out",
+            needs="an English explanation",
+            ticket="#270",
+        ),
+        Activity(
+            slug="rebuild_the_sentence",
+            name="Rebuild the sentence",
+            kind="game",
+            picker_heading="Choose the topics to take sentences from",
+            min_cards=1,
+            too_small="Tick at least one topic to start.",
+            tagline="Put the words back in order",
+            needs="an example sentence of five to fifteen words",
+            ticket="#271",
+        ),
+        Activity(
+            slug="listen_and_type",
+            name="Listen and type",
+            kind="game",
+            picker_heading="Choose the topics to listen to",
+            min_cards=1,
+            too_small="Tick at least one topic to start.",
+            tagline="Hear it, write it",
+            needs="a headword a voice can read",
+            ticket="#272",
         ),
         Activity(
             slug="read_a_text",
@@ -374,6 +462,45 @@ def activity(slug, kind=None):
         return None
     return found
 
+
+# --- which cards a game can actually use (#266) --------------------------
+
+
+def playable(cards, rule):
+    """The cards this game can use, paired with what the rule made of them,
+    and how many it had to drop.
+
+    `min_cards` is the cheap check the picker can answer from counts alone
+    (#248 built it on counts so a page render stays one query). It can only
+    ever say *how many cards*, and most games want something a card either
+    carries or does not: a translation in the chosen language, an explanation,
+    an example that contains its own headword. A learner can tick a topic of
+    twenty cards, satisfy `min_cards` comfortably, and meet an empty round --
+    of production's 503 cards, 74 have no English explanation and 86 no
+    examples, so this is a number people meet rather than a corner case.
+
+    **The rule returns what it made, not just whether it could.** For a card
+    the game cannot use it returns None (or False); for one it can, either True
+    or something derived on the way -- the scrambled puzzle, the gapped
+    sentence. That is what lets one call answer the eligibility question and
+    produce its answer: asking "can this be scrambled?" and then "scramble it"
+    would either state the rule twice, in two places that drift, or spend the
+    random draw twice and shuffle a different word than it tested.
+
+    The count comes back rather than being recomputed, because the caller has
+    to print it and `len(cards) - len(kept)` at the call site is the same
+    subtraction written a fifth time.
+
+    Pure, and takes the cards rather than fetching them, so every rule in the
+    app can be tested without a database.
+    """
+    kept = []
+    for card in cards:
+        made = rule(card)
+        if made is None or made is False:
+            continue
+        kept.append((card, made))
+    return kept, len(cards) - len(kept)
 
 # --- drawing the round ---------------------------------------------------
 
