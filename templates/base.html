@@ -624,6 +624,10 @@
                 settingsForm.reset();      // discard unsaved edits from last open
                 updateQuizLangState();     // reset() restores values, not disabled
                 updateRestartState();
+                // reset() moves the slider but not the text beside it, so the
+                // number would keep whatever the last drag left there — which
+                // is how a 50% label ended up over a thumb sitting at 100.
+                updateSpeechRate();
                 settingsError.hidden = true;
                 settingsOverlay.hidden = false;
                 // On phones the Mykola widget overlaps the popup — the CSS
@@ -687,10 +691,21 @@
                     // which reflect the server-rendered values from page load.
                     // Move the defaults to what was just saved, so reopening the
                     // popup shows the stored settings without a page reload.
-                    settingsForm.querySelectorAll("input[type=checkbox], input[type=radio]")
-                        .forEach(function (el) { el.defaultChecked = el.checked; });
-                    // same for the range input, whose reset() value is defaultValue
-                    restartSlider.defaultValue = restartSlider.value;
+                    //
+                    // **Every input, not a hand-kept list of them.** This used
+                    // to name the checkboxes and radios plus one slider, so a
+                    // control added without a line here quietly kept the old
+                    // behaviour: `speech_rate` snapped back to the rendered
+                    // value on reopening, and `gapped_deck_size` had the same
+                    // gap from the day it landed. A loop cannot be forgotten by
+                    // the next control.
+                    settingsForm.querySelectorAll("input").forEach(function (el) {
+                        if (el.type === "checkbox" || el.type === "radio") {
+                            el.defaultChecked = el.checked;
+                        } else {
+                            el.defaultValue = el.value;
+                        }
+                    });
                     // The typewriter (ai_agent#50) is the one setting the
                     // browser acts on rather than the server: it lives in a
                     // variable in the widget, so saving has to hand it over or
