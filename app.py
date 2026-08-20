@@ -3133,6 +3133,79 @@ def _listen_and_type_round(activity, topics):
         words=words, dropped=dropped)
 
 
+def _topic_sections(sections):
+    """`{topic: section}` from `get_topics_by_section()`'s shape (#269).
+
+    Only used to *prefer* an intruder from another section, so a topic missing
+    from it costs nothing -- the preference simply does not fire for that one.
+    """
+    return {topic: name for name, topics in sections for topic, _ in topics}
+
+
+def _odd_one_out_round(activity, topics):
+    """A round of #269: three words from one topic, and a stranger.
+
+    The only game built on the deck's own **structure** rather than on what a
+    card holds -- #207 and #215 turned a topic from a text label into a real
+    grouping with sections, and this asks a question out of that.
+
+    Every card qualifies, which is why this is the one wave-two game with no
+    card-level rule (#266): it needs a word and the topic it lives in, and
+    every card has both. What it needs instead is #266's other half, two
+    ticked topics, and `game_play` has already enforced that by the time this
+    runs.
+
+    Nothing here is written to the database.
+    """
+    words = games.word_count(request.args.get("words"),
+                             games.remembered_word_count(session))
+
+    if request.method == "POST":
+        # Indexed rather than keyed by card id, like real-or-fake and for the
+        # same reason: a question is four words from two topics rather than one
+        # row, so there is nothing to look up. Everything the results need
+        # travels in hidden fields -- the draw is random and could not be
+        # rebuilt from the selection.
+        results = []
+        for key in sorted(request.form, key=_answer_index):
+            if not key.startswith("answer_"):
+                continue
+            index = key[len("answer_"):]
+            shown = request.form.getlist(f"word_{index}")
+            answer = request.form.get(f"intruder_{index}", "")
+            given = request.form.get(key, "")
+            results.append({
+                "words": shown,
+                "answer": answer,
+                "given": given,
+                "home": request.form.get(f"home_{index}", ""),
+                "intruder_topic": request.form.get(f"from_{index}", ""),
+                "correct": bool(answer) and given == answer,
+            })
+        return render_template(
+            "game_odd_one_out.html", activity=activity, topics=topics,
+            questions=None, results=results, words=words, dropped=0,
+            score=sum(1 for r in results if r["correct"]))
+
+    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    by_topic = games.by_topic(cards)
+    questions = games.odd_one_out_round(
+        by_topic, words, _topic_sections(_visible_sections()))
+
+    if not questions:
+        return _cannot_run(
+            activity, topics,
+            "These topics can't make a question yet.",
+            "A question is three words from one topic and a stranger from "
+            "another, so one of the topics you ticked needs at least three "
+            "cards and another needs a word it does not already share.")
+
+    return render_template(
+        "game_odd_one_out.html", activity=activity, topics=topics,
+        questions=questions, results=None, score=None, words=words,
+        dropped=0, short=words - len(questions))
+
+
 def _answer_index(key):
     """Sort answer_<n> fields back into the order they were asked.
 
@@ -3159,6 +3232,7 @@ GAME_ROUNDS["read_a_text"] = _read_a_text_round
 GAME_ROUNDS["fill_the_gap"] = _fill_the_gap_round
 GAME_ROUNDS["multiple_choice"] = _multiple_choice_round
 GAME_ROUNDS["listen_and_type"] = _listen_and_type_round
+GAME_ROUNDS["odd_one_out"] = _odd_one_out_round
 
 
 @app.route("/games/<game>/play", methods=["GET", "POST"])

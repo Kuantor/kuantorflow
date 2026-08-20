@@ -311,6 +311,13 @@ button:hover { background: var(--blue-dark); }
    above says why (`middle` drops the glyph 7.2px against the text beside it).
    Overriding it here is what made this one look dropped in the first place. */
 .say--listen { font-size: 1.15rem; margin-left: 0.5rem; margin-right: 0.6rem; }
+/* #269's results: the four words with the topic each came from. A list rather
+   than the `.verdict` rows the question used, because nothing here is
+   selectable any more -- it is a reading of what the grouping was. */
+.odd-words { list-style: none; margin: 0.4rem 0 0; padding: 0; }
+.odd-words li { margin: 0.3rem 0; }
+.odd-words em { color: var(--muted); font-size: 0.85rem; margin-left: 0.4rem; }
+.odd-stranger { font-weight: 700; }
 /* The question number leads a row that also holds a button and a text box, so
    here `.word` is a label rather than the block heading it is in every other
    game's results -- scoped to this row rather than changed globally. */
