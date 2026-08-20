@@ -1421,6 +1421,7 @@ def inject_settings():
         # from the store that validates it rather than written into the markup
         # — the box and sanitize() must agree, and one source is how.
         "gapped_deck_range": settings_store.RANGES["gapped_deck_size"],
+        "speech_rate_range": settings_store.RANGES["speech_rate"],
     }
 
 

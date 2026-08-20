@@ -11,7 +11,12 @@
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
+{# #268: the spoken-word speed, as a percentage, where speech.js can read it.
+   On the document rather than fetched, because it is already in `settings`
+   here and an endpoint for one integer would be a round trip per utterance.
+   The Settings popup rewrites it on save, so a change takes effect on the next
+   press without a reload. #}
+<body data-speech-rate="{{ settings.speech_rate }}">
     <header class="site-header">
         <a class="brand" href="{{ url_for('index') }}">Kuantor<span>Flow</span></a>
         <nav>
@@ -160,6 +165,28 @@
                     <p class="settings-hint settings-group-hint">Between
                        {{ gapped_deck_range[0] }} and {{ gapped_deck_range[1] }}.
                        A selection with fewer playable cards deals what it has.</p>
+                </fieldset>
+
+                {# How fast a word is spoken (#268). A learner at B2 often
+                   wants a word slower, and the browser gives it away free.
+                   Stored as a percentage because RANGES holds whole numbers —
+                   speech.js divides by 100 at the point of use. #}
+                <fieldset class="settings-group settings-group--wide">
+                    <legend>How fast words are spoken</legend>
+                    <div class="settings-slider-row">
+                        <input type="range" name="speech_rate"
+                               min="{{ speech_rate_range[0] }}"
+                               max="{{ speech_rate_range[1] }}" step="10"
+                               value="{{ settings.speech_rate }}"
+                               aria-describedby="speech-rate-value"
+                               {% if settings_read_only %}disabled{% endif %}>
+                        <output id="speech-rate-value"
+                                for="speech_rate">{{ settings.speech_rate }}%</output>
+                    </div>
+                    <p class="settings-hint settings-group-hint">Applies
+                       wherever a word is spoken — the card deck, the flashcard
+                       list and <em>Listen and type</em>. The voice itself comes
+                       from your browser, not from KuantorFlow.</p>
                 </fieldset>
 
                 {# Automatic chat restart (ai_agent#54): after this long
@@ -571,6 +598,17 @@
 
             // "Never restart chat automatically" (ai_agent#54) is the stored
             // value 0: while it is checked the slider is greyed out.
+            // #268's speed. The output tracks the slider, and the value on
+            // <body> is what speech.js reads — rewritten on save so the next
+            // press is already at the new speed.
+            var speechSlider = settingsForm.speech_rate;
+            var speechValue = document.getElementById("speech-rate-value");
+            function updateSpeechRate() {
+                speechValue.textContent = speechSlider.value + "%";
+            }
+            speechSlider.addEventListener("input", updateSpeechRate);
+            updateSpeechRate();
+
             var restartSlider = settingsForm.restart_chat_interval;
             var restartNever = settingsForm.restart_never;
             var restartValue = document.getElementById("restart-interval-value");
@@ -586,6 +624,10 @@
                 settingsForm.reset();      // discard unsaved edits from last open
                 updateQuizLangState();     // reset() restores values, not disabled
                 updateRestartState();
+                // reset() moves the slider but not the text beside it, so the
+                // number would keep whatever the last drag left there — which
+                // is how a 50% label ended up over a thumb sitting at 100.
+                updateSpeechRate();
                 settingsError.hidden = true;
                 settingsOverlay.hidden = false;
                 // On phones the Mykola widget overlaps the popup — the CSS
@@ -633,6 +675,7 @@
                         gapped_deck_size: Number(settingsForm.gapped_deck_size.value),
                         mykola_fast_thinking: settingsForm.mykola_fast_thinking.checked,
                         mykola_typewriter: settingsForm.mykola_typewriter.checked,
+                        speech_rate: Number(settingsForm.speech_rate.value),
                         // checked "never" is stored as 0 (ai_agent#54)
                         restart_chat_interval: restartNever.checked
                             ? 0 : Number(restartSlider.value),
@@ -641,14 +684,28 @@
                     if (!resp.ok) throw new Error("save failed");
                     return resp.json();
                 }).then(function () {
+                    // speech.js reads this on every press, so writing it here
+                    // is the whole of "takes effect immediately" (#268).
+                    document.body.dataset.speechRate = speechSlider.value;
                     // form.reset() (used on open) restores the *default* states,
                     // which reflect the server-rendered values from page load.
                     // Move the defaults to what was just saved, so reopening the
                     // popup shows the stored settings without a page reload.
-                    settingsForm.querySelectorAll("input[type=checkbox], input[type=radio]")
-                        .forEach(function (el) { el.defaultChecked = el.checked; });
-                    // same for the range input, whose reset() value is defaultValue
-                    restartSlider.defaultValue = restartSlider.value;
+                    //
+                    // **Every input, not a hand-kept list of them.** This used
+                    // to name the checkboxes and radios plus one slider, so a
+                    // control added without a line here quietly kept the old
+                    // behaviour: `speech_rate` snapped back to the rendered
+                    // value on reopening, and `gapped_deck_size` had the same
+                    // gap from the day it landed. A loop cannot be forgotten by
+                    // the next control.
+                    settingsForm.querySelectorAll("input").forEach(function (el) {
+                        if (el.type === "checkbox" || el.type === "radio") {
+                            el.defaultChecked = el.checked;
+                        } else {
+                            el.defaultValue = el.value;
+                        }
+                    });
                     // The typewriter (ai_agent#50) is the one setting the
                     // browser acts on rather than the server: it lives in a
                     // variable in the widget, so saving has to hand it over or

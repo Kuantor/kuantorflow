@@ -74,6 +74,23 @@
     }
 
     /* Say `text`. Call this **directly from a click handler** — see rule 1. */
+    /* How fast to speak, from the identity's `speech_rate` setting (#268).
+     *
+     * Read from the document **at the moment of speaking**, not cached at load:
+     * the Settings popup rewrites the attribute when it saves, and re-reading
+     * is what makes the next press already at the new speed without a reload.
+     *
+     * Stored as a percentage because the settings store's RANGES holds whole
+     * numbers; dividing by 100 here is the "point of use" that arrangement
+     * exists for. Anything missing or unparseable falls back to normal speed —
+     * a page that never rendered the attribute must still be able to speak. */
+    function rate() {
+        var raw = document.body && document.body.getAttribute("data-speech-rate");
+        var percent = parseInt(raw, 10);
+        if (!percent || percent < 10 || percent > 400) return 1;
+        return percent / 100;
+    }
+
     function speak(text) {
         if (!SUPPORTED || !text) return false;
         try {
@@ -82,6 +99,7 @@
             // state iOS can be left in after the screen locks.
             window.speechSynthesis.cancel();
             var utterance = new window.SpeechSynthesisUtterance(String(text));
+            utterance.rate = rate();
             var voice = pickVoice();
             if (voice) {
                 utterance.voice = voice;

@@ -190,6 +190,7 @@ If you have been away for a few hours he starts a fresh conversation and opens i
 | Ukrainian / Russian | Hide a language everywhere: on the cards and in Mykola's answers. |
 | Quiz language | The language a quiz opens in. The in-page switch still takes it in the other. |
 | Cards per round | How many cards *Fill the gap* deals, between 5 and 50. Ten by default. |
+| How fast words are spoken | The speed of the spoken word, from 50% to 150% of normal. Applies to the speaker button on your cards and to *Listen and type*. The voice itself comes from your browser, so what it sounds like depends on which browser you use. |
 | Restart chat after | Hours of silence before Mykola starts a fresh conversation with a recap. Zero means never. |
 | Fast thinking | Mykola deliberates less and answers shorter and quicker. On by default. |
 | Type his answer out | His reply is typed out as it arrives instead of landing in chunks. On by default. |

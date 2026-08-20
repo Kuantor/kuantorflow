@@ -58,6 +58,15 @@ DEFAULTS = {
     # rather than a literal because ten is a guess about attention, not a fact;
     # a selection with fewer playable cards than this deals what it has.
     "gapped_deck_size": 10,
+    # issue #268 — how fast a word is spoken, as a **percentage** of the
+    # browser's normal speed. A learner at B2 often wants a word slower, and
+    # `SpeechSynthesisUtterance.rate` is free.
+    #
+    # A percentage rather than the natural 0.5–1.5 float, because `RANGES`
+    # holds whole numbers and `sanitize()` validates everything in it through
+    # `_whole_number()`. Storing 0.8 would need a second kind of validation for
+    # one setting; storing 80 and dividing at the point of use needs none.
+    "speech_rate": 100,
     # ai_agent#54 — hours of silence after which Mykola's chat is restarted
     # (his recap of the last exchanges opens the fresh one). 0 = never.
     "restart_chat_interval": 2,
@@ -102,6 +111,10 @@ RANGES = {
     # anything in here through _whole_number(), so this entry is the whole
     # validation.
     "gapped_deck_size": (5, 50),
+    # #268. Half speed is slow enough to hear every syllable; half again is
+    # about as fast as a browser voice stays intelligible. Outside that the
+    # exercise stops being listening and starts being a trick.
+    "speech_rate": (50, 150),
 }
 
 BOOLEAN_KEYS = tuple(k for k, v in DEFAULTS.items()
