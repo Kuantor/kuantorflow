@@ -48,16 +48,28 @@
             <form method="POST">
                 {% for question in questions %}
                     <div class="panel question">
-                        {# The word rides in `data-say` because the browser is
+                        {# The same speaker button the deck and the flashcard
+                           list use (#283) — same class, same glyph, same
+                           `hidden`, which speech.js removes when it has a
+                           voice and restores when it does not. A second kind
+                           of play button would be a second thing to keep
+                           looking right.
+
+                           The word rides in `data-say` because the browser is
                            what speaks it — there is no way to use
                            speechSynthesis without the text being on the page.
                            It is never *rendered*, which is what the exercise
                            needs; a learner determined to read the page source
-                           can, and nothing here is scored or recorded. #}
-                        <button type="button" class="say say--listen"
+                           can, and nothing here is scored or recorded.
+
+                           The label says the position rather than the word,
+                           unlike everywhere else this button appears: naming
+                           it would read the answer out to a screen reader. #}
+                        <span class="word word--inline">{{ loop.index }}.</span>
+                        <button type="button" class="say say--listen" hidden
                                 data-say="{{ question.word }}"
-                                aria-label="Play word {{ loop.index }}">&#9654;</button>
-                        <span class="word">{{ loop.index }}.</span>
+                                title="Hear it"
+                                aria-label="Play word {{ loop.index }}">&#128266;</button>
                         <input type="text" name="answer_{{ question.id }}"
                                autocomplete="off" autocapitalize="none"
                                spellcheck="false" aria-label="What you heard">

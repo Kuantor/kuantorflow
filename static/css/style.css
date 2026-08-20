@@ -305,15 +305,16 @@ button:hover { background: var(--blue-dark); }
     .say { font-size: 1rem; width: 1.9em; height: 1.9em; opacity: 0.6; }
 }
 .say--deck { font-size: 1rem; margin-left: 0.5rem; }
-/* #272's play button sits at the head of a question rather than beside a word,
-   so it leads the row and takes the space a headword would have. Bigger than
-   the deck's, because it is the only control on the line and the thing the
-   learner presses repeatedly. */
-.say--listen { font-size: 1.2rem; margin-right: 0.6rem; vertical-align: middle; }
-/* Scoped to the row that holds one, not to `.question .word` at large: `.word`
-   is a block heading in every other game's results, and making it inline
-   globally would reflow four pages to suit one. */
-.question .say--listen + .word { display: inline; }
+/* #272's speaker sits beside the question number and is pressed repeatedly,
+   so it is a little larger than the deck's -- and **only** larger. It must not
+   touch `vertical-align`: `.say` sets `baseline` deliberately, and the comment
+   above says why (`middle` drops the glyph 7.2px against the text beside it).
+   Overriding it here is what made this one look dropped in the first place. */
+.say--listen { font-size: 1.15rem; margin-left: 0.5rem; margin-right: 0.6rem; }
+/* The question number leads a row that also holds a button and a text box, so
+   here `.word` is a label rather than the block heading it is in every other
+   game's results -- scoped to this row rather than changed globally. */
+.question .word.word--inline { display: inline; }
 .pos {
     font-size: 0.72rem;
     font-weight: 600;
