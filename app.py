@@ -3181,6 +3181,19 @@ def game_play(game):
         request.args.getlist("topic"),
         games.visible_topic_names(_visible_sections()))
     games.remember_selection(session, topics)
+    # The round length is remembered **beside the selection, and for the same
+    # reason** (#233): the picker opens on what was played last.
+    #
+    # Here rather than in each round because no game ever wrote it back --
+    # only `/quiz` did. A number typed into a game's picker was read once and
+    # then forgotten, so the box reopened on whatever the last quiz had stored,
+    # and a learner who never takes the quiz could not change it at all.
+    games.remember_word_count(
+        session,
+        games.word_count(request.args.get("words"),
+                         games.remembered_word_count(session, activity.words),
+                         activity.words),
+        activity.words)
     # Checked here rather than in each round, so every game inherits it, and
     # checked at all because the picker is not the only way in: a hand-typed or
     # shared `?topic=` reaches this URL without passing the Start button that
