@@ -282,6 +282,13 @@ class Activity:
     # every card qualifies -- odd one out asks nothing of a card beyond its
     # word and its topic -- and then the sentence never appears.
     needs: str = ""
+    # Whether the picker offers #270's hint mode -- first letter, or first and
+    # last. On the picker rather than in the round because it decides
+    # *eligibility* as well as the mask: with the last letter shown a
+    # four-letter word is two-thirds given, so that mode draws from a smaller
+    # set. Switching mid-round would also let a learner reveal the last letter
+    # of a word they are stuck on, which is not a hint.
+    picks_hint: bool = False
     # Whether the picker offers the free-text line describing what the round
     # should be about (#237). Only a round that *writes* something has anything
     # to do with it, which is why it is off by default: a quiz has no use for
@@ -390,7 +397,7 @@ ACTIVITIES = {
             too_small="Tick at least one topic to start.",
             tagline="Meaning in, spelling out",
             needs="an English explanation",
-            ticket="#270",
+            picks_hint=True,
         ),
         Activity(
             slug="rebuild_the_sentence",
@@ -1502,6 +1509,146 @@ def mark_words(text, words):
         segments.append((text[at:], False))
     return segments, used, missing
 
+
+# --- the meaning, and how the word starts (#270) --------------------------
+#
+# The direction the site does not otherwise test. The quiz goes from an English
+# word to a translation, the deck shows a word and reveals its meaning, #235
+# hides a word inside its own sentence. Nothing goes from *meaning* to
+# *spelling*, which is the harder direction and the one that fails in an exam.
+
+# What the learner is shown of the word. `first` is the default; `first_last`
+# is the easier one, and is a mode rather than a toggle on the round page --
+# switching mid-round would let a learner reveal the last letter of a word they
+# are stuck on, which is not a hint, it is the answer arriving late.
+HINT_FIRST = "first"
+HINT_FIRST_LAST = "first_last"
+HINTS = (HINT_FIRST, HINT_FIRST_LAST)
+
+# The session key the hint mode is remembered under, beside the selection and
+# the round length and for the same reason (#233): a per-round preference, not
+# a per-account setting.
+HINT_KEY = "spell_hint"
+
+# Below this a word is not a spelling exercise at B2-C1. With the last letter
+# shown as well, a four-letter word is two-thirds given, so that mode asks for
+# one more. Stated here rather than left for the caller to notice.
+MIN_SPELLED = {HINT_FIRST: 4, HINT_FIRST_LAST: 5}
+
+# How long a word has to be before the *last* letter is worth showing as well.
+# Four leaves at least two letters hidden, which is the point at which a hint
+# is still a hint.
+MIN_LAST_LETTER = 4
+
+# One dash per letter, spaced so the count is readable at a glance. Spaces
+# between the dashes rather than a run of underscores, because `_______` is
+# uncountable and the number of letters is the whole of what the mask gives.
+DASH = "_"
+
+
+def hint_mode(raw, remembered=None):
+    """Which hint mode a round runs in, from a query parameter.
+
+    Anything unrecognised falls back to `remembered` and then to showing only
+    the first letter -- the same "a stored value is a hint" rule the topic
+    selection and the round length both follow, and for the same reason: this
+    arrives from a URL anybody can edit.
+    """
+    for candidate in (raw, remembered):
+        if candidate in HINTS:
+            return candidate
+    return HINT_FIRST
+
+
+def remembered_hint(store):
+    return hint_mode(store.get(HINT_KEY))
+
+
+def remember_hint(store, mode):
+    store[HINT_KEY] = hint_mode(mode)
+
+
+def mask_word(word, hint=HINT_FIRST):
+    """`unusual` as `u _ _ _ _ _ _`, or `u _ _ _ _ _ l` in `first_last`.
+
+    **The length is shown, deliberately** -- one dash per letter. That is the
+    exact opposite of #235's fixed-width gap, and the two are right for
+    opposite reasons: there the answer is a *meaning* the learner has to
+    retrieve from nothing, so a gap sized to the word is a free hint; here they
+    have already been told the meaning and are being asked to spell it, and the
+    number of letters is not the answer. A speller who knows the word gains
+    nothing from the dash count; one who does not will not guess it from seven.
+
+    A multi-word headword is masked word by word with the spaces kept, so the
+    shape of the expression survives -- `take for granted` stays visibly three
+    words.
+    """
+    parts = str(word or "").split()
+    masked = []
+    for part in parts:
+        letters = list(part)
+        shown = [letters[0]] if letters else []
+        shown += [DASH] * max(0, len(letters) - 1)
+        # The last letter only where the part can afford to lose it. The
+        # headword's own floor (`MIN_SPELLED`) cannot cover this, because an
+        # expression is masked **part by part**: `take for granted` clears that
+        # floor comfortably and would still have rendered `for` as `f _ r`,
+        # handing over a whole word of the answer. Short parts keep the first
+        # letter only.
+        if hint == HINT_FIRST_LAST and len(letters) >= MIN_LAST_LETTER:
+            shown[-1] = letters[-1]
+        masked.append(" ".join(shown))
+    return "   ".join(masked)
+
+
+def spellable(word, hint=HINT_FIRST):
+    """Whether this headword makes a spelling question in this mode.
+
+    Alphabetic, plus the space of an expression, the hyphen of `well-being` and
+    the apostrophe of `don't` -- a bracketed note or an abbreviation cannot be
+    typed reliably and is not a spelling question. Reuses #272's rule for that,
+    since "letters a person can type back" is the same question both games ask.
+
+    Then long enough to be worth asking, which depends on the mode: see
+    `MIN_SPELLED`.
+    """
+    word = str(word or "").strip()
+    if not speakable(word):
+        return False
+    letters = sum(1 for ch in word if ch.isalpha())
+    return letters >= MIN_SPELLED.get(hint, MIN_SPELLED[HINT_FIRST])
+
+
+def mask_in_text(text, word, hint=HINT_FIRST):
+    """`text` with every occurrence of `word` masked the same way.
+
+    Oxford's explanations routinely contain the headword or an inflection of
+    it: "the act of resigning from a position" prints the answer above the
+    dashes. So the explanation is masked with **the same matcher #235 and #237
+    use** -- case-insensitive, common inflections, a multi-word expression
+    taken whole.
+
+    Unlike #235, a card is **not** made ineligible when the word appears.
+    Masking is enough, and the masked occurrence is a second dash-run in the
+    sentence, which is a *harder* prompt rather than a broken one.
+
+    Every occurrence, not the first: an explanation really can use the word
+    twice, and masking one of them would print the answer beside its own mask.
+    """
+    text = str(text or "")
+    spans = find_word(text, word)
+    if not spans:
+        return text
+    out, last = [], 0
+    for start, end in spans:
+        out.append(text[last:start])
+        # Masked to the length of what was found rather than of the headword,
+        # so an inflection is covered completely -- `resigning` must not leave
+        # its `ing` showing beside the dashes.
+        out.append(mask_word(text[start:end], hint))
+        last = end
+    out.append(text[last:])
+    return "".join(out)
 
 # --- cutting a word out of its own example (#235) ------------------------
 #

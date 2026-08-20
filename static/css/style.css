@@ -318,6 +318,13 @@ button:hover { background: var(--blue-dark); }
 .odd-words li { margin: 0.3rem 0; }
 .odd-words em { color: var(--muted); font-size: 0.85rem; margin-left: 0.4rem; }
 .odd-stranger { font-weight: 700; }
+/* #270's mask. Monospaced so the dashes line up and stay countable — the
+   letter count is the whole of what the mask gives, and a proportional font
+   makes `i` and `m` different widths of the same information. Letter-spacing
+   on top, because adjacent underscores in most faces run together into a rule
+   and stop being countable at all. */
+.spell-mask { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.spell-meaning { margin: 0.4rem 0 0; color: var(--ink); }
 /* The question number leads a row that also holds a button and a text box, so
    here `.word` is a label rather than the block heading it is in every other
    game's results -- scoped to this row rather than changed globally. */
