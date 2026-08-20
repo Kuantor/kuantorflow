@@ -68,7 +68,7 @@ The *Card deck* link at the top of a topic opens the same cards as a **deck**: o
 
 ### The games, in one list
 
-There are ten activities on the front page — most of them games. **Eight are ready to play now**, and two more are on the way:
+There are ten activities on the front page — most of them games. **Nine are ready to play now**, and one more is on the way:
 
 | Game | What you do |
 | --- | --- |
@@ -79,11 +79,11 @@ There are ten activities on the front page — most of them games. **Eight are r
 | **Generate a text** | Read a passage written from your own words. |
 | **Fill the gap** | Guess the word missing from one of its own example sentences. |
 | **Odd one out** | Three words come from one topic and one does not; spot the stranger. |
-| *Spell it* | Not built yet — you are shown what a word means and how it starts, and you type it. |
+| **Spell it** | You are shown what a word means and how it starts, and you type it. |
 | *Rebuild the sentence* | Not built yet — the words of an example sentence, shuffled; put them back in order. |
 | **Listen and type** | The word is spoken and you write it down. |
 
-The two that are not built yet still have tiles on the front page, greyed out. You can see what is coming; you just cannot click into an empty room yet.
+The one that is not built yet still has a tile on the front page, greyed out. You can see what is coming; you just cannot click into an empty room yet.
 
 Each game is described below, and they all start the same way, from the picker.
 
@@ -146,6 +146,18 @@ Where it can, the game takes the stranger from a topic in a different section, b
 When you finish, every question is shown again with **the topic each word came from** — including the ones you got right. That is the point of the game rather than a nicety: a word can honestly belong to two topics, and *negotiation* would not look out of place under either *Business and work* or *Crime and justice*. The game can only ask about the grouping **your deck** actually has, so it tells you what that grouping was instead of leaving you to argue with the screen.
 
 One thing it will never do is use a word that sits in both topics as the stranger — that would make the question unanswerable rather than hard.
+
+### Spell it
+
+You are shown **what a word means and how it starts**, and you type the word. Every other activity goes from a word to its meaning; this one goes the other way, which is harder and is the direction that fails in an exam.
+
+The word is shown as dashes, **one dash per letter**, with the first letter given: `u _ _ _ _ _ _`. In the picker you can ask for the last letter too — `u _ _ _ _ _ l` — which is easier, so that mode only uses words of five letters or more. You choose before the round starts rather than during it: being able to reveal the last letter of a word you are stuck on is not a hint, it is the answer arriving late.
+
+Showing the number of letters is deliberate. You have already been told the meaning, so the length is not the answer — and if you know the word, counting dashes tells you nothing you did not know.
+
+Dictionary explanations often contain the word they explain, or a form of it. Those are **masked too**, so a question never gives itself away. That is why you will sometimes see a second run of dashes inside the meaning.
+
+Answers are marked the way the other typed games mark them — capitals, extra spaces and a trailing full stop are forgiven. A different form of the word is not: *resigned* for *resign* is wrong, because spelling the exact word is what this practises.
 
 ### Listen and type
 

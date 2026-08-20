@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} | KuantorFlow{% endblock %}
+
+{#
+   A round of #270 — what a word means and how it starts, and the learner
+   types it.
+
+   The direction the site does not otherwise test: the quiz goes from a word to
+   a translation, the deck shows a word and reveals its meaning, #235 hides a
+   word inside its own sentence. This goes from *meaning* to *spelling*, which
+   is the harder direction and the one that fails in an exam.
+
+   The hint mode is not on this page on purpose. It is chosen in the picker,
+   because a switch here would let a learner reveal the last letter of a word
+   they are stuck on — which is not a hint, it is the answer arriving late.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+    </p>
+    <h1 class="page-title">{{ activity.name }}</h1>
+
+    {% if results is none %}
+        <div class="panel panel--tight">
+            <p>Read what the word means and write the word
+               ({{ questions|length }} word{{ '' if questions|length == 1 else 's' }}).
+               One dash stands for one letter.
+            {% include "_shortfall.html" with context %}
+            </p>
+        </div>
+
+        <form method="POST">
+            {% for question in questions %}
+                <div class="panel question">
+                    {# The mask carries the letter count deliberately — the
+                       opposite of #235's fixed-width gap, and right for the
+                       opposite reason: the meaning is already given, so the
+                       number of letters is not the answer. #}
+                    <div class="word spell-mask">{{ loop.index }}. {{ question.mask }}
+                        {% if question.pos %}<span class="pos">{{ question.pos }}</span>{% endif %}
+                    </div>
+                    {# Masked with the same matcher #235 and #237 use: Oxford's
+                       explanations routinely contain the headword or an
+                       inflection of it, and a question must never print its
+                       own answer. #}
+                    <p class="spell-meaning">{{ question.explanation }}</p>
+                    <input type="text" name="answer_{{ question.id }}"
+                           autocomplete="off" autocapitalize="none"
+                           spellcheck="false" aria-label="The word, spelled out">
+                </div>
+            {% endfor %}
+            <button type="submit">Check answers</button>
+        </form>
+
+    {% else %}
+        <p class="score">Score: {{ score }} / {{ results|length }}</p>
+        {% for r in results %}
+            <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
+                <div class="word">{{ loop.index }}. {{ r.word }}
+                    {% if r.pos %}<span class="pos">{{ r.pos }}</span>{% endif %}
+                    <button type="button" class="say say--deck" hidden
+                            data-say="{{ r.word }}"
+                            title="Hear it"
+                            aria-label="Pronounce {{ r.word }}">&#128266;</button>
+                </div>
+                <p>You wrote: {{ r.user_answer or '—' }}</p>
+                {# Unmasked now. The round is over, and a learner who spelled it
+                   wrong should read the meaning against the actual word. #}
+                {% if r.explanation_en %}
+                    <p class="expected">{{ r.explanation_en }}</p>
+                {% endif %}
+            </div>
+        {% endfor %}
+        <p class="crumbs">
+            <a href="{{ url_for('index') }}">&larr; Home</a>
+            <a href="{{ url_for('game_play', game=activity.slug, topic=topics, words=words, hint=hint) }}">Play again</a>
+        </p>
+    {% endif %}
+{% endblock %}

@@ -2371,6 +2371,9 @@ def _render_picker(activity, start_url):
         start_url=start_url,
         quiz_langs=quiz_langs,
         quiz_lang=quiz_lang,
+        # #270's hint mode, remembered like the selection and the round length
+        # so the picker opens on what was played last.
+        hint=games.remembered_hint(session),
         sections=[(name, topics) for name, topics in sections if topics],
         selected=set(games.remembered_selection(session, visible)),
         total_cards=sum(count for _, topics in sections for _, count in topics),
@@ -3206,6 +3209,87 @@ def _odd_one_out_round(activity, topics):
         dropped=0, short=words - len(questions))
 
 
+def _spell_it_round(activity, topics):
+    """A round of #270: the meaning and how the word starts, type the word.
+
+    The direction the site does not otherwise test. The quiz goes from an
+    English word to a translation, the deck shows a word and reveals its
+    meaning, #235 hides a word inside its own sentence — nothing goes from
+    *meaning* to *spelling*, which is the harder direction and the one that
+    fails in an exam.
+
+    The hint mode is settled **before** the draw, because it decides
+    eligibility as well as the mask: with the last letter shown, a four-letter
+    word is two-thirds given, so that mode asks for a longer one.
+
+    Nothing is written to the database.
+    """
+    words = games.word_count(request.args.get("words"),
+                             games.remembered_word_count(session))
+    hint = games.hint_mode(request.args.get("hint"),
+                           games.remembered_hint(session))
+    games.remember_hint(session, hint)
+
+    if request.method == "POST":
+        results = []
+        cards = get_flashcards_by_topics(topics, cards_owner_filter())
+        for card in games.asked(request.form,
+                                {str(c["id"]): c for c in cards}):
+            given = (request.form.get(f"answer_{card['id']}") or "").strip()
+            results.append({
+                "word": card["word"],
+                "pos": card.get("pos"),
+                # Shown in full now — the round is over, and a learner who got
+                # it wrong should read the meaning against the actual word.
+                "explanation_en": card.get("explanation_en"),
+                "user_answer": given,
+                # #267's rule: capitals, a doubled space, a trailing full stop
+                # and a hyphen typed as a space are forgiven. `resigned` for
+                # `resign` is **wrong** — a different word, and this is the one
+                # game where being approximately right is what is being tested
+                # against.
+                "correct": games.same_answer(given, card["word"]),
+            })
+        return render_template(
+            "game_spell_it.html", activity=activity, topics=topics,
+            questions=None, results=results, words=words, hint=hint,
+            dropped=0, score=sum(1 for r in results if r["correct"]))
+
+    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    usable, dropped = games.playable(
+        cards,
+        lambda card: bool((card.get("explanation_en") or "").strip())
+        and games.spellable(card.get("word"), hint))
+
+    if not usable:
+        return _cannot_run(
+            activity, topics,
+            "No words here can be spelled out yet.",
+            "This game shows what a word means and asks you to spell it, so it "
+            "needs cards with an English explanation and a headword of at "
+            f"least {games.MIN_SPELLED[hint]} letters.")
+
+    questions = []
+    for card, _ in games.sample(usable, words):
+        word = card["word"].strip()
+        questions.append({
+            "id": card["id"],
+            "pos": card.get("pos"),
+            "mask": games.mask_word(word, hint),
+            # Masked with the same matcher #235 and #237 use. Oxford's
+            # explanations routinely contain the headword or an inflection of
+            # it, and "the act of resigning from a position" would print the
+            # answer above the dashes.
+            "explanation": games.mask_in_text(card["explanation_en"], word,
+                                              hint),
+        })
+
+    return render_template(
+        "game_spell_it.html", activity=activity, topics=topics,
+        questions=questions, results=None, score=None, words=words,
+        hint=hint, dropped=dropped)
+
+
 def _answer_index(key):
     """Sort answer_<n> fields back into the order they were asked.
 
@@ -3233,6 +3317,7 @@ GAME_ROUNDS["fill_the_gap"] = _fill_the_gap_round
 GAME_ROUNDS["multiple_choice"] = _multiple_choice_round
 GAME_ROUNDS["listen_and_type"] = _listen_and_type_round
 GAME_ROUNDS["odd_one_out"] = _odd_one_out_round
+GAME_ROUNDS["spell_it"] = _spell_it_round
 
 
 @app.route("/games/<game>/play", methods=["GET", "POST"])

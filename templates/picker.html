@@ -93,6 +93,29 @@
                 </div>
             {% endif %}
 
+            {# #270's hint mode, chosen here rather than in the round because
+               it decides *eligibility* as well as the mask -- with the last
+               letter shown a four-letter word is two-thirds given, so that
+               mode draws from a smaller set. A switch on the round page would
+               also let a learner reveal the last letter of a word they are
+               stuck on, which is not a hint. Rendered in the same row shape as
+               the language choice, which is the same kind of decision. #}
+            {% if with_language and activity.picks_hint %}
+                <div class="picker-langs">
+                    <span class="picker-langs-label">Show me:</span>
+                    <label class="picker-lang">
+                        <input type="radio" name="hint" value="first"
+                               {% if hint != 'first_last' %}checked{% endif %}>
+                        The first letter
+                    </label>
+                    <label class="picker-lang">
+                        <input type="radio" name="hint" value="first_last"
+                               {% if hint == 'first_last' %}checked{% endif %}>
+                        First and last
+                    </label>
+                </div>
+            {% endif %}
+
             {% if with_language and quiz_langs %}
                 <div class="picker-langs">
                     <span class="picker-langs-label">Translation to:</span>
