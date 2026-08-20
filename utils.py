@@ -1136,6 +1136,13 @@ def get_flashcards_by_topics(topics, owner_id=None):
     into an explicit list of names before this is called; see
     `games.resolve_selection()`.
 
+    **`topic` comes from the topics row, not from `flashcards.topic`** (#269).
+    The two hold the same text today -- #207's backfill made the column
+    canonical -- but the column is what #210 exists to drop, and a caller that
+    groups by it would break silently when that lands. Selected after `f.*` so
+    it shadows the column rather than sitting beside it under another name,
+    which keeps every existing caller reading the same key.
+
     Ordered by `(topic name, word)` so a result is deterministic and a caller
     that wants to group by topic can. Games shuffle what they get, so the order
     is for tests and for the quiz rather than for play.
@@ -1150,7 +1157,8 @@ def get_flashcards_by_topics(topics, owner_id=None):
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT f.* FROM flashcards f JOIN topics t ON f.topic_id = t.id "
+            "SELECT f.*, t.name AS topic "
+            "FROM flashcards f JOIN topics t ON f.topic_id = t.id "
             f"WHERE t.name IN ({placeholders})" + clause +
             " ORDER BY t.name, f.word",
             tuple(names) + params,

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} | KuantorFlow{% endblock %}
+
+{#
+   A round of #269 — three words from one topic and a stranger from another.
+
+   The only game built on the deck's own structure rather than on what a card
+   holds, which is why the results matter more here than in any other round:
+   getting it wrong teaches nothing unless the learner is told what the
+   grouping *was*. So every question is shown afterwards with both topics
+   named, right or wrong.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+    </p>
+    <h1 class="page-title">{{ activity.name }}</h1>
+
+    {% if results is none %}
+        <div class="panel panel--tight">
+            <p>Three of these words come from the same topic. Pick the one that
+               does not ({{ questions|length }} question{{ '' if questions|length == 1 else 's' }}).
+            {% if short > 0 %}
+                {# The selection ran out rather than the cards being unusable,
+                   so this is not #266's sentence: nothing was dropped for
+                   failing a rule, there simply were not enough words to keep
+                   building different questions from. #}
+                <span class="hint">These topics could only make
+                    {{ questions|length }} — a question needs three words from
+                    one topic and a word another topic does not share.</span>
+            {% endif %}
+            </p>
+        </div>
+
+        <form method="POST">
+            {% for question in questions %}
+                {# Captured because Jinja's inner `loop` shadows this one and
+                   has no way back up to it — the same note picker.html makes
+                   about its sections. #}
+                {% set q = loop.index %}
+                <div class="panel question">
+                    <div class="word">{{ q }}.</div>
+                    {# The draw is random and mixes two topics, so nothing here
+                       could be rebuilt from the selection on POST — the words,
+                       the answer and both topic names travel with it. #}
+                    <input type="hidden" name="intruder_{{ q }}" value="{{ question.answer }}">
+                    <input type="hidden" name="home_{{ q }}" value="{{ question.home }}">
+                    <input type="hidden" name="from_{{ q }}" value="{{ question.intruder_topic }}">
+                    <div class="verdict verdict--stacked">
+                        {% for word in question.words %}
+                            <input type="hidden" name="word_{{ q }}" value="{{ word }}">
+                            <label>
+                                <input type="radio"
+                                       name="answer_{{ q }}"
+                                       value="{{ word }}"
+                                       {{ 'required' if loop.first }}>
+                                {{ word }}
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+            <button type="submit">Check answers</button>
+        </form>
+
+    {% else %}
+        <p class="score">Score: {{ score }} / {{ results|length }}</p>
+        {% for r in results %}
+            <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
+                <div class="word">{{ loop.index }}.</div>
+                {# Both topics named on every question, right or wrong. This is
+                   the teaching moment: the game is a quiz over *this deck's*
+                   grouping, and a learner who reasoned well about a word that
+                   could sit in either topic deserves to see why it was marked
+                   as it was, rather than being left to argue with the page. #}
+                <ul class="odd-words">
+                    {% for word in r.words %}
+                        <li class="{{ 'odd-stranger' if word == r.answer }}">
+                            {{ word }}
+                            <span class="pos">{{ r.intruder_topic if word == r.answer else r.home }}</span>
+                            {% if word == r.given %}<em>&larr; you picked this</em>{% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+                {% if not r.correct %}
+                    <p class="expected">The stranger was <strong>{{ r.answer }}</strong>,
+                       from {{ r.intruder_topic }}.</p>
+                {% endif %}
+            </div>
+        {% endfor %}
+        <p class="crumbs">
+            <a href="{{ url_for('index') }}">&larr; Home</a>
+            <a href="{{ url_for('game_play', game=activity.slug, topic=topics, words=words) }}">Play again</a>
+        </p>
+    {% endif %}
+{% endblock %}

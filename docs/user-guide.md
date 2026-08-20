@@ -68,7 +68,7 @@ The *Card deck* link at the top of a topic opens the same cards as a **deck**: o
 
 ### The games, in one list
 
-There are ten activities on the front page — most of them games. **Seven are ready to play now**, and three more are on the way:
+There are ten activities on the front page — most of them games. **Eight are ready to play now**, and two more are on the way:
 
 | Game | What you do |
 | --- | --- |
@@ -78,12 +78,12 @@ There are ten activities on the front page — most of them games. **Seven are r
 | **Scrambled** | Rebuild a word whose middle letters were shuffled. |
 | **Generate a text** | Read a passage written from your own words. |
 | **Fill the gap** | Guess the word missing from one of its own example sentences. |
-| *Odd one out* | Not built yet — three words from one topic and a stranger; spot the stranger. |
+| **Odd one out** | Three words come from one topic and one does not; spot the stranger. |
 | *Spell it* | Not built yet — you are shown what a word means and how it starts, and you type it. |
 | *Rebuild the sentence* | Not built yet — the words of an example sentence, shuffled; put them back in order. |
 | **Listen and type** | The word is spoken and you write it down. |
 
-The three that are not built yet still have tiles on the front page, greyed out. You can see what is coming; you just cannot click into an empty room yet.
+The two that are not built yet still have tiles on the front page, greyed out. You can see what is coming; you just cannot click into an empty room yet.
 
 Each game is described below, and they all start the same way, from the picker.
 
@@ -134,6 +134,18 @@ A game of guessing a word from its own dictionary example. The front of each car
 You mark yourself: tick **I remember it** on the ones you knew, and the count in the corner keeps score. **Finish game** is there from the first card, not only the last, so you can stop whenever you like and still see how you did. Nothing is recorded — the score goes when the page does.
 
 A card can only appear here if one of its examples actually contains its own word, so a card with no examples sits the game out and a round can be shorter than you asked for. It says so when that happens. How many cards a round deals is yours to set — see *Cards per round* in Settings.
+
+### Odd one out
+
+Four words, three of them from the same topic. You pick the one that does not belong.
+
+This is the only game that asks about **your topics** rather than about a single word, so it needs at least **two topics ticked** — the stranger has to come from somewhere. The Start button says so if you have only picked one.
+
+Where it can, the game takes the stranger from a topic in a different section, because *Sport* against *Law* is a fair question while *Business and work* against *Money and finance* is closer to a coin toss.
+
+When you finish, every question is shown again with **the topic each word came from** — including the ones you got right. That is the point of the game rather than a nicety: a word can honestly belong to two topics, and *negotiation* would not look out of place under either *Business and work* or *Crime and justice*. The game can only ask about the grouping **your deck** actually has, so it tells you what that grouping was instead of leaving you to argue with the screen.
+
+One thing it will never do is use a word that sits in both topics as the stranger — that would make the question unanswerable rather than hard.
 
 ### Listen and type
 

@@ -380,7 +380,6 @@ ACTIVITIES = {
             tagline="Spot the stranger",
             # Nothing beyond a word and the topic it lives in, which is why
             # this is the one wave-two game that needs no card-level rule.
-            ticket="#269",
         ),
         Activity(
             slug="spell_it",
@@ -462,6 +461,128 @@ def activity(slug, kind=None):
         return None
     return found
 
+
+# --- three words from one topic, and a stranger (#269) -------------------
+#
+# The one game built on the deck's own *structure* rather than on what a card
+# holds. #207 and #215 turned a topic from a text label into a real grouping
+# with sections, and this is the cheapest test of whether a puzzle made from
+# that lands at all.
+
+# Words drawn from the home topic, beside one intruder.
+GROUP = 3
+
+# How many times to try building a question before giving up on the selection.
+# A round asks for ten and a thin selection can refuse most draws -- two topics
+# of four words each run out quickly -- so this bounds the loop rather than
+# letting a hopeless selection spin.
+ATTEMPTS = 40
+
+
+def by_topic(cards):
+    """`{topic: [word, ...]}`, deduplicated, skipping anything unusable.
+
+    Deduplicated because #101 keeps a card per word *and part of speech*, so
+    `work` the noun and `work` the verb are two cards -- and the same word
+    twice among four options is a free mark and looks like a mistake.
+    """
+    found = {}
+    for card in cards:
+        topic = (card.get("topic") or "").strip()
+        word = (card.get("word") or "").strip()
+        if not topic or not word:
+            continue
+        words = found.setdefault(topic, [])
+        if word.casefold() not in {w.casefold() for w in words}:
+            words.append(word)
+    return found
+
+
+def _intruder_topics(home, by_topic, sections, rng):
+    """Topics a stranger may come from, the better ones first.
+
+    **A topic in a different section is preferred**, which is #236's difficulty
+    knob taken at the easy end: *Sport* against *Law* is a fair question, while
+    *Business and work* against *Money and finance* is a coin flip. Where the
+    selection offers nothing outside the home's section, a same-section
+    intruder is accepted rather than refusing to build a question -- a learner
+    who ticked two neighbouring topics asked for exactly that.
+
+    `sections` maps a topic to its section name and may be empty, in which case
+    every other topic is equally good and the order is simply shuffled.
+    """
+    others = [t for t in by_topic if t != home]
+    rng.shuffle(others)
+    if not sections:
+        return others
+    home_section = sections.get(home)
+    far = [t for t in others if sections.get(t) != home_section]
+    near = [t for t in others if sections.get(t) == home_section]
+    return far + near
+
+
+def odd_one_out(by_topic, sections=None, rng=None, avoid=()):
+    """One question, or **None** if this selection cannot build another.
+
+    Returns `{"words", "answer", "home", "intruder_topic"}` with the four words
+    already shuffled, so the caller renders them in order and the position of
+    the stranger gives nothing away.
+
+    Two rules keep a question answerable, and both come from the same fact:
+    a word can honestly belong to two topics.
+
+    * **An intruder whose word also exists in the home topic is never drawn.**
+      #101 keeps one card per word *and part of speech*, so the same word
+      really can sit in two topics -- and drawing it as the stranger makes the
+      question unanswerable rather than hard.
+    * `avoid` holds questions already asked, as frozensets of the four words,
+      so a round does not deal the same four twice.
+
+    None rather than a shorter question: three options is a different, easier
+    game, and dealing one silently would make the score mean two things.
+    """
+    rng = rng or random
+    homes = [t for t, words in by_topic.items() if len(words) >= GROUP]
+    if not homes or len(by_topic) < 2:
+        return None
+    rng.shuffle(homes)
+
+    for home in homes:
+        family = by_topic[home]
+        taken = {w.casefold() for w in family}
+        for topic in _intruder_topics(home, by_topic, sections or {}, rng):
+            strangers = [w for w in by_topic[topic]
+                         if w.casefold() not in taken]
+            if not strangers:
+                continue
+            for _ in range(ATTEMPTS):
+                three = rng.sample(family, GROUP)
+                stranger = rng.choice(strangers)
+                words = three + [stranger]
+                if frozenset(w.casefold() for w in words) in avoid:
+                    continue
+                rng.shuffle(words)
+                return {"words": words, "answer": stranger, "home": home,
+                        "intruder_topic": topic}
+    return None
+
+
+def odd_one_out_round(by_topic, count, sections=None, rng=None):
+    """Up to `count` questions, and as many as the selection can build.
+
+    Fewer than asked for is not an error -- two topics of four words each run
+    out quickly, and refusing a round because it yields seven questions
+    instead of ten would be the wrong call (#235's rule, #266's sentence).
+    """
+    rng = rng or random
+    asked, seen = [], set()
+    for _ in range(count):
+        question = odd_one_out(by_topic, sections, rng, avoid=seen)
+        if question is None:
+            break
+        seen.add(frozenset(w.casefold() for w in question["words"]))
+        asked.append(question)
+    return asked
 
 # --- a headword a voice can read (#272) ----------------------------------
 
