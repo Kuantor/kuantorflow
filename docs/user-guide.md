@@ -68,7 +68,7 @@ The *Card deck* link at the top of a topic opens the same cards as a **deck**: o
 
 ### The games, in one list
 
-There are ten activities on the front page — most of them games. **Nine are ready to play now**, and one more is on the way:
+There are ten activities on the front page — most of them games. **All ten are ready to play.**
 
 | Game | What you do |
 | --- | --- |
@@ -80,10 +80,8 @@ There are ten activities on the front page — most of them games. **Nine are re
 | **Fill the gap** | Guess the word missing from one of its own example sentences. |
 | **Odd one out** | Three words come from one topic and one does not; spot the stranger. |
 | **Spell it** | You are shown what a word means and how it starts, and you type it. |
-| *Rebuild the sentence* | Not built yet — the words of an example sentence, shuffled; put them back in order. |
+| **Rebuild the sentence** | The words of an example sentence, shuffled; put them back in order. |
 | **Listen and type** | The word is spoken and you write it down. |
-
-The one that is not built yet still has a tile on the front page, greyed out. You can see what is coming; you just cannot click into an empty room yet.
 
 Each game is described below, and they all start the same way, from the picker.
 
@@ -158,6 +156,18 @@ Showing the number of letters is deliberate. You have already been told the mean
 Dictionary explanations often contain the word they explain, or a form of it. Those are **masked too**, so a question never gives itself away. That is why you will sometimes see a second run of dashes inside the meaning.
 
 Answers are marked the way the other typed games mark them — capitals, extra spaces and a trailing full stop are forgiven. A different form of the word is not: *resigned* for *resign* is wrong, because spelling the exact word is what this practises.
+
+### Rebuild the sentence
+
+One real example sentence, with its words shuffled into a pool. You put them back in order.
+
+**Tap a word to place it, and tap a placed word to send it back** — there is no dragging. It works the same with a mouse, a finger or the keyboard, and on a phone it is far easier than trying to drag a small word into a small gap.
+
+This is not *Scrambled* with bigger pieces. That one shuffles the letters inside a word and practises spelling; this shuffles the words inside a sentence and practises **word order** — which is where Ukrainian and Russian speakers most often lose marks, because both languages allow orders that English does not. A sentence that feels perfectly natural to write can still come out wrong.
+
+Two things are left as they were written. The **full stop is removed**, so the last word does not announce itself. The **capital letter stays**, because lowercasing the first word would mangle every sentence starting with a name or *I* — you can use it to find the beginning, and everything after it is still yours to work out.
+
+If a sentence uses the same word twice, either arrangement of those two words is accepted — they are genuinely interchangeable.
 
 ### Listen and type
 
