@@ -68,7 +68,7 @@ The *Card deck* link at the top of a topic opens the same cards as a **deck**: o
 
 ### The games, in one list
 
-There are ten activities on the front page — most of them games. **Six are ready to play now**, and four more are on the way:
+There are ten activities on the front page — most of them games. **Seven are ready to play now**, and three more are on the way:
 
 | Game | What you do |
 | --- | --- |
@@ -81,9 +81,9 @@ There are ten activities on the front page — most of them games. **Six are rea
 | *Odd one out* | Not built yet — three words from one topic and a stranger; spot the stranger. |
 | *Spell it* | Not built yet — you are shown what a word means and how it starts, and you type it. |
 | *Rebuild the sentence* | Not built yet — the words of an example sentence, shuffled; put them back in order. |
-| *Listen and type* | Not built yet — the word is spoken and you write it down. |
+| **Listen and type** | The word is spoken and you write it down. |
 
-The four that are not built yet still have tiles on the front page, greyed out. You can see what is coming; you just cannot click into an empty room yet.
+The three that are not built yet still have tiles on the front page, greyed out. You can see what is coming; you just cannot click into an empty room yet.
 
 Each game is described below, and they all start the same way, from the picker.
 
@@ -134,6 +134,18 @@ A game of guessing a word from its own dictionary example. The front of each car
 You mark yourself: tick **I remember it** on the ones you knew, and the count in the corner keeps score. **Finish game** is there from the first card, not only the last, so you can stop whenever you like and still see how you did. Nothing is recorded — the score goes when the page does.
 
 A card can only appear here if one of its examples actually contains its own word, so a card with no examples sits the game out and a round can be shorter than you asked for. It says so when that happens. How many cards a round deals is yours to set — see *Cards per round* in Settings.
+
+### Listen and type
+
+The one activity that makes a sound. A question is a **play button and a box** — the word is never written down, which is the whole exercise. Press play, listen, and type what you heard. You can replay a word as many times as you like: listening is the skill, not memory.
+
+Nothing plays by itself, ever. The first sound happens when you press, which is what makes it work on an iPhone as well as anywhere else.
+
+The voice comes from your **browser**, not from KuantorFlow — nothing is recorded, downloaded or sent anywhere. That also means it depends on what your browser has installed: Chrome, Edge and Safari ship English voices, and if yours has none, the page says so rather than showing you buttons that do nothing.
+
+It is not a pronunciation reference. Browser voices range from good to robotic, and a dictionary is better if you want to know exactly how a word is said. This is for practising whether you can *catch* a word you already know.
+
+Answers are marked the way the other typed games mark them — capitals, extra spaces and a trailing full stop are all forgiven. A word that merely sounds the same is wrong: telling *their* from *there* by ear is exactly what this drills, and the results show you each word with its meaning, so a word you misheard is one you also learn.
 
 ### Generate a text
 

@@ -212,6 +212,7 @@ def remember_word_count(store, count, words=QUIZ_WORDS):
 # the same reason this declaration did not exist at all in #248.
 
 import random
+import re
 from dataclasses import dataclass
 
 
@@ -412,7 +413,6 @@ ACTIVITIES = {
             too_small="Tick at least one topic to start.",
             tagline="Hear it, write it",
             needs="a headword a voice can read",
-            ticket="#272",
         ),
         Activity(
             slug="read_a_text",
@@ -462,6 +462,28 @@ def activity(slug, kind=None):
         return None
     return found
 
+
+# --- a headword a voice can read (#272) ----------------------------------
+
+# Letters, and the three things that hold a real headword together: a space
+# between the words of an expression, a hyphen in `well-being`, an apostrophe
+# in `don't`. Anything else -- a bracketed note, a digit, an abbreviation's
+# full stops -- is a poor thing to dictate and worse to type back.
+SPEAKABLE = re.compile(r"^[A-Za-z]+(?:[ '’-][A-Za-z]+)*$")
+
+
+def speakable(word):
+    """Whether a voice can be asked to read this headword (#272).
+
+    **Multi-word expressions are kept.** "Take for granted" is a perfectly good
+    listening question and arguably a better one than a single word, since the
+    learner has to catch the unstressed middle -- so the space is allowed
+    rather than being the easy thing to exclude.
+
+    Pure, and about the *word* rather than the card, so a caller passes
+    `card["word"]` and this needs no database to test.
+    """
+    return bool(SPEAKABLE.match((word or "").strip()))
 
 # --- one typed-answer path (#267) ----------------------------------------
 #
@@ -1217,8 +1239,6 @@ def question_options(answer, pool, spare=(), known=(), rng=None):
 # not find `resignation` -- that is a different word, and #237 would rather
 # report a word as unused than draw a box around something the learner was not
 # studying.
-
-import re
 
 # What a headword may be wearing, per stem. Kept separate rather than thrown
 # into one list because a stem earns only the endings its own spelling rule
