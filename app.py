@@ -2801,14 +2801,18 @@ def _real_or_fake_round(activity, topics):
     kept, dropped = games.playable(in_selection, usable)
     # Deduplicated: #101 keeps one card per word *and part of speech*, so a
     # word that is both a noun and a verb is two cards, and the same word twice
-    # on the page is a free mark and looks like a mistake. Counted as dropped
-    # too -- to the learner it is one more card of theirs that is not asked.
+    # on the page is a free mark and looks like a mistake.
+    #
+    # **Not counted as dropped**, though it was at first. `dropped` is printed
+    # beside the activity's `needs` -- "not usable for this game, which needs a
+    # single word of seven letters or more" -- and a duplicate meets that
+    # perfectly well. Counting it would put a large number in front of a reason
+    # that is not the real one.
     selected, seen = [], set()
     for card, _ in kept:
         if card["word"].lower() not in seen:
             seen.add(card["word"].lower())
             selected.append(card["word"])
-    dropped += len(kept) - len(selected)
     everything = get_flashcards_by_topics(
         games.visible_topic_names(_visible_sections()), cards_owner_filter())
 
@@ -3046,6 +3050,88 @@ def _multiple_choice_round(activity, topics):
         unbuildable=min(len(unique), words) - len(questions), **page)
 
 
+def _listen_and_type_round(activity, topics):
+    """A round of #272: the word is spoken, the learner writes it.
+
+    The first activity on the site that makes a sound. Every other one is a
+    reading exercise — a learner can hold five hundred cards and never once
+    hear an English word, which #236 called a missing sense rather than a
+    missing game.
+
+    **Nothing on the server touches audio.** The word travels to the page and
+    #268's `speech.js` speaks it in the browser: no round trip, no key, no
+    stored audio. Which is also why *grading stays here*. The audio being in
+    the browser is not a reason to move correctness there, and moving it would
+    put the one automatically testable half of this game out of reach too.
+
+    Whether the round can actually run is the one place #233's rule breaks
+    down: the picker answers "can this activity run" everywhere else, but no
+    card count can tell the server whether the visitor's browser owns an
+    English voice. So the page probes on load and says so itself, which is
+    written down as a deliberate exception in #268 rather than left to look
+    like an oversight.
+    """
+    prefs = current_settings()
+    words = games.word_count(request.args.get("words"),
+                             games.remembered_word_count(session))
+    field, label = _gap_translation(prefs)
+    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+
+    if request.method == "POST":
+        results = []
+        for card in games.asked(request.form,
+                                {str(c["id"]): c for c in cards}):
+            given = (request.form.get(f"answer_{card['id']}") or "").strip()
+            results.append({
+                "word": card["word"],
+                "pos": card.get("pos"),
+                "explanation_en": card.get("explanation_en"),
+                "translation": card.get(field) if field else None,
+                "translation_label": label,
+                "user_answer": given,
+                # #267's rule, so a trailing full stop and a hyphen typed as a
+                # space are forgiven. A homophone is **not**: `their` for
+                # `there` is wrong, and that is the exercise rather than a
+                # defect -- telling them apart by ear is the whole point, and
+                # the results say which word was meant.
+                "correct": games.same_answer(given, card["word"]),
+            })
+        return render_template(
+            "game_listen_and_type.html", activity=activity, topics=topics,
+            questions=None, results=results, words=words, dropped=0,
+            score=sum(1 for r in results if r["correct"]))
+
+    usable, dropped = games.playable(
+        cards, lambda card: games.speakable(card.get("word")))
+    if not usable:
+        return _cannot_run(
+            activity, topics,
+            "There are no words here that can be read aloud.",
+            "This game dictates a headword, so it needs cards whose word is "
+            "letters — an abbreviation or a bracketed note is a poor thing to "
+            "hear and worse to type back.")
+
+    # One card per word. #101 keeps a card per word *and part of speech*, so
+    # `work` the noun and `work` the verb are two cards -- and dictating the
+    # same word twice is a free second mark and sounds like a mistake.
+    # **Not counted as dropped.** `dropped` is printed beside the activity's
+    # `needs`, so every card in that number is one the game could not use for
+    # the stated reason -- and a duplicate is perfectly usable, it has just
+    # already been asked. Adding it would make the sentence say 153 cards have
+    # no headword a voice can read, which is false and alarming.
+    unique, seen = [], set()
+    for card, _ in usable:
+        spoken = card["word"].strip()
+        if spoken.casefold() not in seen:
+            seen.add(spoken.casefold())
+            unique.append({"id": card["id"], "word": spoken})
+
+    return render_template(
+        "game_listen_and_type.html", activity=activity, topics=topics,
+        questions=games.sample(unique, words), results=None, score=None,
+        words=words, dropped=dropped)
+
+
 def _answer_index(key):
     """Sort answer_<n> fields back into the order they were asked.
 
@@ -3071,6 +3157,7 @@ GAME_ROUNDS["real_or_fake"] = _real_or_fake_round
 GAME_ROUNDS["read_a_text"] = _read_a_text_round
 GAME_ROUNDS["fill_the_gap"] = _fill_the_gap_round
 GAME_ROUNDS["multiple_choice"] = _multiple_choice_round
+GAME_ROUNDS["listen_and_type"] = _listen_and_type_round
 
 
 @app.route("/games/<game>/play", methods=["GET", "POST"])

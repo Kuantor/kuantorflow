@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} | KuantorFlow{% endblock %}
+
+{#
+   A round of #272 — the word is spoken and the learner writes it. The first
+   activity on the site that makes a sound.
+
+   A question is a play button and a text box, and nothing else: the word is
+   not written down, which is the entire exercise. Speech goes through #268's
+   `kfSpeech`, so this template contains no `speechSynthesis` of its own — the
+   button is a plain `[data-say]`, which speech.js already delegates, cancels
+   a previous utterance for, and picks an English voice for.
+
+   **Nothing speaks on load.** Browsers block audio without a user gesture and
+   iOS Safari is strict about it, so the first utterance is always a press —
+   which is also the better exercise, since the learner decides when to listen.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+    </p>
+    <h1 class="page-title">{{ activity.name }}</h1>
+
+    {% if results is none %}
+        {# Whether a voice exists is a *browser* fact, and the server cannot
+           know it — the one deliberate exception to #233's rule that "can this
+           run" is answered in the picker (#268). So the page carries both
+           answers and the probe below chooses between them. #}
+        <div class="panel" id="no-voice" hidden>
+            <p>Your browser has no English voice, so there is nothing to listen to.</p>
+            <p class="hint">This is the only activity that needs one. Chrome,
+               Edge and Safari ship English voices; Firefox on Linux often has
+               none installed.</p>
+            <p><a href="{{ url_for('index') }}">Try another activity</a></p>
+        </div>
+
+        <div id="listen-round">
+            <div class="panel panel--tight">
+                <p>Press play, then write the word you hear
+                   ({{ questions|length }} word{{ '' if questions|length == 1 else 's' }}).
+                   You can listen as many times as you like.
+                {% include "_shortfall.html" with context %}
+                </p>
+            </div>
+
+            <form method="POST">
+                {% for question in questions %}
+                    <div class="panel question">
+                        {# The word rides in `data-say` because the browser is
+                           what speaks it — there is no way to use
+                           speechSynthesis without the text being on the page.
+                           It is never *rendered*, which is what the exercise
+                           needs; a learner determined to read the page source
+                           can, and nothing here is scored or recorded. #}
+                        <button type="button" class="say say--listen"
+                                data-say="{{ question.word }}"
+                                aria-label="Play word {{ loop.index }}">&#9654;</button>
+                        <span class="word">{{ loop.index }}.</span>
+                        <input type="text" name="answer_{{ question.id }}"
+                               autocomplete="off" autocapitalize="none"
+                               spellcheck="false" aria-label="What you heard">
+                    </div>
+                {% endfor %}
+                <button type="submit">Check answers</button>
+            </form>
+        </div>
+
+        <noscript>
+            <div class="panel">
+                <p>This game needs JavaScript to speak the words.</p>
+            </div>
+        </noscript>
+
+        <script>
+            /* The probe resolves once the voice list has settled — #268 owns
+               the awkwardness of that (an empty first `getVoices()`, the
+               `voiceschanged` event, and the browsers where it never fires).
+               Here it only decides which of the two blocks above is shown.
+               
+               **Wait for DOMContentLoaded before looking for `kfSpeech`.**
+               `speech.js` is loaded with `defer`, so it runs *after* the
+               document is parsed, while this inline script runs *during*
+               parsing — read too early, `window.kfSpeech` is simply not there
+               yet and the page would announce "no English voice" on a browser
+               that has plenty. Deferred scripts are guaranteed to have run by
+               DOMContentLoaded, which is what makes that the right moment.
+               
+               Reaching that point with no `kfSpeech` at all is a different
+               thing and does deserve the warning: the module failed to load,
+               so nothing will ever speak. */
+            (function () {
+                function decide() {
+                    var round = document.getElementById("listen-round");
+                    var warning = document.getElementById("no-voice");
+                    if (!round || !warning) return;
+                    function silent() {
+                        round.hidden = true;
+                        warning.hidden = false;
+                    }
+                    if (!window.kfSpeech) { silent(); return; }
+                    window.kfSpeech.whenDecided(function (available) {
+                        if (!available) silent();
+                    });
+                }
+                if (document.readyState === "loading") {
+                    document.addEventListener("DOMContentLoaded", decide);
+                } else {
+                    decide();
+                }
+            })();
+        </script>
+
+    {% else %}
+        <p class="score">Score: {{ score }} / {{ results|length }}</p>
+        {% for r in results %}
+            <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
+                <div class="word">{{ loop.index }}. {{ r.word }}
+                    {% if r.pos %}<span class="pos">{{ r.pos }}</span>{% endif %}
+                    <button type="button" class="say say--deck"
+                            data-say="{{ r.word }}"
+                            aria-label="Play {{ r.word }}">&#9654;</button>
+                </div>
+                <p>You wrote: {{ r.user_answer or '—' }}</p>
+                {# A word that was misheard should also be learned, not just
+                   marked — the explanation where the card has one, and the
+                   translation in the identity's quiz_lang where it does not. #}
+                {% if r.explanation_en %}
+                    <p class="expected">{{ r.explanation_en }}</p>
+                {% elif r.translation %}
+                    <p class="expected">{{ r.translation_label }}: {{ r.translation }}</p>
+                {% endif %}
+            </div>
+        {% endfor %}
+        <p class="crumbs">
+            <a href="{{ url_for('index') }}">&larr; Home</a>
+            <a href="{{ url_for('game_play', game=activity.slug, topic=topics, words=words) }}">Play again</a>
+        </p>
+    {% endif %}
+{% endblock %}
