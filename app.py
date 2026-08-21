@@ -2748,7 +2748,12 @@ def _scrambled_round(activity, topics):
     """
     words = games.word_count(request.args.get("words"),
                              games.remembered_word_count(session))
+    # One card per word (#101 keeps one per word *and part of speech*, and
+    # this deck holds true duplicates besides). Before the eligibility rule,
+    # so a duplicate never reaches `dropped` -- it is usable, just already
+    # asked.
     cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    cards = games.one_per_word(cards)
 
     if request.method == "POST":
         # Both halves shared since #267: which questions were asked, and what
@@ -2842,11 +2847,8 @@ def _real_or_fake_round(activity, topics):
     # single word of seven letters or more" -- and a duplicate meets that
     # perfectly well. Counting it would put a large number in front of a reason
     # that is not the real one.
-    selected, seen = [], set()
-    for card, _ in kept:
-        if card["word"].lower() not in seen:
-            seen.add(card["word"].lower())
-            selected.append(card["word"])
+    selected = [card["word"]
+                for card in games.one_per_word(card for card, _ in kept)]
     everything = get_flashcards_by_topics(
         games.visible_topic_names(_visible_sections()), cards_owner_filter())
 
@@ -2914,8 +2916,12 @@ def _fill_the_gap_round(activity, topics):
     # never opens the control sees the game they have always seen.
     hint = _round_hint(activity)
 
+    # One card per word, before the eligibility rule so a duplicate never
+    # reaches `dropped` (#272's rule). Shuffled first, so which of a word's
+    # cards survives is not always the lowest id.
     cards = get_flashcards_by_topics(topics, cards_owner_filter())
     random.shuffle(cards)
+    cards = games.one_per_word(cards)
 
     # The rule returns the gapped sentence, not a yes: finding an example that
     # contains its own headword and cutting the word out of it are one question
@@ -2933,6 +2939,13 @@ def _fill_the_gap_round(activity, topics):
             "so a card with no examples — or none that use the word — sits "
             "this one out.")
 
+    # Deduping the **gapped sentence** as well was tried and dropped. It is a
+    # blunt rule: two different words in the same frame gap to the same string,
+    # and collapsing those loses questions that are genuinely distinct. Across
+    # the deck's 917 gapped sentences exactly one pair collides -- `campaign`
+    # and `manifesto` both give "an election ______" -- which is not worth the
+    # cost, and one card per word already fixes the reported repetition, since
+    # the two `tip` cards are one word.
     questions = []
     for card, sentence in usable[:wanted]:
         word = (card.get("word") or "").strip()
@@ -3033,15 +3046,9 @@ def _multiple_choice_round(activity, topics):
             score=sum(1 for r in results if r["correct"]),
             dropped=0, unbuildable=0, **page)
 
-    # One card per English word. #101 keeps a card per word *and part of
-    # speech*, so `work` as a noun and as a verb are two cards — and asking
-    # both would show the same four options twice, the second time as a free
-    # mark. `real_or_fake` deduplicates for the same reason.
-    unique, seen = [], set()
-    for card in answerable:
-        if card["word"].strip().casefold() not in seen:
-            seen.add(card["word"].strip().casefold())
-            unique.append(card)
+    # One card per English word -- asking both `work` the noun and `work` the
+    # verb would show the same four options twice, the second a free mark.
+    unique = games.one_per_word(answerable)
     pool = [card["word"].strip() for card in unique]
 
     # The wider deck, fetched **only when the selection cannot furnish its own
@@ -3157,12 +3164,8 @@ def _listen_and_type_round(activity, topics):
     # the stated reason -- and a duplicate is perfectly usable, it has just
     # already been asked. Adding it would make the sentence say 153 cards have
     # no headword a voice can read, which is false and alarming.
-    unique, seen = [], set()
-    for card, _ in usable:
-        spoken = card["word"].strip()
-        if spoken.casefold() not in seen:
-            seen.add(spoken.casefold())
-            unique.append({"id": card["id"], "word": spoken})
+    unique = [{"id": card["id"], "word": card["word"].strip()}
+              for card in games.one_per_word(card for card, _ in usable)]
 
     return render_template(
         "game_listen_and_type.html", activity=activity, topics=topics,
@@ -3287,7 +3290,12 @@ def _spell_it_round(activity, topics):
             questions=None, results=results, words=words, hint=hint,
             dropped=0, score=sum(1 for r in results if r["correct"]))
 
+    # One card per word (#101 keeps one per word *and part of speech*, and
+    # this deck holds true duplicates besides). Before the eligibility rule,
+    # so a duplicate never reaches `dropped` -- it is usable, just already
+    # asked.
     cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    cards = games.one_per_word(cards)
     usable, dropped = games.playable(
         cards,
         lambda card: bool((card.get("explanation_en") or "").strip())
@@ -3345,7 +3353,12 @@ def _rebuild_the_sentence_round(activity, topics):
     """
     words = games.word_count(request.args.get("words"),
                              games.remembered_word_count(session))
+    # One card per word (#101 keeps one per word *and part of speech*, and
+    # this deck holds true duplicates besides). Before the eligibility rule,
+    # so a duplicate never reaches `dropped` -- it is usable, just already
+    # asked.
     cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    cards = games.one_per_word(cards)
 
     if request.method == "POST":
         results = []

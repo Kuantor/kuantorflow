@@ -768,6 +768,33 @@ def playable(cards, rule):
         kept.append((card, made))
     return kept, len(cards) - len(kept)
 
+def one_per_word(cards):
+    """`cards` with a word held only once, keeping the first of each.
+
+    #101 keeps one card per word **and part of speech**, so `tip` the noun and
+    `tip` the verb are two rows -- and a deck can hold true duplicates besides
+    (this one has two identical `tip` nouns). A round that draws from the cards
+    therefore asks the same word twice, which reads as a bug whatever the game:
+    in *Fill the gap* it is the same answer under two sentences, in *Scrambled*
+    the same puzzle twice, and everywhere it is a free second mark.
+
+    Applied **before** the eligibility rule, not after, so a duplicate never
+    reaches `dropped`. That number is printed beside what the game *needs*, and
+    a duplicate is perfectly usable -- it has just already been asked (#272).
+
+    First wins rather than a random pick: the caller has usually shuffled
+    already, and picking again here would be a second source of randomness for
+    no gain.
+    """
+    kept, seen = [], set()
+    for card in cards:
+        word = (card.get("word") or "").strip().casefold()
+        if not word or word in seen:
+            continue
+        seen.add(word)
+        kept.append(card)
+    return kept
+
 # --- drawing the round ---------------------------------------------------
 
 
