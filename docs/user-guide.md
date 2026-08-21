@@ -131,6 +131,10 @@ A game of guessing a word from its own dictionary example. The front of each car
 
 You mark yourself: tick **I remember it** on the ones you knew, and the count in the corner keeps score. **Finish game** is there from the first card, not only the last, so you can stop whenever you like and still see how you did. Nothing is recorded — the score goes when the page does.
 
+**If the gap is too hard, ask for a letter.** In the picker you can choose to see the **first letter** of the missing word, or the first *and* the last — `r___`, or `r___n`. The dashes **hint at the size** without giving it away — a longer word gets a longer run, but there are far fewer dashes than letters, so you cannot count them to find the answer. An expression is shown word by word, so *take for granted* becomes `t___e   f___   g____d`: you can see it is three words, and roughly how long each one is, but not exactly. A word of three letters or fewer keeps its last letter hidden even in the second mode, because showing both ends of a short word is most of the word.
+
+The default is **no hint at all**, exactly as before — you only see letters if you ask for them. Like the other before-you-start choices, it is made in the picker rather than on the card: being able to reveal a letter of the word you are stuck on is not a hint, it is the answer arriving late.
+
 A card can only appear here if one of its examples actually contains its own word, so a card with no examples sits the game out and a round can be shorter than you asked for. It says so when that happens. How many cards a round deals is yours to set — see *Cards per round* in Settings.
 
 ### Odd one out

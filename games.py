@@ -199,6 +199,40 @@ def remember_word_count(store, count, words=QUIZ_WORDS):
     store[words.key] = int(count)
 
 
+# --- how much of a hidden word is shown (#270, #334) ---------------------
+#
+# Declared up here rather than beside the games that use them, because the
+# activities themselves name their modes and a dataclass default is evaluated
+# where it is written.
+
+HINT_NONE = "none"
+HINT_FIRST = "first"
+HINT_FIRST_LAST = "first_last"
+
+# Which modes each game offers, because they are not the same set. *Spell it*
+# has no "none": it always shows at least the first letter, since a bare "type
+# the word for this meaning" is a different exercise. *Fill the gap* must have
+# it, and must **default** to it -- the game existed for months without a hint
+# and falling back to one would change it for everyone who never asked (#334).
+HINTS = (HINT_FIRST, HINT_FIRST_LAST)
+GAP_HINTS = (HINT_NONE, HINT_FIRST, HINT_FIRST_LAST)
+
+# What the picker calls them.
+HINT_LABELS = {
+    HINT_NONE: "No hint",
+    HINT_FIRST: "The first letter",
+    HINT_FIRST_LAST: "First and last",
+}
+
+# The session key the hint mode is remembered under, beside the selection and
+# the round length and for the same reason (#233): a per-round preference, not
+# a per-account setting.
+HINT_KEY = "spell_hint"
+
+# #334's, and a **separate** key on purpose -- see `remember_hint()`.
+GAP_HINT_KEY = "gap_hint"
+
+
 # --- the activities themselves -------------------------------------------
 #
 # #233 asks for **one declaration** of the activities, rendered by the
@@ -282,13 +316,17 @@ class Activity:
     # every card qualifies -- odd one out asks nothing of a card beyond its
     # word and its topic -- and then the sentence never appears.
     needs: str = ""
-    # Whether the picker offers #270's hint mode -- first letter, or first and
-    # last. On the picker rather than in the round because it decides
-    # *eligibility* as well as the mask: with the last letter shown a
-    # four-letter word is two-thirds given, so that mode draws from a smaller
-    # set. Switching mid-round would also let a learner reveal the last letter
-    # of a word they are stuck on, which is not a hint.
-    picks_hint: bool = False
+    # Which hint modes the picker offers, or () for an activity with no such
+    # control. A tuple rather than a bool because the two games that have one
+    # offer **different sets**: #270 has no "no hint" (it always shows the
+    # first letter) and #334 must have one and must start there.
+    #
+    # On the picker rather than in the round for two reasons. In #270 the mode
+    # decides *eligibility* as well as the mask -- with the last letter shown a
+    # four-letter word is two-thirds given. In both, a switch on the round page
+    # would let a learner reveal the last letter of a word they are stuck on,
+    # which is not a hint but the answer arriving late.
+    hint_modes: tuple = ()
     # Whether the picker offers the free-text line describing what the round
     # should be about (#237). Only a round that *writes* something has anything
     # to do with it, which is why it is off by default: a quiz has no use for
@@ -363,6 +401,7 @@ ACTIVITIES = {
             too_small="Tick at least one topic to start.",
             tagline="Guess the missing word",
             needs="an example sentence that uses the word itself",
+            hint_modes=GAP_HINTS,
         ),
         # --- wave two (#265), registered as stubs by #266 -----------------
         #
@@ -397,7 +436,7 @@ ACTIVITIES = {
             too_small="Tick at least one topic to start.",
             tagline="Meaning in, spelling out",
             needs="an English explanation",
-            picks_hint=True,
+            hint_modes=HINTS,
         ),
         Activity(
             slug="rebuild_the_sentence",
@@ -728,6 +767,33 @@ def playable(cards, rule):
             continue
         kept.append((card, made))
     return kept, len(cards) - len(kept)
+
+def one_per_word(cards):
+    """`cards` with a word held only once, keeping the first of each.
+
+    #101 keeps one card per word **and part of speech**, so `tip` the noun and
+    `tip` the verb are two rows -- and a deck can hold true duplicates besides
+    (this one has two identical `tip` nouns). A round that draws from the cards
+    therefore asks the same word twice, which reads as a bug whatever the game:
+    in *Fill the gap* it is the same answer under two sentences, in *Scrambled*
+    the same puzzle twice, and everywhere it is a free second mark.
+
+    Applied **before** the eligibility rule, not after, so a duplicate never
+    reaches `dropped`. That number is printed beside what the game *needs*, and
+    a duplicate is perfectly usable -- it has just already been asked (#272).
+
+    First wins rather than a random pick: the caller has usually shuffled
+    already, and picking again here would be a second source of randomness for
+    no gain.
+    """
+    kept, seen = [], set()
+    for card in cards:
+        word = (card.get("word") or "").strip().casefold()
+        if not word or word in seen:
+            continue
+        seen.add(word)
+        kept.append(card)
+    return kept
 
 # --- drawing the round ---------------------------------------------------
 
@@ -1609,15 +1675,6 @@ def rebuildable(examples, rng=None):
 # is the easier one, and is a mode rather than a toggle on the round page --
 # switching mid-round would let a learner reveal the last letter of a word they
 # are stuck on, which is not a hint, it is the answer arriving late.
-HINT_FIRST = "first"
-HINT_FIRST_LAST = "first_last"
-HINTS = (HINT_FIRST, HINT_FIRST_LAST)
-
-# The session key the hint mode is remembered under, beside the selection and
-# the round length and for the same reason (#233): a per-round preference, not
-# a per-account setting.
-HINT_KEY = "spell_hint"
-
 # Below this a word is not a spelling exercise at B2-C1. With the last letter
 # shown as well, a four-letter word is two-thirds given, so that mode asks for
 # one more. Stated here rather than left for the caller to notice.
@@ -1634,26 +1691,40 @@ MIN_LAST_LETTER = 4
 DASH = "_"
 
 
-def hint_mode(raw, remembered=None):
+def hint_mode(raw, remembered=None, allowed=HINTS, default=HINT_FIRST):
     """Which hint mode a round runs in, from a query parameter.
 
-    Anything unrecognised falls back to `remembered` and then to showing only
-    the first letter -- the same "a stored value is a hint" rule the topic
-    selection and the round length both follow, and for the same reason: this
-    arrives from a URL anybody can edit.
+    Anything unrecognised falls back to `remembered` and then to `default` --
+    the same "a stored value is a hint" rule the topic selection and the round
+    length both follow, and for the same reason: this arrives from a URL
+    anybody can edit.
+
+    `allowed` and `default` are arguments rather than constants because the two
+    games that use this genuinely differ: *Spell it* offers two modes and
+    starts on the first letter, *Fill the gap* offers three and starts on
+    none. A shared fallback would have given one of them a hint it never asked
+    for.
     """
     for candidate in (raw, remembered):
-        if candidate in HINTS:
+        if candidate in allowed:
             return candidate
-    return HINT_FIRST
+    return default
 
 
-def remembered_hint(store):
-    return hint_mode(store.get(HINT_KEY))
+def remembered_hint(store, key=HINT_KEY, allowed=HINTS, default=HINT_FIRST):
+    return hint_mode(store.get(key), allowed=allowed, default=default)
 
 
-def remember_hint(store, mode):
-    store[HINT_KEY] = hint_mode(mode)
+def remember_hint(store, mode, key=HINT_KEY, allowed=HINTS,
+                  default=HINT_FIRST):
+    """Remember the mode this visitor chose.
+
+    **A key per game, not one shared key.** Sharing was considered and refused:
+    the valid sets differ, and asking for the last letter in *Spell it* would
+    silently soften *Fill the gap*, which is a different game the learner did
+    not touch.
+    """
+    store[key] = hint_mode(mode, allowed=allowed, default=default)
 
 
 def mask_word(word, hint=HINT_FIRST):
@@ -1753,8 +1824,80 @@ def mask_in_text(text, word, hint=HINT_FIRST):
 # turns out to be too hard in practice.
 GAP = "______"
 
+# The run shown between a hinted gap's letters: **about half the letters, never
+# fewer than three, never more than seven.**
+#
+# A fixed three was tried first and looked absurd behind a long word --
+# `n___d` standing in for *neighbourhood*. So the run now implies the scale.
+# **Be honest about what this leaks.** Halving is monotonic, so a learner who
+# works it out narrows the word to about two lengths in the middle of the range
+# (a run of five means nine letters or ten) and to a wider band at the ends,
+# where the clamps collapse several lengths together -- a run of three covers
+# two letters through six, a run of seven covers thirteen and up. That is
+# considerably less than a dash per letter and considerably more than nothing,
+# and it is the trade #334 accepted when it asked for the size to show.
+#
+# Measured over the deck's 442 gappable words -- 2 to 14 letters, bulk between
+# 6 and 10 -- this spreads them across runs of 3 to 7, so the difference is
+# visible where most of the deck actually sits rather than only at the
+# extremes.
+#
+# Underscores rather than an ellipsis, so the hinted and unhinted modes look
+# like the same game: `______` and `t___d` are visibly a hole to fill, where
+# `t…d` reads as truncation. Never dots -- those *are* countable and would be
+# read as letters.
+GAP_RUN_MIN = 3
+GAP_RUN_MAX = 7
 
-def gap_sentence(sentence, word):
+
+def gap_run(letters):
+    """The underscores standing in for a word of `letters` letters."""
+    return "_" * max(GAP_RUN_MIN, min(GAP_RUN_MAX, (int(letters) + 1) // 2))
+
+
+def mask_gap(text, hint=HINT_NONE):
+    """`text` as a gap, showing as much as `hint` asks for (#334).
+
+    `none` is the plain fixed-width gap this game has always shown, so the
+    default reproduces #235 exactly and a learner who never opens the control
+    sees no change at all.
+
+    Otherwise **word by word**, keeping the spaces, in the shape *Spell it*
+    uses -- but with the letter counts removed:
+
+        take for granted   ->   t___e   f___   g___d
+
+    So the word count shows and the letter count does not. That is a real step
+    back from hiding the length, taken deliberately: the shape of an expression
+    is part of recognising it, and a gap that hides even the word count makes a
+    collocation nearly unguessable rather than merely hard.
+
+    The run **implies** the word's size without stating it: about half the
+    letters, floored at three and capped at seven. A long word no longer hides
+    behind a stub -- `neighbourhood` shows `n______d` rather than `n___d` --
+    and the halving keeps it from being a count.
+
+    A part below `MIN_LAST_LETTER` keeps its last letter hidden however the
+    mode is set -- `for` shows `f___`. Both ends of a three-letter word is most
+    of the word, whether or not the reader knows how short it is.
+    """
+    parts = str(text or "").split()
+    if hint == HINT_NONE or not parts:
+        return GAP
+    masked = []
+    for part in parts:
+        letters = [ch for ch in part if ch.isalpha()]
+        if not letters:
+            masked.append(gap_run(len(part)))
+            continue
+        shown = letters[0] + gap_run(len(letters))
+        if hint == HINT_FIRST_LAST and len(letters) >= MIN_LAST_LETTER:
+            shown += letters[-1]
+        masked.append(shown)
+    return "   ".join(masked)
+
+
+def gap_sentence(sentence, word, hint=HINT_NONE):
     """`sentence` with `word` cut out, or **None** if it is not in there.
 
     **Every** occurrence goes, not just the first. A sentence that uses the
@@ -1772,13 +1915,18 @@ def gap_sentence(sentence, word):
     out, at = [], 0
     for start, end in spans:
         out.append(sentence[at:start])
-        out.append(GAP)
+        # Masked from **what was matched**, not from the headword: the span may
+        # be an inflection, and with an expression it carries the object too
+        # ("takes **it** for granted"), which per-word masking then shows as
+        # its own chunk. That is more structure than the headword alone
+        # implies, and it is the honest rendering of what has been cut out.
+        out.append(mask_gap(sentence[start:end], hint))
         at = end
     out.append(sentence[at:])
     return "".join(out)
 
 
-def gapped_example(examples, word, rng=None):
+def gapped_example(examples, word, rng=None, hint=HINT_NONE):
     """One of `examples` with `word` cut out, or **None** if none will do.
 
     The examples are tried in random order, so a card with three usable
@@ -1792,7 +1940,7 @@ def gapped_example(examples, word, rng=None):
     usable = [str(s).strip() for s in (examples or []) if str(s or "").strip()]
     (rng or random).shuffle(usable)
     for sentence in usable:
-        gapped = gap_sentence(sentence, word)
+        gapped = gap_sentence(sentence, word, hint)
         if gapped:
             return gapped
     return None
