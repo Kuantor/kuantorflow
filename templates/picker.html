@@ -100,19 +100,19 @@
                also let a learner reveal the last letter of a word they are
                stuck on, which is not a hint. Rendered in the same row shape as
                the language choice, which is the same kind of decision. #}
-            {% if with_language and activity.picks_hint %}
+            {% if with_language and activity.hint_modes %}
                 <div class="picker-langs">
                     <span class="picker-langs-label">Show me:</span>
-                    <label class="picker-lang">
-                        <input type="radio" name="hint" value="first"
-                               {% if hint != 'first_last' %}checked{% endif %}>
-                        The first letter
-                    </label>
-                    <label class="picker-lang">
-                        <input type="radio" name="hint" value="first_last"
-                               {% if hint == 'first_last' %}checked{% endif %}>
-                        First and last
-                    </label>
+                    {# Rendered from what the activity declares: the two games
+                       with this control offer different sets, and #334's
+                       includes a "no hint" that #270's must not. #}
+                    {% for mode in activity.hint_modes %}
+                        <label class="picker-lang">
+                            <input type="radio" name="hint" value="{{ mode }}"
+                                   {% if mode == hint %}checked{% endif %}>
+                            {{ hint_labels[mode] }}
+                        </label>
+                    {% endfor %}
                 </div>
             {% endif %}
 

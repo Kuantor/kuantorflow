@@ -2339,6 +2339,33 @@ def _visible_sections():
         return []
 
 
+def _hint_settings(activity):
+    """`(session key, allowed modes, default)` for this activity's hint.
+
+    One place that knows the two games differ, so a round and the picker cannot
+    disagree about which modes are legal or which one a fresh visitor gets.
+    """
+    if activity.slug == "fill_the_gap":
+        return games.GAP_HINT_KEY, games.GAP_HINTS, games.HINT_NONE
+    return games.HINT_KEY, games.HINTS, games.HINT_FIRST
+
+
+def _remembered_hint(activity):
+    key, allowed, default = _hint_settings(activity)
+    return games.remembered_hint(session, key, allowed, default)
+
+
+def _round_hint(activity):
+    """The mode this round runs in, read from the query and remembered."""
+    key, allowed, default = _hint_settings(activity)
+    mode = games.hint_mode(request.args.get("hint"),
+                           games.remembered_hint(session, key, allowed,
+                                                 default),
+                           allowed, default)
+    games.remember_hint(session, mode, key, allowed, default)
+    return mode
+
+
 def _render_picker(activity, start_url):
     """The topic picker (#250), shared by every activity in #233.
 
@@ -2371,9 +2398,12 @@ def _render_picker(activity, start_url):
         start_url=start_url,
         quiz_langs=quiz_langs,
         quiz_lang=quiz_lang,
-        # #270's hint mode, remembered like the selection and the round length
-        # so the picker opens on what was played last.
-        hint=games.remembered_hint(session),
+        # The hint mode, remembered like the selection and the round length so
+        # the picker opens on what was played last. Each game keeps its own,
+        # because the sets differ and asking for help in one must not silently
+        # soften the other (#334).
+        hint=_remembered_hint(activity),
+        hint_labels=games.HINT_LABELS,
         sections=[(name, topics) for name, topics in sections if topics],
         selected=set(games.remembered_selection(session, visible)),
         total_cards=sum(count for _, topics in sections for _, count in topics),
@@ -2880,6 +2910,9 @@ def _fill_the_gap_round(activity, topics):
     prefs = current_settings()
     wanted = prefs["gapped_deck_size"]
     field, label = _gap_translation(prefs)
+    # #334. `none` is the default and reproduces #235 exactly, so a learner who
+    # never opens the control sees the game they have always seen.
+    hint = _round_hint(activity)
 
     cards = get_flashcards_by_topics(topics, cards_owner_filter())
     random.shuffle(cards)
@@ -2890,7 +2923,8 @@ def _fill_the_gap_round(activity, topics):
     usable, dropped = games.playable(
         cards,
         lambda card: games.gapped_example(card.get("examples_en"),
-                                          (card.get("word") or "").strip()))
+                                          (card.get("word") or "").strip(),
+                                          hint=hint))
     if not usable:
         return _cannot_run(
             activity, topics,
@@ -2913,7 +2947,7 @@ def _fill_the_gap_round(activity, topics):
 
     return render_template(
         "game_fill_the_gap.html", activity=activity, topics=topics,
-        cards=questions, wanted=wanted, dropped=dropped)
+        cards=questions, wanted=wanted, dropped=dropped, hint=hint)
 
 
 # Distinct words a selection needs before it can supply its own wrong answers
@@ -3226,9 +3260,7 @@ def _spell_it_round(activity, topics):
     """
     words = games.word_count(request.args.get("words"),
                              games.remembered_word_count(session))
-    hint = games.hint_mode(request.args.get("hint"),
-                           games.remembered_hint(session))
-    games.remember_hint(session, hint)
+    hint = _round_hint(activity)
 
     if request.method == "POST":
         results = []
