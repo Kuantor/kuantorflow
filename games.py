@@ -1797,18 +1797,35 @@ def mask_in_text(text, word, hint=HINT_FIRST):
 # turns out to be too hard in practice.
 GAP = "______"
 
-# The run shown between a hinted gap's letters. **Three, fixed, whatever the
-# word** -- the whole point of #334 is that the length is not given away, and
-# `r______n` between two real letters invites counting to eight however fixed
-# the six actually is. Three is plainly too short to be most words, so it reads
-# as a mark rather than a measurement, and every gap in a round is the same
-# width, which settles it after the first one.
+# The run shown between a hinted gap's letters: **about half the letters, never
+# fewer than three, never more than seven.**
+#
+# A fixed three was tried first and looked absurd behind a long word --
+# `n___d` standing in for *neighbourhood*. So the run now implies the scale.
+# **Be honest about what this leaks.** Halving is monotonic, so a learner who
+# works it out narrows the word to about two lengths in the middle of the range
+# (a run of five means nine letters or ten) and to a wider band at the ends,
+# where the clamps collapse several lengths together -- a run of three covers
+# two letters through six, a run of seven covers thirteen and up. That is
+# considerably less than a dash per letter and considerably more than nothing,
+# and it is the trade #334 accepted when it asked for the size to show.
+#
+# Measured over the deck's 442 gappable words -- 2 to 14 letters, bulk between
+# 6 and 10 -- this spreads them across runs of 3 to 7, so the difference is
+# visible where most of the deck actually sits rather than only at the
+# extremes.
 #
 # Underscores rather than an ellipsis, so the hinted and unhinted modes look
 # like the same game: `______` and `t___d` are visibly a hole to fill, where
-# `t…d` reads as truncation. Never three dots -- those *are* countable and
-# would be read as three letters, the worst of both.
-GAP_RUN = "___"
+# `t…d` reads as truncation. Never dots -- those *are* countable and would be
+# read as letters.
+GAP_RUN_MIN = 3
+GAP_RUN_MAX = 7
+
+
+def gap_run(letters):
+    """The underscores standing in for a word of `letters` letters."""
+    return "_" * max(GAP_RUN_MIN, min(GAP_RUN_MAX, (int(letters) + 1) // 2))
 
 
 def mask_gap(text, hint=HINT_NONE):
@@ -1828,6 +1845,11 @@ def mask_gap(text, hint=HINT_NONE):
     is part of recognising it, and a gap that hides even the word count makes a
     collocation nearly unguessable rather than merely hard.
 
+    The run **implies** the word's size without stating it: about half the
+    letters, floored at three and capped at seven. A long word no longer hides
+    behind a stub -- `neighbourhood` shows `n______d` rather than `n___d` --
+    and the halving keeps it from being a count.
+
     A part below `MIN_LAST_LETTER` keeps its last letter hidden however the
     mode is set -- `for` shows `f___`. Both ends of a three-letter word is most
     of the word, whether or not the reader knows how short it is.
@@ -1839,9 +1861,9 @@ def mask_gap(text, hint=HINT_NONE):
     for part in parts:
         letters = [ch for ch in part if ch.isalpha()]
         if not letters:
-            masked.append(GAP_RUN)
+            masked.append(gap_run(len(part)))
             continue
-        shown = letters[0] + GAP_RUN
+        shown = letters[0] + gap_run(len(letters))
         if hint == HINT_FIRST_LAST and len(letters) >= MIN_LAST_LETTER:
             shown += letters[-1]
         masked.append(shown)
