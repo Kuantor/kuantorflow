@@ -80,7 +80,17 @@
 <div class="ws-page">
 
     <div class="ws-controls ws-no-print">
-        <a class="crumbs" href="{{ url_for('game_play', game=activity.slug) }}">&larr; Back to the text</a>
+        {# `crumbs` goes on the wrapper, never on the link. The class carries
+           the blue background and `.crumbs a` carries the white text, so an
+           anchor wearing it directly comes out blue on blue. #}
+        <p class="crumbs">
+            {# Rebuilds the URL that produced this text -- same shape as the
+               redirect the round issues after generating. Without the
+               parameters the round resolves to the whole visible deck at the
+               default length, `_held_for()` matches nothing, and the learner
+               is dropped on the write form as though their text had gone. #}
+            <a href="{{ back_url }}">&larr; Back to the text</a>
+        </p>
 
         {% if held and held.text %}
             {# The same three modes *Fill the gap* offers (#334), read from the
@@ -108,7 +118,7 @@
             <p class="hint">Write one first &mdash; a worksheet is made from the
                passage you are holding, and this page never writes a new one.</p>
             <p class="crumbs">
-                <a href="{{ url_for('game_play', game=activity.slug) }}">Write a text</a>
+                <a href="{{ back_url }}">Write a text</a>
             </p>
         </div>
 

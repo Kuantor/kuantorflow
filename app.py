@@ -3490,8 +3490,15 @@ def worksheet():
         items, answers = games.worksheet_blanks(
             held.get("segments") or [], hint, start=len(title_answers))
         answers = title_answers + answers
+    # The way back, built from what produced the held text rather than from
+    # this request, which carries no selection of its own (#340).
+    back_url = url_for("game_play", game=activity.slug,
+                       topic=(held or {}).get("topics") or None,
+                       words=(held or {}).get("length") or None,
+                       about=(held or {}).get("instruction") or None)
     return render_template(
         "worksheet.html", activity=activity, held=held, hint=hint,
+        back_url=back_url,
         hints=games.GAP_HINTS, hint_labels=games.HINT_LABELS,
         title_items=title_items, items=items, answers=answers)
 
