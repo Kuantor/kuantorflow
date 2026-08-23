@@ -29,6 +29,8 @@ it may bold a word it was not given, or miss one it used. What actually
 happened is reported: the words that appeared, and the ones that did not.
 """
 
+import re
+
 import applog
 import games
 
@@ -58,11 +60,37 @@ WORDS_PER_TEXT_MAX = 20
 # hotel, quite formal".
 INSTRUCTION_MAX_CHARS = 200
 
-# `max_tokens` is not the word count. English prose runs about 1.3 tokens a word
-# before punctuation and the model's own framing, so a 1:1 cap stops a 150-word
-# request mid-sentence. The cap still makes a runaway impossible — it just
-# leaves room for the text that was asked for.
-TOKENS_PER_WORD = 1.5
+# `max_tokens` is not the word count, and the ratio between them was measured
+# against the wrong English (#344).
+#
+# The first figure here was 1.3 tokens a word, which is right for *ordinary*
+# prose — the live deck's own explanations and example sentences measure 1.12
+# to 1.40, median 1.27. But a generated passage is not ordinary prose: it packs
+# a dozen or more advanced words into 150, with the hyphens, em-dashes and
+# British spellings that come with them. The text that prompted this ticket
+# measured **1.452**, above the densest block in the whole deck, and it was cut
+# off mid-word at exactly its ceiling.
+#
+# The ratio also has to absorb the model overshooting its target: asked for
+# "about 150 words" it wrote 155 and was still going. So 1.9 rather than a
+# figure sitting on top of the measurement — at 150 words that is 285 tokens,
+# about 196 words of that dense prose, roughly 30% of room.
+#
+# Raising it costs nothing when unused: billing is on tokens actually produced,
+# and `max_tokens` is a ceiling rather than a commitment.
+TOKENS_PER_WORD = 1.9
+
+# What the ceiling may never exceed, and the reason is the **cookie**, not the
+# budget (#237). The held text lives in a signed cookie that Werkzeug drops in
+# silence past ~4 KB — signing the learner out — and 600 tokens of deliberately
+# incompressible prose, plus an identity and an eighteen-topic selection, was
+# measured at 3.2 KB of it.
+#
+# So the ratio widens the common range and this holds the worst case exactly
+# where it already was. It also means the top of the range is budget-bound and
+# can still truncate, which is why `trim_to_sentence()` below is the safety net
+# rather than an optimisation.
+MAX_TOKENS_CAP = 600
 
 
 def clean_instruction(raw):
@@ -112,7 +140,7 @@ def words_for_text(cards, length, rng=None):
 
 def max_tokens(length):
     """The ceiling on one generation, from the requested length."""
-    return int(length * TOKENS_PER_WORD)
+    return min(int(length * TOKENS_PER_WORD), MAX_TOKENS_CAP)
 
 
 def build_prompt(words, instruction, length):
@@ -156,8 +184,58 @@ def build_prompt(words, instruction, length):
     )
 
 
+# A completed sentence: terminal punctuation, any closing quote or bracket that
+# belongs to it, and then whitespace or the end of the reply.
+SENTENCE_END = re.compile(r"""[.!?]["')\]]*(?=\s|$)""")
+
+# How much of a truncated reply has to survive the trim for it to be worth
+# showing. A 150-word passage loses one dangling word; a reply cut inside its
+# own first sentence would lose nearly all of itself, and half a sentence is
+# not a text -- that is a failed generation and should say so rather than
+# render a stub.
+MIN_KEPT_FRACTION = 0.5
+
+
+def trim_to_sentence(text):
+    """`text` back to its last completed sentence, or **None** if too little is
+    left to be worth showing.
+
+    Used when the model reports the ceiling stopped it mid-flow, which is how
+    a passage comes to end *"increases your success rate considerably. You"*
+    (#344). Dropping the fragment gives a whole text a few words shorter --
+    better to read, and much better to print as a worksheet (#340), where a
+    half word sits there on paper.
+
+    **Never a second call to round the text off.** That would spend money
+    outside every guard #237 puts in front of the first one, and it would be
+    the app writing English and presenting it as the model's -- the opposite of
+    the "verified, not requested" rule the highlighting already follows. The
+    model's own last finished sentence is the honest ending.
+
+    Pure, so the rule can be tested without a network, a request or a key.
+    """
+    text = (text or "").strip()
+    if not text:
+        return None
+    end = None
+    for end in SENTENCE_END.finditer(text):
+        pass
+    if end is None:
+        return None
+    kept = text[:end.end()].rstrip()
+    return kept if len(kept) >= len(text) * MIN_KEPT_FRACTION else None
+
+
 def _ask_claude(prompt, length):
-    """One call, returning the model's plain text."""
+    """One call, returning the model's plain text.
+
+    **Truncation is handled here, at the seam that knows about it.** The API
+    reports `stop_reason == "max_tokens"` and this used to discard that, so a
+    reply the model had not finished was passed on as though it were whole.
+    Trimming here rather than in `generate()` also keeps the ordering right:
+    `mark()` runs on the stored text, so a text trimmed afterwards would leave
+    the page claiming a word appeared that is no longer on the screen.
+    """
     import anthropic
 
     client = anthropic.Anthropic()
@@ -166,8 +244,21 @@ def _ask_claude(prompt, length):
         max_tokens=max_tokens(length),
         messages=[{"role": "user", "content": prompt}],
     )
-    return "".join(
+    text = "".join(
         block.text for block in message.content if block.type == "text").strip()
+
+    if getattr(message, "stop_reason", None) == "max_tokens":
+        trimmed = trim_to_sentence(text)
+        if trimmed is None:
+            # Raised, not returned: `generate()` turns an exception into the
+            # learner's "could not be written just now" and logs the cause,
+            # which is the right answer for a reply with no whole sentence in
+            # it at all.
+            raise ValueError(
+                f"the model was cut off at {max_tokens(length)} tokens with no "
+                "complete sentence to fall back to")
+        return trimmed
+    return text
 
 
 # A title is four or five words; anything much longer is the model having
