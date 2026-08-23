@@ -1944,3 +1944,51 @@ def gapped_example(examples, word, rng=None, hint=HINT_NONE):
         if gapped:
             return gapped
     return None
+
+
+# --- a printable gap-fill worksheet (#340) --------------------------------
+#
+# The session key the worksheet's hint mode is remembered under. **Its own
+# key**, not `GAP_HINT_KEY`, following the precedent #334 set when it gave
+# *Fill the gap* a key separate from *Spell it*: the two are the same three
+# choices answering different questions. A teacher choosing "no hint" for a
+# sheet they are about to print has not asked for their next round of *Fill
+# the gap* to get harder.
+WORKSHEET_HINT_KEY = "worksheet_hint"
+
+
+def worksheet_blanks(segments, hint=HINT_NONE, start=0):
+    """`segments` with every marked run replaced by a numbered blank.
+
+    `segments` is `mark_words()`'s output -- `(run, marked)` pairs covering the
+    whole text in order -- so this is the same data the reader renders in bold,
+    rendered as an exercise instead.
+
+    Returns `(items, answers)`: `items` is `(run, number)` where `number` is
+    **None** for prose and an integer for a blank, and `answers` is
+    `(number, text)` for the key.
+
+    **The numbers run in document order and the key records what was actually
+    matched**, not the headword the card holds. If the passage says "resigned"
+    and the card says `resign`, the answer to blank 4 is *resigned* -- a key
+    saying "resign" would mark a student wrong for reading correctly. It is the
+    same argument `mask_gap()` already makes about masking what was matched
+    rather than the headword, carried through to the other end of the sheet.
+
+    `start` is how many blanks a previous call already numbered, so the title
+    and the body share **one** sequence: a sheet whose numbering restarts at 1
+    halfway down has two blanks called 1, and the key cannot say which is which.
+
+    Pure, and takes the segments rather than the text, so it needs no request,
+    no session and no database -- and so it cannot disagree with the page it
+    was made from about which words were used.
+    """
+    items, answers, n = [], [], start
+    for run, marked in segments:
+        if not marked:
+            items.append((run, None))
+            continue
+        n += 1
+        items.append((mask_gap(run, hint), n))
+        answers.append((n, run))
+    return items, answers

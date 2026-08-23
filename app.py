@@ -2347,6 +2347,12 @@ def _hint_settings(activity):
     """
     if activity.slug == "fill_the_gap":
         return games.GAP_HINT_KEY, games.GAP_HINTS, games.HINT_NONE
+    # #340's worksheet offers exactly what *Fill the gap* offers -- the same
+    # three modes and the same default -- under its own key, because a choice
+    # made for a sheet about to be printed is not a choice about the next
+    # round played on screen.
+    if activity.slug == "read_a_text":
+        return games.WORKSHEET_HINT_KEY, games.GAP_HINTS, games.HINT_NONE
     return games.HINT_KEY, games.HINTS, games.HINT_FIRST
 
 
@@ -3442,6 +3448,52 @@ GAME_ROUNDS["listen_and_type"] = _listen_and_type_round
 GAME_ROUNDS["odd_one_out"] = _odd_one_out_round
 GAME_ROUNDS["spell_it"] = _spell_it_round
 GAME_ROUNDS["rebuild_the_sentence"] = _rebuild_the_sentence_round
+
+
+WORKSHEET_SLUG = "read_a_text"
+
+
+@app.route("/games/read_a_text/worksheet")
+def worksheet():
+    """A printable gap-fill sheet made from the text already held (#340).
+
+    **Outside `GAME_ROUNDS` deliberately.** The chassis dispatches
+    `/games/<slug>` (the picker) and `/games/<slug>/play` (a round); a
+    worksheet is neither, and registering it as a round would put it in the
+    picker and on the front-page tile, both of which are wrong.
+
+    **GET only, and it never reaches `textgen.generate()`.** It re-renders the
+    passage in the session, so #237's ceilings, its anonymous nudge and
+    `_generation_refusal()` are untouched and no new guard is needed. That is
+    the property to keep: the moment this route can spend, it needs all of
+    #237's accounting and it is no longer a printable page.
+
+    It asks for **no topic selection**. The round takes one because it may
+    generate; this takes the text the learner is holding, whatever produced it,
+    which is why `_held_generation()` is right here and `_held_for()` is not.
+    """
+    activity = _reachable_activity(WORKSHEET_SLUG)
+    if activity is None:
+        abort(404)
+    held = _held_generation()
+    hint = _round_hint(activity)
+    items, answers = [], []
+    title_items, title_answers = [], []
+    if held and held.get("text"):
+        # The title is gapped too, and numbered first. `textgen.mark()` counts
+        # a word in the title as used (#315), so leaving the title intact would
+        # print an answer two lines above its own blank -- the exact failure
+        # #235's "never show the sentence ungapped" rule exists to prevent.
+        title_items, title_answers = games.worksheet_blanks(
+            held.get("title_segments") or [], hint)
+        # Numbering continues from the title, so the key reads 1..n once.
+        items, answers = games.worksheet_blanks(
+            held.get("segments") or [], hint, start=len(title_answers))
+        answers = title_answers + answers
+    return render_template(
+        "worksheet.html", activity=activity, held=held, hint=hint,
+        hints=games.GAP_HINTS, hint_labels=games.HINT_LABELS,
+        title_items=title_items, items=items, answers=answers)
 
 
 @app.route("/games/<game>/play", methods=["GET", "POST"])

@@ -2103,3 +2103,9 @@ button:disabled:hover { background: #9db4c7; }
     border: 1px solid #c5d0da;
     color: var(--muted);
 }
+
+/* #340 — the worksheet link on the reader page. A block rather than an inline
+   link because the hint under it is a second line, and the two belong to each
+   other. */
+.reader-worksheet { margin-top: 0.9rem; }
+.reader-worksheet .hint { display: block; margin-top: 0.15rem; }

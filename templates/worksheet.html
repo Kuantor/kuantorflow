@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Worksheet | KuantorFlow</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+{#
+   #340 — a printable gap-fill sheet made from #237's generated text.
+
+   **A standalone page, not an extension of base.html**, and that is the whole
+   design. A worksheet has to print in isolation: extending the site layout
+   would put the header, the footer and Mykola's widget on the sheet, and the
+   print stylesheet would then exist to hide two thirds of a page it did not
+   own. That is the version that rots the next time the layout changes.
+
+   The blanks and the key come from `games.worksheet_blanks()`, which is fed
+   the very segments the reader renders in bold — so this sheet and the page it
+   was made from can never disagree about which words were used.
+
+   Nothing here spends anything: the route is GET and re-renders the passage
+   already held in the session.
+#}
+<style>
+    /* ---- screen ---- */
+    .ws-page { max-width: 46rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+    .ws-controls { display: flex; flex-wrap: wrap; gap: 0.75rem;
+                   align-items: center; margin-bottom: 1.25rem; }
+    .ws-controls form { display: flex; gap: 0.5rem; align-items: center;
+                        margin: 0; }
+    .ws-sheet { background: #fff; color: #1b1b1b; padding: 2rem 2.25rem;
+                border-radius: 6px; box-shadow: 0 2px 14px rgba(0,0,0,0.25); }
+    .ws-head { border-bottom: 1px solid #bbb; padding-bottom: 0.75rem;
+               margin-bottom: 1.25rem; }
+    .ws-title { font-size: 1.35rem; margin: 0 0 0.5rem; color: #1b1b1b; }
+    .ws-meta { display: flex; gap: 2rem; font-size: 0.9rem; color: #444; }
+    .ws-meta span { border-bottom: 1px solid #999; min-width: 9rem;
+                    display: inline-block; }
+    .ws-instructions { font-size: 0.92rem; color: #444; margin: 0 0 1.25rem; }
+    /* pre-wrap so the model's own paragraphs survive, exactly as the reader
+       panel does it — the segments are not split around newlines. */
+    .ws-text { white-space: pre-wrap; line-height: 2.15; font-size: 1.02rem; }
+    .ws-gap { font-family: inherit; letter-spacing: 0.06em;
+              padding: 0 0.15em; white-space: nowrap; }
+    .ws-num { font-size: 0.7em; vertical-align: super; color: #555;
+              margin-right: 0.15em; }
+    .ws-key { margin-top: 2rem; }
+    .ws-key ol { columns: 2; column-gap: 2.5rem; padding-left: 1.4rem;
+                 margin: 0.5rem 0 0; }
+    .ws-key li { break-inside: avoid; margin-bottom: 0.2rem; }
+    .ws-missing { font-size: 0.9rem; color: #444; margin-top: 1rem; }
+
+    /* ---- print ----
+       The controls, the crumbs and the page chrome go; the sheet loses its
+       card styling and becomes the page itself. Colours are set explicitly
+       rather than inherited: a worksheet is printed on a monochrome office
+       printer more often than not, and a grey that reads on screen can come
+       out of one of those as nothing at all. */
+    @page { margin: 18mm 16mm; }
+    @media print {
+        html, body { background: #fff !important; color: #000 !important; }
+        body > *:not(.ws-page) { display: none !important; }
+        .ws-page { max-width: none; margin: 0; padding: 0; }
+        .ws-no-print { display: none !important; }
+        .ws-sheet { box-shadow: none; border-radius: 0; padding: 0;
+                    background: #fff; color: #000; }
+        .ws-title, .ws-text, .ws-key, .ws-meta, .ws-instructions,
+        .ws-missing, .ws-num { color: #000 !important; }
+        .ws-text { font-size: 12pt; line-height: 2.3; }
+        /* The key starts its own sheet, so handing out page one is safe
+           without having to think about it. */
+        .ws-key { break-before: page; page-break-before: always;
+                  margin-top: 0; }
+    }
+</style>
+</head>
+<body>
+
+<div class="ws-page">
+
+    <div class="ws-controls ws-no-print">
+        <a class="crumbs" href="{{ url_for('game_play', game=activity.slug) }}">&larr; Back to the text</a>
+
+        {% if held and held.text %}
+            {# The same three modes *Fill the gap* offers (#334), read from the
+               query and remembered, because this is the same question asked
+               about a different surface. #}
+            <form method="GET" action="{{ url_for('worksheet') }}">
+                <label for="ws-hint">Blanks:</label>
+                <select name="hint" id="ws-hint" onchange="this.form.submit()">
+                    {% for mode in hints %}
+                        <option value="{{ mode }}" {% if mode == hint %}selected{% endif %}>
+                            {{ hint_labels[mode] }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <noscript><button type="submit">Apply</button></noscript>
+            </form>
+
+            <button type="button" onclick="window.print()">Print</button>
+        {% endif %}
+    </div>
+
+    {% if not held or not held.text %}
+        <div class="panel">
+            <p>There is no text to make a worksheet from yet.</p>
+            <p class="hint">Write one first &mdash; a worksheet is made from the
+               passage you are holding, and this page never writes a new one.</p>
+            <p class="crumbs">
+                <a href="{{ url_for('game_play', game=activity.slug) }}">Write a text</a>
+            </p>
+        </div>
+
+    {% else %}
+        <div class="ws-sheet">
+            <div class="ws-head">
+                <h1 class="ws-title">
+                    {%- if title_items -%}
+                        {%- for run, number in title_items -%}
+                            {%- if number %}<span class="ws-gap"><span class="ws-num">{{ number }}</span>{{ run }}</span>{% else %}{{ run }}{% endif -%}
+                        {%- endfor -%}
+                    {%- else -%}Fill in the missing words{%- endif -%}
+                </h1>
+                <p class="ws-meta">Name: <span></span> Date: <span></span></p>
+            </div>
+
+            <p class="ws-instructions">Write the missing word in each numbered
+               gap. There are {{ answers | length }} of them.</p>
+
+            <div class="ws-text">
+                {%- for run, number in items -%}
+                    {%- if number %}<span class="ws-gap"><span class="ws-num">{{ number }}</span>{{ run }}</span>{% else %}{{ run }}{% endif -%}
+                {%- endfor -%}
+            </div>
+
+            <div class="ws-key">
+                <h2 class="ws-title">Answer key</h2>
+                <ol>
+                    {% for number, text in answers %}
+                        <li value="{{ number }}">{{ text }}</li>
+                    {% endfor %}
+                </ol>
+                {# Named rather than dropped: "we studied these and the passage
+                   did not use them" is something a teacher wants to know, and
+                   it is the same honesty #237 shows on the reader page. #}
+                {% if held.missing %}
+                    <p class="ws-missing">Not used in this text:
+                       {{ held.missing | join(', ') }}.</p>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+</div>
+
+</body>
+</html>
