@@ -117,8 +117,12 @@
             <p>There is no text to make a worksheet from yet.</p>
             <p class="hint">Write one first &mdash; a worksheet is made from the
                passage you are holding, and this page never writes a new one.</p>
+            {# The picker, not `back_url`. With nothing held there is no text
+               to go back to, and `back_url` would be a bare round -- which
+               plays over the whole visible deck and, until #342, stored that
+               as though the learner had chosen it. #}
             <p class="crumbs">
-                <a href="{{ back_url }}">Write a text</a>
+                <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics and write a text</a>
             </p>
         </div>
 
