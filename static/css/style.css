@@ -142,7 +142,11 @@ input[type="text"]:focus {
     outline-offset: 0;
     border-color: var(--blue);
 }
-button {
+/* `a.button-link` shares this rule rather than copying it (#340): a link that
+   is supposed to look like the button beside it has to *be* the same
+   declaration, or the two drift the first time either is touched. */
+button,
+a.button-link {
     margin-top: 0.9rem;
     padding: 0.55rem 1.6rem;
     border: none;
@@ -152,7 +156,11 @@ button {
     font-size: 1rem;
     cursor: pointer;
 }
-button:hover { background: var(--blue-dark); }
+button:hover,
+a.button-link:hover { background: var(--blue-dark); }
+/* The parts a link needs and a <button> already has. */
+a.button-link { display: inline-block; text-decoration: none;
+                text-align: center; }
 .form-row { display: flex; gap: 1rem; }
 /* `position` so a column can anchor its own hint (#298) — see `.form-hint`. */
 .form-row > div { flex: 1; position: relative; }
@@ -2108,4 +2116,4 @@ button:disabled:hover { background: #9db4c7; }
    link because the hint under it is a second line, and the two belong to each
    other. */
 .reader-worksheet { margin-top: 0.9rem; }
-.reader-worksheet .hint { display: block; margin-top: 0.15rem; }
+.reader-worksheet .hint { display: block; margin-top: 0.35rem; }
