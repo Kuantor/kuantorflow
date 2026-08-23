@@ -45,8 +45,12 @@
                instruction and pressing the button keeps the length that was
                chosen on the picker. #}
             <input type="hidden" name="words" value="{{ words }}">
+            {# The count of words a text carries is scaled by its length, not
+               by how many topics are selected -- so this belongs beside the
+               length control, where it is actionable. #}
             <p class="hint">About {{ words }} words, using
-               {{ topic_summary or (topics[0] if topics else 'your deck') }}.</p>
+               {{ topic_summary or (topics[0] if topics else 'your deck') }}.
+               A longer text carries more of your words.</p>
             <button type="submit">{{ label }}</button>
         </form>
     {% endmacro %}
@@ -111,8 +115,14 @@
         </div>
 
         <div class="panel panel--tight reader-words">
-            <p><strong>{{ held.used | length }}</strong> of your
-               {{ held.words | length }} words appeared:</p>
+            {# "16 of your 18 words appeared" read as *the 18 words you
+               have*, and a learner with four topics and a hundred cards
+               reasonably took it for a bug (#346). Say where the 18 came
+               from. #}
+            <p>This text was built from
+               <strong>{{ held.words | length }}</strong> words drawn from your
+               selection, and <strong>{{ held.used | length }}</strong>
+               of them appeared:</p>
             <p class="reader-word-list">
                 {%- for word in held.used -%}
                     <span class="reader-word-used">{{ word }}</span>
