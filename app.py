@@ -3460,10 +3460,22 @@ def game_play(game):
     round_view = GAME_ROUNDS.get(game)
     if activity is None or round_view is None:
         abort(404)
+    # **Only a request that named topics expresses a preference** (#342).
+    #
+    # `resolve_selection()` turns no `topic` parameter into the whole visible
+    # deck, which is the right answer for *this round* and keeps a bare link
+    # meaningful. Remembering that expansion is a different claim: it rewrites
+    # "I named no topics" as "I chose all of them", and the picker then opens
+    # fully ticked forever after -- inventing a preference on the learner's
+    # behalf, which is exactly what `remembered_selection()` refuses to do.
+    #
+    # An explicit *Select all* still submits every name, so a learner who
+    # really did choose everything still gets it back.
+    requested = request.args.getlist("topic")
     topics = games.resolve_selection(
-        request.args.getlist("topic"),
-        games.visible_topic_names(_visible_sections()))
-    games.remember_selection(session, topics)
+        requested, games.visible_topic_names(_visible_sections()))
+    if requested:
+        games.remember_selection(session, topics)
     # The round length is remembered **beside the selection, and for the same
     # reason** (#233): the picker opens on what was played last.
     #
