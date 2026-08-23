@@ -50,7 +50,23 @@ TEXT_MODEL = "claude-haiku-4-5-20251001"
 # the two is what keeps a short text readable and a long one from thinning out
 # into filler.
 WORDS_PER_TEXT_MIN = 12
-WORDS_PER_TEXT_MAX = 20
+# Doubled from 20 (#346). The band's own comment says it exists to keep a long
+# text from thinning out into filler, and at 20 it did not do that: density
+# fell **five-fold** across the range -- one of the learner's words every 4.2
+# words of prose at fifty, one every 20 at four hundred. At 40 it falls 2.4x
+# instead, which is the shape the comment describes.
+#
+# What governs this is the **cookie**, since the words are held in it beside
+# the text. Measured on the worst case CLAUDE.md names -- 400 words of
+# incompressible prose, a signed-in identity, an eighteen-topic selection, a
+# full-length instruction and every remembered hint:
+#
+#     20 words -> 3,044 bytes    40 words -> 3,210 bytes    limit 4,093
+#
+# So the doubling costs 166 bytes of an 883-byte margin: the text dominates the
+# payload, not the list. `test_generated_text.py` now pins that measurement,
+# which nothing did before -- the 3.2 KB figure lived only in a comment.
+WORDS_PER_TEXT_MAX = 40
 
 # The learner's free-text line, capped and collapsed onto one line before it
 # reaches the prompt — `clean_preferred_name()` in ai_agent (#62) is the
