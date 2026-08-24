@@ -144,6 +144,19 @@ def card_created(entry, source, user=None, card_id=None):
            langs=_languages(entry), source=source, user=_user(user))
 
 
+def card_filled(entry, fields, source, user=None):
+    """A duplicate was not written, but it *gained* something (#349).
+
+    Its own action rather than an EDIT or a SKIP. A SKIP says nothing happened
+    and this is not that; an EDIT says somebody changed a card and this is not
+    that either -- nothing was overwritten, only gaps closed by a fresh lookup.
+    `fields` is what actually changed, which is the whole interest of the line
+    when asking later which cards still carry a translator outage.
+    """
+    _write(CARDS, "FILL", **_card_fields(entry), fields=",".join(fields),
+           source=source, user=_user(user))
+
+
 def card_skipped(entry, source, user=None, reason="duplicate"):
     """A card was not written — same word + part of speech already exists
     (issue #101). Worth logging: it explains a card the user expected."""
@@ -346,6 +359,18 @@ def anonymous_limit_hit(kind, used, limit):
 
 def lookup_finished(word, cards, elapsed_ms):
     _write(DICT, "RESULT", word=word, cards=cards, ms=elapsed_ms)
+
+
+def lookup_degraded(word, cards, dictionary):
+    """A lookup that produced cards from the dictionary alone (#349).
+
+    Its own line rather than a flag on RESULT: this is the shape of a
+    translator outage, and it is the line you want to count when asking *how
+    long was this broken, and how many cards carry the scar*. The individual
+    `TRANSLATE` failures above it say which provider refused; this says what
+    the learner ended up with.
+    """
+    _write(DICT, "DEGRADED", word=word, cards=cards, dictionary=dictionary)
 
 
 def lookup_failed(word, error):

@@ -40,6 +40,7 @@ from utils import (
     delete_flashcard,
     delete_user,
     duplicate_topic,
+    fill_missing_fields,
     resolve_user_cards,
     flashcard_word_exists,
     get_db_connection,
@@ -567,7 +568,7 @@ def current_settings():
     return settings_store.load(_current_user_id(), _current_email())
 
 
-def _save_and_log(entry, source):
+def _save_and_log(entry, source, fills=None):
     """Save one card and record the outcome in logs/cards.log (#30).
 
     Every card written by the app goes through here or through the explicit
@@ -591,7 +592,21 @@ def _save_and_log(entry, source):
         raise PermissionError(refusal)
     card_id = save_flashcard(entry, added_by_user_id=_current_user_id())
     if card_id is None:
-        applog.card_skipped(entry, source=source, user=_current_email())
+        # A duplicate, but this lookup may still carry what the stored card is
+        # missing -- which is the exit from #349's trap: a card saved during a
+        # translator outage could otherwise never be improved, because looking
+        # the word up again is exactly what #101 refuses.
+        #
+        # Still returns False. A fill is **not** a save, and saying otherwise
+        # is how #308 had Mykola confirming a card that was never written.
+        filled = fill_missing_fields(entry)
+        if filled:
+            applog.card_filled(entry, filled, source=source,
+                               user=_current_email())
+            if fills is not None:
+                fills.append(filled)
+        else:
+            applog.card_skipped(entry, source=source, user=_current_email())
         return False
     applog.card_created(entry, source=source, user=_current_email(),
                         card_id=card_id)
@@ -1895,6 +1910,22 @@ def index():
                         translator=prefs["translator"],
                         explanatory_dictionary=prefs["explanatory_dictionary"],
                     )
+                    # #349: the dictionary answered and no translator did, so
+                    # these cards carry an explanation and no translations.
+                    # Said here, once, because it is true of the review popup
+                    # and the automatic save alike — and said as *the service
+                    # is unavailable* rather than *this word has no
+                    # translations*, which is the wrong sentence that sent
+                    # #348's investigation at the wrong provider.
+                    if entries and not any(
+                            entry.get("translation_ukr")
+                            or entry.get("translation_rus")
+                            for entry in entries):
+                        flash(("No translation service is answering just now, "
+                               f"so '{word}' comes with its English "
+                               "explanation and examples only. Look it up "
+                               "again later and the translations will be "
+                               "filled in.", None))
                     if prefs["cards_automatically"] and not can_add_cards():
                         # #125/#126: nothing may be written, so the automatic
                         # save cannot happen. The lookup already succeeded, so
@@ -1912,20 +1943,28 @@ def index():
                         # 'Add cards automatically' is on (#13): skip the
                         # review popup, write the cards straight to the DB.
                         # Duplicates are skipped and reported (issue #101).
+                        fills = []
                         added = sum(
                             1 for entry in entries
-                            if _save_and_log(entry, source="automatic add")
+                            if _save_and_log(entry, source="automatic add",
+                                             fills=fills)
                         )
                         skipped = len(entries) - added
+                        # A duplicate that gained something is not "nothing
+                        # added" (#349), and a learner repeating a lookup to
+                        # repair a card needs to hear that it worked.
+                        completed = (f" Completed {len(fills)} of them with "
+                                     "this lookup." if fills else "")
                         if not added:
                             note = duplicate_notice(entries)   # #186
                             flash((f"All {skipped} card(s) for '{word}' are "
                                    "already in the database — nothing added."
+                                   + completed
                                    + (f" {note}" if note else ""), None))
                         elif skipped:
                             flash((f"Added {added} card(s) for '{word}' "
                                    f"automatically, skipped {skipped} already "
-                                   "in the database.", topic))
+                                   "in the database." + completed, topic))
                         else:
                             flash((f"Added {added} card(s) for '{word}' automatically.", topic))
                         return redirect(url_for("index"))

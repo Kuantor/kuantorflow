@@ -562,6 +562,94 @@ def save_flashcard(entry, added_by_user_id=None):
         conn.close()
 
 
+def _is_empty(value):
+    """Whether a stored column holds nothing worth keeping.
+
+    `[]` counts, because the list fields are stored as JSON and an empty list
+    is written as the two-character string rather than as NULL — so a card that
+    has never had examples looks full to a plain `IS NULL` test.
+    """
+    if value is None:
+        return True
+    if isinstance(value, (list, tuple, dict)):
+        return not value
+    text = str(value).strip()
+    return text in ("", "[]", "{}", "null")
+
+
+# What a later lookup may repair on a card that already exists. Deliberately
+# not `word`, `pos` or `topic`: the first two identify the card, and moving it
+# between topics has its own rules and its own ticket (#177).
+FILLABLE_FIELDS = tuple(
+    f for f in FLASHCARD_FIELDS if f not in ("word", "pos", "topic"))
+
+
+def fill_missing_fields(entry):
+    """Fill a card's **empty** columns from a fresh lookup. Returns what it
+    filled, as a list of column names, or `[]` if there was nothing to do.
+
+    The exit from the trap #349 would otherwise create. `save_flashcard()`
+    refuses a duplicate `word` + `pos` (#101), so a card saved during a
+    translator outage -- explanation and examples, no translations -- could
+    never be improved: looking the word up again once the service returned
+    would simply be skipped, and the card would stay half empty for good.
+
+    **Only what is empty, and only from what the entry actually carries.** A
+    stored value that holds anything wins, always: this repairs gaps and can
+    never overwrite. That rule is what makes it safe to call on every skipped
+    duplicate rather than only on ones somebody has inspected, and it is the
+    same principle `update_flashcard()` follows for a key that is absent
+    (#176) -- the difference being that this one also declines a key that is
+    *present but empty*, since a failed lookup carries plenty of those.
+
+    Not a permission check, and deliberately so: it adds nothing a card did not
+    already claim about the same word, it cannot remove or alter anything, and
+    the alternative -- leaving a card broken because somebody else made it --
+    serves nobody. The caller still has to be allowed to save at all.
+    """
+    def serialize(value):
+        if isinstance(value, (list, dict)):
+            return json.dumps(value, ensure_ascii=False)
+        return value
+
+    offered = {f: entry.get(f) for f in FILLABLE_FIELDS
+               if f in entry and not _is_empty(entry.get(f))}
+    if not offered:
+        return []
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        # The same matching `save_flashcard()` deduplicates on, so this repairs
+        # exactly the row that blocked the insert -- collation-driven on the
+        # word, NULL-safe on the part of speech.
+        cursor.execute(
+            f"SELECT id, {', '.join(FILLABLE_FIELDS)} FROM flashcards "
+            "WHERE word = %s AND pos <=> %s LIMIT 1",
+            (entry.get("word"), entry.get("pos")),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            cursor.close()
+            return []
+
+        filling = [f for f, value in offered.items() if _is_empty(row.get(f))]
+        if not filling:
+            cursor.close()
+            return []
+
+        cursor.execute(
+            f"UPDATE flashcards SET {', '.join(f'{f} = %s' for f in filling)} "
+            "WHERE id = %s",
+            tuple(serialize(offered[f]) for f in filling) + (row["id"],),
+        )
+        conn.commit()
+        cursor.close()
+        return filling
+    finally:
+        conn.close()
+
+
 # What an edit may change (issue #176). `topic` is deliberately absent: moving
 # a card between topics has different rules and its own ticket (#177), and
 # `added_by_user_id` is never editable at all — it is the answer to "whose card
