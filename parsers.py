@@ -652,10 +652,10 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     if len(cards) > 1:
         cards.pop("other", None)
 
-    if not cards:
-        applog.lookup_failed(word, "no translations")
-        raise ValueError(f"No translations found for '{word}'")
-
+    # The raise used to be here, *before* the dictionary was consulted at all,
+    # so a translator outage threw away an explanation the app had not yet
+    # asked for (#348 was exactly that: both translators down while Oxford
+    # answered perfectly). It now happens below, once both halves are in.
     fetch_defs = _dictionary_backend(explanatory_dictionary)
     dictionary = _provider_name(fetch_defs)
     error = None
@@ -681,6 +681,37 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
                 error = e
         applog.definitions_fetched(word, "reverso", len(definitions), timer.ms,
                                    fallback_from=dictionary, error=error)
+    # #349. No translator answered, but the dictionary did: build the cards
+    # from the dictionary's parts of speech instead, and leave the translation
+    # fields empty.
+    #
+    # A deliberate inversion of the usual rule -- a card is normally created
+    # per part of speech the *translator* found and takes its text from the
+    # part of speech the *dictionary* found (#228). That stays true whenever a
+    # translator answers. This is the fallback for when none does, and an
+    # English explanation with examples is most of a card's value to a B2-C1
+    # learner: refusing to save one because a different provider is rate-
+    # limited throws away work already done.
+    if not cards:
+        for pos in sorted(set(definitions) | set(examples)):
+            cards[pos] = {"word": word, "pos": pos, "topic": topic}
+        # Same rule the translator half applies: the untagged catch-all is kept
+        # only when nothing else was identified.
+        if len(cards) > 1:
+            cards.pop("other", None)
+        if cards:
+            applog.lookup_degraded(word, len(cards), dictionary)
+
+    if not cards:
+        # Both halves empty is still a failure -- there is nothing to make a
+        # card from. The message names *why* rather than blaming the word:
+        # "No translations found for 'scholar'" reads as "that word does not
+        # exist", and it sent #348's investigation at the wrong provider.
+        applog.lookup_failed(word, "no translations and no definitions")
+        raise ValueError(
+            f"Could not look up '{word}': no translation service answered, "
+            f"and {dictionary} has no entry for it either.")
+
     _attach_dictionary_text(cards, definitions, examples)
 
     applog.lookup_finished(word, len(cards), overall.ms)
