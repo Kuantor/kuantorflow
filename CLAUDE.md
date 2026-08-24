@@ -59,6 +59,12 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   map is applied to **both** sides and only for matching: a card keeps the label
   its translator gave it, because that is what the learner sees. A card the
   dictionary cannot explain is **kept** — a translation is enough to keep one.
+  Since #349 the reverse holds too: when **no translator answers**, the cards
+  are built from the *dictionary's* parts of speech with the translation fields
+  left empty — an explanation is most of a card's value, and #348 proved both
+  translators can be down while Oxford is fine. That is the fallback, not the
+  rule: a translator that answers still decides the cards, and only **both**
+  halves empty is a failure.
   Also the **notes-upload parsers**
   (`parse_notes_preview` dispatches on the extension: `.txt`, `.docx`, `.mht`)
   and the **Reverso copy-paste parser** they share — one state machine fed by
@@ -96,6 +102,15 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   `UPDATE`, not a check before it, and only the keys **present** in `entry` are
   touched — a missing key means "leave it", which is what keeps an editor that
   hides a language from wiping it.
+  `fill_missing_fields()` (#349) is the third writer, and it exists because
+  #101 has a sharp edge: a card saved during a translator outage could never be
+  improved, since looking the word up again is exactly what the duplicate rule
+  refuses. It fills **only empty columns**, **only** from values the new entry
+  actually carries, and a stored value holding anything always wins — it
+  repairs gaps and cannot edit, which is what makes it safe to run on every
+  skipped duplicate rather than on ones somebody has inspected. It is **not** a
+  save: `_save_and_log()` still returns False and logs `FILL`, because a fill
+  reported as a save is #308 again.
 - **`settings_store.py`** — per-identity JSON config under `settings/`
   (`config-default.json` shared by anonymous visitors, `config-<username>.json`
   per Google user). `DEFAULTS` is the source of truth; files self-create, are
