@@ -1882,6 +1882,7 @@ def index():
     message = None
     proposed = None
     proposed_topic = None
+    proposed_degraded = False   # the cards carry no translations (#349)
     source_content = None  # readable text of an upload, shown beside its cards
     duplicate_warning = None  # the word to warn about before looking it up (#145)
     write_refusal = None  # why a write was refused, if one was (#125/#126)
@@ -1912,20 +1913,20 @@ def index():
                     )
                     # #349: the dictionary answered and no translator did, so
                     # these cards carry an explanation and no translations.
-                    # Said here, once, because it is true of the review popup
-                    # and the automatic save alike — and said as *the service
-                    # is unavailable* rather than *this word has no
-                    # translations*, which is the wrong sentence that sent
-                    # #348's investigation at the wrong provider.
-                    if entries and not any(
-                            entry.get("translation_ukr")
-                            or entry.get("translation_rus")
-                            for entry in entries):
-                        flash(("No translation service is answering just now, "
-                               f"so '{word}' comes with its English "
-                               "explanation and examples only. Look it up "
-                               "again later and the translations will be "
-                               "filled in.", None))
+                    #
+                    # **Where this is said depends on where the learner is
+                    # looking.** A page-level banner is unreadable behind the
+                    # review popup -- `.modal-overlay` is fixed, inset 0, 75%
+                    # opaque and blurred -- and that popup is the default, so
+                    # the first version of this notice was invisible to most
+                    # people while passing a test that only checked the HTML.
+                    # The banner is kept for the automatic save, which has no
+                    # popup at all; the popup carries its own, next to the
+                    # empty fields and phrased around what to do about them.
+                    degraded = bool(entries) and not any(
+                        entry.get("translation_ukr")
+                        or entry.get("translation_rus")
+                        for entry in entries)
                     if prefs["cards_automatically"] and not can_add_cards():
                         # #125/#126: nothing may be written, so the automatic
                         # save cannot happen. The lookup already succeeded, so
@@ -1938,11 +1939,22 @@ def index():
                             reason="blocked" if is_blocked() else "anonymous")
                         proposed = entries
                         proposed_topic = topic
+                        proposed_degraded = degraded
                         write_refusal = add_refusal()
                     elif prefs["cards_automatically"]:
                         # 'Add cards automatically' is on (#13): skip the
                         # review popup, write the cards straight to the DB.
                         # Duplicates are skipped and reported (issue #101).
+                        if degraded:
+                            # Said as *the service is unavailable* rather than
+                            # *this word has no translations*, which is the
+                            # wrong sentence that sent #348's investigation at
+                            # the wrong provider.
+                            flash(("No translation service is answering just "
+                                   f"now, so '{word}' was saved with its "
+                                   "English explanation and examples only. "
+                                   "Look it up again later and the "
+                                   "translations will be filled in.", None))
                         fills = []
                         added = sum(
                             1 for entry in entries
@@ -1971,6 +1983,7 @@ def index():
                     # Don't save yet: show the cards for review/editing first.
                     proposed = entries
                     proposed_topic = topic
+                    proposed_degraded = degraded
 
             elif action == "upload_notes":
                 # Parsing costs money before it costs anything else (#200):
@@ -2022,6 +2035,7 @@ def index():
     return render_template(
         "index.html", message=message, sections=sections,
         proposed=proposed, proposed_topic=proposed_topic,
+        proposed_degraded=proposed_degraded,
         source_content=source_content, duplicate_warning=duplicate_warning,
         write_refusal=write_refusal,
     )

@@ -2117,3 +2117,47 @@ button:disabled:hover { background: #9db4c7; }
    other. */
 .reader-worksheet { margin-top: 0.9rem; }
 .reader-worksheet .hint { display: block; margin-top: 0.35rem; }
+
+/* #349 — the "no translation service" notice inside the review popup. Warm
+   rather than red: nothing has gone wrong with the learner's card, and the
+   cards below are perfectly usable. Scoped under `.proposal-dialog` like the
+   title and topic rules above it, and for the same reason — `.modal-dialog p`
+   sets a size and margin for every paragraph in a dialog and would win on
+   specificity, silently, leaving only the size looking wrong. */
+.proposal-dialog .proposal-degraded {
+    margin: 0 0 1rem;
+    padding: 0.6rem 0.8rem;
+    border-left: 3px solid var(--yellow, #d8a13a);
+    border-radius: 4px;
+    background: rgba(216, 161, 58, 0.12);
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: var(--ink, #23303c);
+}
+
+/* The review popup must contain its own content (#349).
+   `.modal-scroll` caps the card list at a **fixed** 65vh, and the dialog was a
+   plain block — so anything added above the list (a destination topic, #349's
+   notice) added height the dialog had no way to reclaim, and the cards ran out
+   past its bottom edge.
+
+   A flex column fixes the class of bug rather than the instance: the head
+   keeps its natural height, the body takes what is left, and the scroll region
+   absorbs the rest. `min-height: 0` on both is the load-bearing part — a flex
+   item defaults to `min-height: auto` and refuses to shrink below its content,
+   which is precisely how a child escapes its container. */
+.proposal-dialog { display: flex; flex-direction: column; max-height: 90vh; }
+.proposal-dialog .proposal-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+/* The two-column upload variant sets `display: flex` and relies on the default
+   row direction; the rule above would now make it a column, so it says so. */
+.proposal-dialog--source .proposal-body { flex-direction: row; }
+.proposal-dialog .proposal-cards-pane {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;   /* the flex row above bounds it now, not a fixed 65vh */
+}
