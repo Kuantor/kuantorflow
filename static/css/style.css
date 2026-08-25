@@ -2162,7 +2162,13 @@ button:disabled:hover { background: #9db4c7; }
     max-height: none;   /* the flex row above bounds it now, not a fixed 65vh */
 }
 
-/* #353 — the note beside a translator that returns no part of speech. Inline
-   rather than a block: it qualifies the label it follows, and on its own line
-   it would read as a second option. */
+/* #353 — the note beside a translator that returns no part of speech. It
+   qualifies the label it follows; on its own line it would read as a second
+   option.
+
+   What keeps it on that line is the settings label being `display: flex` with
+   `align-items: center` — a flex item is blockified, so `.hint`'s own
+   `display: block` does not break the row. Stated because it is not obvious
+   from this rule alone: measured at 1280px, the DeepL row is 20px tall with
+   the note on the same baseline as its label. */
 .settings-inline-hint { margin-left: 0.35rem; font-size: 0.85em; }
