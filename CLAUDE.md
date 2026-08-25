@@ -316,6 +316,20 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
 - **Tests are in a separate repo.** When you change app behaviour, open a
   **parallel test PR** in `kuantorflow_automation` (a `tests/…` branch),
   alongside the code PR here.
+- **Prove a regression test fails before trusting it.** Break the fix, run the
+  test, watch it fail, restore. A test written straight after a fix is written
+  against code that already works, so every assertion is satisfied by
+  construction and nothing in a green run separates "catches the bug" from
+  "cannot fail". This has caught vacuous tests repeatedly — #334's dedupe had
+  six of seven pass with the fix disabled.
+- **Commit the fix *before* you break it.** The restore step is
+  `git checkout -- <file>`, which discards **everything** uncommitted in that
+  file, not just the deliberate break. It has silently reverted finished work
+  three times in this repo: a button style, a Settings panel, and the change
+  that was being verified at the time. Commit first and the restore is a
+  no-op that cannot lose anything. Same shape as never running `reset --hard`
+  on a dirty tree: a destructive command used as an undo needs the work to be
+  somewhere else first.
 - **Significant PRs get a report** — a Markdown + PDF verification report
   committed under `kuantorflow_automation/test_reports/` (render with
   `reports/scripts/md_to_pdf.py`). Small PRs are exempt unless asked.
