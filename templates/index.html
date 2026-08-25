@@ -311,26 +311,6 @@
                 {% if proposed_topic %}
                     <p class="proposal-topic">Topic: <strong>{{ proposed_topic }}</strong></p>
                 {% endif %}
-                {# #349. Inside the dialog, not as a page banner: the overlay
-                   is fixed and opaque, so a banner behind it cannot be read —
-                   and the popup is the default path, which made the first
-                   version of this notice invisible to most people.
-
-                   Phrased around what to do rather than only what happened.
-                   The learner is looking at the empty fields and can type a
-                   translation in right now, which leaves the card not
-                   degraded at all; the alternative is to save as-is and let a
-                   later lookup fill it (#349's `fill_missing_fields`). Both
-                   are fine, and saying so turns a notice into a choice. #}
-                {% if proposed_degraded %}
-                    <p class="proposal-degraded">
-                        <strong>No translation service is answering just now.</strong>
-                        These cards have their English explanation and examples
-                        but no translations. Type them in yourself if you like,
-                        or save as they are &mdash; look the word up again later
-                        and the translations will be filled in.
-                    </p>
-                {% endif %}
                 <div class="proposal-body">
                     {% if source_content %}
                         <div class="proposal-source">
@@ -340,6 +320,31 @@
                     {% endif %}
                     <div class="modal-scroll proposal-cards-pane">
                         {% if source_content %}<h3 class="proposal-pane-title">Cards to add ({{ proposed|length }})</h3>{% endif %}
+                        {# #349. Inside the scrolling pane, not above it.
+                           As a sibling of `.proposal-body` this added its own
+                           height to a dialog whose scroll region is capped at
+                           a *fixed* 65vh, so the cards were pushed out of the
+                           popup's bottom edge. In here it costs the layout
+                           nothing and scrolls with what it is about.
+
+                           Phrased around what to do rather than only what
+                           happened: the learner is looking at the empty fields
+                           and can type a translation in right now, which leaves
+                           the card not degraded at all. The alternative is to
+                           save as-is and let a later lookup fill it
+                           (`fill_missing_fields`). Both are fine, and saying so
+                           turns a notice into a choice. #}
+                        {% if proposed_degraded %}
+                            <p class="proposal-degraded">
+                                <strong>No translation service is answering just now.</strong>
+                                These cards have their English explanation and
+                                examples but no translations. Type them in
+                                yourself if you like, or save as they are &mdash;
+                                look the word up again later and the translations
+                                will be filled in.
+                            </p>
+                        {% endif %}
+
                         {% for card in proposed %}
                             <form class="proposal-card" data-add-url="{{ url_for('add_card') }}">
                                 <button type="button" class="card-delete proposal-remove"
