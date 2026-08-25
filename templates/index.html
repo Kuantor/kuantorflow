@@ -311,6 +311,26 @@
                 {% if proposed_topic %}
                     <p class="proposal-topic">Topic: <strong>{{ proposed_topic }}</strong></p>
                 {% endif %}
+                {# #349. Inside the dialog, not as a page banner: the overlay
+                   is fixed and opaque, so a banner behind it cannot be read —
+                   and the popup is the default path, which made the first
+                   version of this notice invisible to most people.
+
+                   Phrased around what to do rather than only what happened.
+                   The learner is looking at the empty fields and can type a
+                   translation in right now, which leaves the card not
+                   degraded at all; the alternative is to save as-is and let a
+                   later lookup fill it (#349's `fill_missing_fields`). Both
+                   are fine, and saying so turns a notice into a choice. #}
+                {% if proposed_degraded %}
+                    <p class="proposal-degraded">
+                        <strong>No translation service is answering just now.</strong>
+                        These cards have their English explanation and examples
+                        but no translations. Type them in yourself if you like,
+                        or save as they are &mdash; look the word up again later
+                        and the translations will be filled in.
+                    </p>
+                {% endif %}
                 <div class="proposal-body">
                     {% if source_content %}
                         <div class="proposal-source">

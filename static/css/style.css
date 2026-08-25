@@ -2117,3 +2117,20 @@ button:disabled:hover { background: #9db4c7; }
    other. */
 .reader-worksheet { margin-top: 0.9rem; }
 .reader-worksheet .hint { display: block; margin-top: 0.35rem; }
+
+/* #349 — the "no translation service" notice inside the review popup. Warm
+   rather than red: nothing has gone wrong with the learner's card, and the
+   cards below are perfectly usable. Scoped under `.proposal-dialog` like the
+   title and topic rules above it, and for the same reason — `.modal-dialog p`
+   sets a size and margin for every paragraph in a dialog and would win on
+   specificity, silently, leaving only the size looking wrong. */
+.proposal-dialog .proposal-degraded {
+    margin: 0 0 1rem;
+    padding: 0.6rem 0.8rem;
+    border-left: 3px solid var(--yellow, #d8a13a);
+    border-radius: 4px;
+    background: rgba(216, 161, 58, 0.12);
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: var(--ink, #23303c);
+}
