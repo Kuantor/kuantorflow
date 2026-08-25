@@ -73,18 +73,40 @@
                 <div class="settings-grid">
                 <fieldset class="settings-group">
                     <legend>Translation (ENG &rarr; UKR/RUS)</legend>
-                    <label>
-                        <input type="radio" name="translator" value="google"
-                               {% if settings.translator == 'google' %}checked{% endif %}
-                               {% if settings_read_only %}disabled{% endif %}>
-                        Google Translate
-                    </label>
-                    <label>
-                        <input type="radio" name="translator" value="bing"
-                               {% if settings.translator == 'bing' %}checked{% endif %}
-                               {% if settings_read_only %}disabled{% endif %}>
-                        Bing Translator
-                    </label>
+                    {# #353. Rendered from `parsers.TRANSLATORS` rather than
+                       hard-coded, so a fifth provider is one entry in that
+                       declaration and not one entry plus this markup — the
+                       rule `games.ACTIVITIES` follows for the activities.
+
+                       Only providers whose key this deployment actually has
+                       are listed: an option the app cannot honour is not
+                       offered, which is `_reachable_activity()`'s rule for
+                       #237's reader.
+
+                       The two scraped backends are gone from here because
+                       they are gone from that declaration — see #348 for why
+                       they stopped working and #353 for why they are not
+                       coming back. #}
+                    {% for option in translators %}
+                        <label>
+                            <input type="radio" name="translator" value="{{ option.slug }}"
+                                   {% if settings.translator == option.slug %}checked{% endif %}
+                                   {% if settings_read_only %}disabled{% endif %}>
+                            {{ option.label }}
+                            {% if not option.groups_by_pos %}
+                                <span class="hint settings-inline-hint">one card per word</span>
+                            {% endif %}
+                        </label>
+                    {% else %}
+                        <p class="hint">No translation service is configured, so
+                           a new card comes with its English explanation and
+                           examples only. Set one of
+                           <code>ANTHROPIC_API_KEY</code>,
+                           <code>MS_TRANSLATOR_KEY</code>,
+                           <code>DEEPL_API_KEY</code> or
+                           <code>GOOGLE_TRANSLATE_API_KEY</code> to turn
+                           translations back on.</p>
+                    {% endfor %}
                 </fieldset>
 
                 <fieldset class="settings-group">

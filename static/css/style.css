@@ -2161,3 +2161,8 @@ button:disabled:hover { background: #9db4c7; }
     min-height: 0;
     max-height: none;   /* the flex row above bounds it now, not a fixed 65vh */
 }
+
+/* #353 — the note beside a translator that returns no part of speech. Inline
+   rather than a block: it qualifies the label it follows, and on its own line
+   it would read as a second option. */
+.settings-inline-hint { margin-left: 0.35rem; font-size: 0.85em; }

@@ -33,6 +33,7 @@ import applog
 import games
 import settings_store
 import textgen
+import parsers
 from parsers import lookup_word, parse_notes_preview
 from utils import (
     claim_anonymous_message,
@@ -1437,6 +1438,12 @@ def inject_settings():
         # — the box and sanitize() must agree, and one source is how.
         "gapped_deck_range": settings_store.RANGES["gapped_deck_size"],
         "speech_rate_range": settings_store.RANGES["speech_rate"],
+        # The translators this deployment is actually configured for (#353).
+        # Read here rather than written into the markup, for the same reason
+        # the ranges above are: the panel and the dispatch must agree, and one
+        # source is how. Empty is a real state — no key, no translator — and
+        # the panel says so rather than showing an empty box.
+        "translators": parsers.available_translators(),
     }
 
 

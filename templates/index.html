@@ -193,7 +193,13 @@
 
     <div class="panel">
         {# The provider name follows the Settings choice (#20). #}
-        <h2>Look up a word ({{ 'Bing Translator' if settings.translator == 'bing' else 'Google Translate' }})</h2>
+        {# The provider's own label, from `parsers.TRANSLATORS` (#353) — the
+           third surface that declaration feeds, after the Settings panel and
+           the dispatch. It used to be a ternary over two hard-coded names,
+           which is how a third provider would have quietly been announced as
+           the second one. #}
+        {%- set chosen = translators | selectattr('slug', 'equalto', settings.translator) | first -%}
+        <h2>Look up a word{% if chosen %} ({{ chosen.label }}){% endif %}</h2>
         <form method="POST">
             <input type="hidden" name="action" value="parse_word">
             <div class="form-row">
