@@ -2172,3 +2172,10 @@ button:disabled:hover { background: #9db4c7; }
    from this rule alone: measured at 1280px, the DeepL row is 20px tall with
    the note on the same baseline as its label. */
 .settings-inline-hint { margin-left: 0.35rem; font-size: 0.85em; }
+
+/* #353 — a translator this deployment has no key for. Greyed and still
+   readable, the way #261 greys an unfinished game tile: the option exists,
+   this copy of the app just cannot reach it yet. `cursor: default` because a
+   pointer over a control that will not respond is a small lie. */
+.settings-option-off { color: var(--muted); cursor: default; }
+.settings-option-off input { cursor: default; }

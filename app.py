@@ -1444,6 +1444,11 @@ def inject_settings():
         # source is how. Empty is a real state — no key, no translator — and
         # the panel says so rather than showing an empty box.
         "translators": parsers.available_translators(),
+        # Every provider, so the panel can show the ones this deployment
+        # cannot use yet rather than hiding them (#353). #261's rule for an
+        # unfinished game tile: greyed and labelled beats absent, because
+        # absent looks like the feature does not exist.
+        "all_translators": parsers.TRANSLATORS,
     }
 
 

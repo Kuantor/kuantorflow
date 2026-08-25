@@ -78,35 +78,38 @@
                        declaration and not one entry plus this markup — the
                        rule `games.ACTIVITIES` follows for the activities.
 
-                       Only providers whose key this deployment actually has
-                       are listed: an option the app cannot honour is not
-                       offered, which is `_reachable_activity()`'s rule for
-                       #237's reader.
+                       Every provider is listed and the ones this deployment
+                       has no key for are **disabled**, not hidden. #261 made
+                       the same call for an unfinished game: a greyed tile that
+                       says why beats an absent one, because absent reads as
+                       "this app cannot do that" rather than "this copy is not
+                       set up for it". The note names the variable, since the
+                       person who can act on it is the one reading.
 
-                       The two scraped backends are gone from here because
-                       they are gone from that declaration — see #348 for why
-                       they stopped working and #353 for why they are not
-                       coming back. #}
-                    {% for option in translators %}
-                        <label>
+                       The two scraped backends are absent because they are
+                       gone from the declaration — see #348 for why they
+                       stopped working and #353 for why they are not coming
+                       back. #}
+                    {% for option in all_translators %}
+                        {% set usable = option in translators %}
+                        <label class="{% if not usable %}settings-option-off{% endif %}">
                             <input type="radio" name="translator" value="{{ option.slug }}"
                                    {% if settings.translator == option.slug %}checked{% endif %}
-                                   {% if settings_read_only %}disabled{% endif %}>
+                                   {% if settings_read_only or not usable %}disabled{% endif %}>
                             {{ option.label }}
-                            {% if not option.groups_by_pos %}
+                            {% if not usable %}
+                                <span class="hint settings-inline-hint">needs <code>{{ option.key_env }}</code></span>
+                            {% elif not option.groups_by_pos %}
                                 <span class="hint settings-inline-hint">one card per word</span>
                             {% endif %}
                         </label>
-                    {% else %}
-                        <p class="hint">No translation service is configured, so
-                           a new card comes with its English explanation and
-                           examples only. Set one of
-                           <code>ANTHROPIC_API_KEY</code>,
-                           <code>MS_TRANSLATOR_KEY</code>,
-                           <code>DEEPL_API_KEY</code> or
-                           <code>GOOGLE_TRANSLATE_API_KEY</code> to turn
-                           translations back on.</p>
                     {% endfor %}
+                    {% if not translators %}
+                        <p class="hint">None of these is configured, so a new
+                           card comes with its English explanation and examples
+                           only. Set one of the keys above to turn translations
+                           back on.</p>
+                    {% endif %}
                 </fieldset>
 
                 <fieldset class="settings-group">
