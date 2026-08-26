@@ -43,6 +43,42 @@ MAX_DEFINITIONS = 3
 POS_CLASSES = {"n": "noun", "v": "verb", "adj": "adjective", "adv": "adverb"}
 
 
+# Punctuation a space must not precede, and brackets a space must not follow
+# (#359). The ellipsis is deliberately absent: `...` is Oxford's omission
+# marker rather than the end of a sentence, and "It's about time you ..." is
+# how Oxford writes it.
+_SPACE_BEFORE_PUNCTUATION = re.compile(r"\s+([,.;:!?)\]])")
+_SPACE_AFTER_BRACKET = re.compile(r"([(\[])\s+")
+
+
+def _readable(text):
+    """One scraped string, tidied of the separator's own footprints (#359).
+
+    Every extraction below reads a node as `get_text(" ", strip=True)`, and
+    the separator is load-bearing - without it Oxford's markup glues words
+    together, `...help with literacy and <span>numeracy</span>.` coming out as
+    `literacy andnumeracy.`. The cost is a space wherever an element ends and
+    punctuation follows, which is exactly what happens when a sentence ends on
+    the word being looked up:
+
+        Are your grandparents still alive ?
+
+    So it is not sporadic, it is systematic: a lookup's own examples are the
+    ones most likely to end on the headword, and all three for `alive` did.
+    Same footprint around a parenthetical of its own - `( = spread quickly )`.
+    """
+    collapsed = " ".join(text.split())
+    tidied = _SPACE_BEFORE_PUNCTUATION.sub(r"\1", collapsed)
+    return _SPACE_AFTER_BRACKET.sub(r"\1", tidied)
+
+
+def _node_text(el):
+    """The readable text of one element - the single seam where scraped
+    markup becomes something a learner reads, so the tidy-up happens once
+    rather than in whichever caller last noticed it was needed."""
+    return _readable(el.get_text(" ", strip=True))
+
+
 def _fetch_reverso(word, lang):
     """
     Fetch one english-<lang> Reverso Context page.
@@ -80,8 +116,8 @@ def _fetch_reverso(word, lang):
         trg = example.select_one(".trg .text")
         if src and trg:
             examples.append((
-                src.get_text(" ", strip=True),
-                trg.get_text(" ", strip=True),
+                _node_text(src),
+                _node_text(trg),
             ))
 
     return pos_translations, examples
@@ -130,7 +166,7 @@ def _fetch_definitions(word):
         # The clean sense text lives in the mention-sentence child; the
         # element also contains category/domain chips we don't want.
         sentence = el.select_one(".definition-example__mention-sentence")
-        text = (sentence or el).get_text(" ", strip=True)
+        text = _node_text(sentence or el)
         if text:
             is_common = any("very-common" in cls for cls in classes)
             collected.setdefault(current_pos, []).append((is_common, text))
@@ -355,7 +391,7 @@ def _oxford_example_text(item):
     wraps one.
     """
     sentence = item.select_one(".x")
-    return (sentence or item).get_text(" ", strip=True)
+    return _node_text(sentence or item)
 
 
 def _capped(elements, limit, text=None):
@@ -363,7 +399,7 @@ def _capped(elements, limit, text=None):
 
     `text` extracts one element's string; the default takes all of it.
     """
-    read = text or (lambda el: el.get_text(" ", strip=True))
+    read = text or _node_text
     out = []
     for el in elements:
         value = read(el)
@@ -470,7 +506,7 @@ def _fetch_merriam_webster_definitions(word):
         pos = pos_el.get_text(" ", strip=True).split()[0].lower()
         defs = definitions.setdefault(pos, [])
         for sense in entry.select(".dtText"):
-            text = sense.get_text(" ", strip=True).lstrip(":").strip()
+            text = _readable(_node_text(sense).lstrip(":"))
             if text and text not in defs:
                 defs.append(text)
             if len(defs) >= MAX_DEFINITIONS:
@@ -1137,7 +1173,7 @@ def _entries_from_soup(soup, topic):
     entries = []
     seen_words = set()
     for node in soup.find_all(["p", "li", "td"]):
-        text = " ".join(node.get_text(" ", strip=True).split())
+        text = _node_text(node)
         entry = _entry_from_line(text, topic)
         if entry and entry["word"].lower() not in seen_words:
             seen_words.add(entry["word"].lower())
@@ -1150,7 +1186,7 @@ def _readable_text(soup):
     popup next to the parsed cards so the user can see the source."""
     lines = []
     for node in soup.find_all(TEXT_NODES):
-        text = " ".join(node.get_text(" ", strip=True).split())
+        text = _node_text(node)
         if text:
             lines.append(text)
     if not lines:  # fallback for documents without those block tags
@@ -1206,11 +1242,6 @@ def _reverso_header(p):
             word = text[: text.rfind(pos)].strip() if pos and pos in text else ""
             return (word, pos) if word and pos else None
     return None
-
-
-def _clean_explanation(text):
-    # get_text(" ") pads the italic "(context)" span -> "( context )"; tidy it.
-    return re.sub(r"\(\s+", "(", re.sub(r"\s+\)", ")", text)).strip()
 
 
 def _new_sense():
@@ -1269,7 +1300,7 @@ def _reverso_entries_from_lines(lines):
         if line.get("terms"):
             sense["terms"] = (sense["terms"] or []) + line["terms"]
         elif sense.get(field) is None:
-            sense[field] = _clean_explanation(text) if field == "explanation" else text
+            sense[field] = _readable(text) if field == "explanation" else text
 
     entries = [e for e in entries if e["senses"]]
     consumed = {i for e in entries for i in e["lines"]}
@@ -1284,7 +1315,10 @@ def _reverso_lines_from_soup(soup):
     """
     lines = []
     for p in soup.find_all(["p", "li", "td"]):
-        text = " ".join(p.get_text(" ", strip=True).split())
+        # The line as the learner will read it (#359). The header below is
+        # parsed from the raw text instead: it matches on exact substrings
+        # rather than being shown to anyone.
+        text = _node_text(p)
         marker = bool(re.match(r"^\d+\.$", text))
         lines.append({
             "text": text,
