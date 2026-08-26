@@ -54,6 +54,7 @@ import sys
 import time
 
 import applog
+import settings_store
 import seed_words
 from parsers import _fetch_oxford_definitions, lookup_word
 from utils import get_db_connection, place_topic, save_flashcard
@@ -67,7 +68,10 @@ SECTION = "B2–C1 Conversational Topics"
 # settings/config-*.json: the script is not a user, and a deck whose contents
 # depend on whose settings file was lying around is not reproducible. These are
 # settings_store.DEFAULTS' values, overridable by flag.
-DEFAULT_TRANSLATOR = "google"
+# Follows the settings default (#353). Was "google" until the scraped
+# backends were retired; a pinned literal here would have the seed
+# quietly using a provider the app no longer offers.
+DEFAULT_TRANSLATOR = settings_store.DEFAULTS["translator"]
 DEFAULT_DICTIONARY = "oxford"
 
 # Seconds between lookups. Each word already makes several requests (two

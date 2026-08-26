@@ -73,18 +73,43 @@
                 <div class="settings-grid">
                 <fieldset class="settings-group">
                     <legend>Translation (ENG &rarr; UKR/RUS)</legend>
-                    <label>
-                        <input type="radio" name="translator" value="google"
-                               {% if settings.translator == 'google' %}checked{% endif %}
-                               {% if settings_read_only %}disabled{% endif %}>
-                        Google Translate
-                    </label>
-                    <label>
-                        <input type="radio" name="translator" value="bing"
-                               {% if settings.translator == 'bing' %}checked{% endif %}
-                               {% if settings_read_only %}disabled{% endif %}>
-                        Bing Translator
-                    </label>
+                    {# #353. Rendered from `parsers.TRANSLATORS` rather than
+                       hard-coded, so a fifth provider is one entry in that
+                       declaration and not one entry plus this markup — the
+                       rule `games.ACTIVITIES` follows for the activities.
+
+                       Every provider is listed and the ones this deployment
+                       has no key for are **disabled**, not hidden. #261 made
+                       the same call for an unfinished game: a greyed tile that
+                       says why beats an absent one, because absent reads as
+                       "this app cannot do that" rather than "this copy is not
+                       set up for it". The note names the variable, since the
+                       person who can act on it is the one reading.
+
+                       The two scraped backends are absent because they are
+                       gone from the declaration — see #348 for why they
+                       stopped working and #353 for why they are not coming
+                       back. #}
+                    {% for option in all_translators %}
+                        {% set usable = option in translators %}
+                        <label class="{% if not usable %}settings-option-off{% endif %}">
+                            <input type="radio" name="translator" value="{{ option.slug }}"
+                                   {% if settings.translator == option.slug %}checked{% endif %}
+                                   {% if settings_read_only or not usable %}disabled{% endif %}>
+                            {{ option.label }}
+                            {% if not usable %}
+                                <span class="hint settings-inline-hint">needs <code>{{ option.key_env }}</code></span>
+                            {% elif not option.groups_by_pos %}
+                                <span class="hint settings-inline-hint">one card per word</span>
+                            {% endif %}
+                        </label>
+                    {% endfor %}
+                    {% if not translators %}
+                        <p class="hint">None of these is configured, so a new
+                           card comes with its English explanation and examples
+                           only. Set one of the keys above to turn translations
+                           back on.</p>
+                    {% endif %}
                 </fieldset>
 
                 <fieldset class="settings-group">

@@ -42,8 +42,21 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   `preferred_name` is the user's own answer to that. `current_settings()` + a
   context processor expose settings to templates.
 - **`parsers.py`** — `lookup_word(word, translator, explanatory_dictionary)`
-  dispatches to Google/Bing translators + Oxford/Merriam-Webster dictionaries
-  (call-time resolution so it's mockable). A dictionary backend returns
+  dispatches to a **licensed** translator + Oxford/Merriam-Webster dictionaries
+  (call-time resolution so it's mockable). `TRANSLATORS` (#353) is the one
+  declaration of the translators — slug, label, fetcher *name*, the environment
+  variable it needs — and the Settings panel, the lookup panel's title and the
+  dispatch all render from it, so a fifth provider is one entry. The fetcher is
+  held **by name** and resolved through `Translator.fetch`: storing the object
+  captures it at import and silently breaks every test that patches a backend.
+  A provider is offered only where its key is set, read at call time —
+  `_reachable_activity()`'s rule for #237. With none set there is no translator,
+  which #349 answers with a dictionary-only card rather than a failure.
+  `_google_dictionary()` and `_bing_dictionary()` are **retired, not deleted**:
+  they called endpoints nobody offered us and #348 is both being withdrawn on
+  one day. They are not in `TRANSLATORS`, so they cannot be chosen or stored,
+  and dropping them from `settings_store.CHOICES` is what coerces an account
+  still holding one onto the default instead of stranding it (#352). A dictionary backend returns
   **`(definitions, examples)`** (#225): Oxford supplies both from one pass over
   its pages, Merriam-Webster wraps to `(defs, {})`. That tuple is the **only
   seam** — whatever `_dictionary_backend()` returns is all `lookup_word()` calls,

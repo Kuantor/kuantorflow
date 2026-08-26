@@ -46,7 +46,7 @@ DEFAULTS = {
     # review-before-save popup. Off by default: review stays the safe default.
     "cards_automatically": False,
     # issues #20/#21 — provider choices, dispatched in parsers.lookup_word().
-    "translator": "google",
+    "translator": "claude",
     "explanatory_dictionary": "oxford",
     # issue #46 — hide a language everywhere (flashcards and Mykola's answers).
     "show_ukrainian": True,
@@ -97,7 +97,11 @@ DEFAULTS = {
 
 # Allowed values for the non-boolean settings (issues #20, #113).
 CHOICES = {
-    "translator": ("google", "bing"),
+    # #353: the sanctioned providers only. `google` and `bing` were scraped
+    # endpoints and are gone from here on purpose -- dropping them means
+    # `sanitize()` coerces any account still holding one to the default
+    # rather than leaving it on a provider that cannot work (#352).
+    "translator": ("claude", "microsoft", "deepl", "google_cloud"),
     "explanatory_dictionary": ("oxford", "merriam-webster"),
     "quiz_lang": ("ukrainian", "russian"),
 }

@@ -12,6 +12,7 @@ import re
 import time
 import xml.etree.ElementTree as ET
 import zipfile
+from typing import NamedTuple
 from email import policy
 from urllib.parse import quote
 
@@ -477,14 +478,283 @@ def _fetch_merriam_webster_definitions(word):
     return {pos: defs for pos, defs in definitions.items() if defs}
 
 
-# Option value (as stored in the settings file, #86) -> fetcher. Resolved at
-# call time (not captured in a module-level dict) so tests can monkeypatch a
-# single fetcher and the dispatch picks the replacement up.
-def _translator_backend(translator):
-    return {
-        "google": _google_dictionary,
-        "bing": _bing_dictionary,
-    }.get(translator, _google_dictionary)
+# --- licensed translators (#353) -----------------------------------------
+#
+# `_google_dictionary()` and `_bing_dictionary()` above are **retired**, not
+# deleted. They call endpoints nobody offered us -- the URL Google's own web
+# page uses, and the token flow Edge's built-in translator uses -- and #348 is
+# both of them being withdrawn on the same day. They stay in the file because
+# deleting them would hide that history, and because the response-shaping in
+# them is what these fetchers had to match. Nothing selects them: they are not
+# in `TRANSLATORS`, so they cannot be chosen or stored.
+#
+# What every fetcher returns is `{pos: [terms]}` -- the contract
+# `lookup_word()` builds cards from, and the one `save_flashcard()` dedupes on
+# (#101's word + part of speech).
+
+LANGUAGE_NAMES = {"uk": "Ukrainian", "ru": "Russian"}
+
+# The model for the translation call. Its own constant beside `SPLIT_MODEL`
+# rather than a shared one: two features agreeing on a model today are still
+# two decisions, which is the reason `textgen.TEXT_MODEL` exists separately as
+# well. Haiku follows the precedent both of those set -- a word into two
+# languages is not a task that needs a larger model.
+TRANSLATE_MODEL = "claude-haiku-4-5-20251001"
+
+# A dozen terms across a few parts of speech, with room for Cyrillic. Bounded
+# for the same reason every other model call in this project is.
+TRANSLATE_MAX_TOKENS = 700
+
+# The grouping the deck is built on. An enum rather than free text so the
+# labels line up with what #228's `POS_SYNONYMS` already matches on, and so a
+# model cannot invent a nineteenth part of speech.
+TRANSLATE_POS = ("noun", "verb", "adjective", "adverb", "phrase", "other")
+
+TRANSLATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "entries": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "part_of_speech": {"type": "string",
+                                       "enum": list(TRANSLATE_POS)},
+                    "translations": {"type": "array",
+                                     "items": {"type": "string"}},
+                },
+                "required": ["part_of_speech", "translations"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["entries"],
+    "additionalProperties": False,
+}
+
+
+def _claude_dictionary(word, target):
+    """Translations grouped by part of speech, from Claude (#353).
+
+    **Structured outputs, not a fenced reply.** `_split_glued_translations()`
+    in this same file asks for JSON in prose and strips ``` fences before
+    `json.loads()` -- which works, and is a parsing problem that does not need
+    to exist. `output_config.format` makes the schema the contract, so a
+    malformed answer stops being a failure mode.
+    """
+    import anthropic
+
+    language = LANGUAGE_NAMES.get(target, target)
+    prompt = (
+        f"Translate the English word or expression below into {language}, for "
+        "a B2-C1 learner's flashcard.\n\n"
+        f"    {word}\n\n"
+        "Group the translations by the part of speech the English word has in "
+        f"that sense, at most {MAX_TRANSLATIONS} per part of speech, most "
+        "common first. Give only the parts of speech this word actually has: "
+        "one entry is the normal answer and several is unusual. Use 'phrase' "
+        "for a multi-word expression and 'other' only when nothing else fits. "
+        "Translate the word itself -- no explanations, no transliteration, no "
+        "articles and no 'to' before a verb."
+    )
+    client = anthropic.Anthropic()
+    message = client.messages.create(
+        model=TRANSLATE_MODEL,
+        max_tokens=TRANSLATE_MAX_TOKENS,
+        messages=[{"role": "user", "content": prompt}],
+        output_config={"format": {"type": "json_schema",
+                                  "schema": TRANSLATE_SCHEMA}},
+    )
+    text = next((b.text for b in message.content if b.type == "text"), "")
+    data = json.loads(text)
+
+    pos_translations = {}
+    for entry in data.get("entries", []):
+        pos = (entry.get("part_of_speech") or "other").lower()
+        terms = [t.strip() for t in entry.get("translations", [])
+                 if isinstance(t, str) and t.strip()][:MAX_TRANSLATIONS]
+        if terms:
+            pos_translations.setdefault(pos, terms)
+    return pos_translations
+
+
+# The free and paid tiers are different hosts and a key works on one only, so
+# the free host is tried first and a 403 moves on rather than failing.
+DEEPL_URLS = ("https://api-free.deepl.com/v2/translate",
+              "https://api.deepl.com/v2/translate")
+
+
+def _deepl_dictionary(word, target):
+    """DeepL (#353) -- a plain translation, so everything lands under `other`.
+
+    DeepL translates; it does not classify. That is the same shape
+    `_google_dictionary()` already fell back to for a word with no dictionary
+    entry, and `lookup_word()` has always handled it -- a card with one part of
+    speech rather than several. It is also why DeepL is not the default despite
+    being the cheapest of the four.
+    """
+    key = os.environ.get("DEEPL_API_KEY", "")
+    refused = None
+    for url in DEEPL_URLS:
+        resp = requests.post(
+            url, headers={"Authorization": f"DeepL-Auth-Key {key}"},
+            data={"text": word, "source_lang": "EN",
+                  "target_lang": target.upper()}, timeout=10)
+        if resp.status_code == 403:
+            refused = resp
+            continue
+        resp.raise_for_status()
+        found = resp.json().get("translations") or []
+        plain = ((found[0].get("text") if found else "") or "").strip()
+        return ({"other": [plain]}
+                if plain and plain.lower() != word.lower() else {})
+    if refused is not None:
+        refused.raise_for_status()
+    return {}
+
+
+GOOGLE_CLOUD_URL = "https://translation.googleapis.com/language/translate/v2"
+
+
+def _google_cloud_dictionary(word, target):
+    """Google Cloud Translation (#353) -- the licensed version of what
+    `_google_dictionary()` was scraping.
+
+    Like DeepL it returns a string rather than a grouping, so the result lands
+    under `other`.
+    """
+    resp = requests.post(
+        GOOGLE_CLOUD_URL,
+        params={"key": os.environ.get("GOOGLE_TRANSLATE_API_KEY", "")},
+        data={"q": word, "source": "en", "target": target, "format": "text"},
+        timeout=10)
+    resp.raise_for_status()
+    found = (resp.json().get("data") or {}).get("translations") or []
+    plain = ((found[0].get("translatedText") if found else "") or "").strip()
+    return {"other": [plain]} if plain and plain.lower() != word.lower() else {}
+
+
+MS_API_BASE = "https://api.cognitive.microsofttranslator.com"
+
+
+def _microsoft_dictionary(word, target):
+    """Microsoft Translator (#353) -- the only one of the four whose dictionary
+    endpoint returns parts of speech natively.
+
+    The same endpoint and the same `posTag` mapping `_bing_dictionary()` used;
+    what changed is the credential. That one minted an anonymous token through
+    Edge's browser flow, which is what #348 found withdrawn. This one sends a
+    subscription key, which is the supported way to reach the same API.
+    """
+    def call(path):
+        headers = {"Ocp-Apim-Subscription-Key":
+                   os.environ.get("MS_TRANSLATOR_KEY", ""),
+                   "Content-Type": "application/json"}
+        # Required for a regional resource and rejected by a global one, so it
+        # is sent only when configured.
+        region = os.environ.get("MS_TRANSLATOR_REGION", "").strip()
+        if region:
+            headers["Ocp-Apim-Subscription-Region"] = region
+        resp = requests.post(f"{MS_API_BASE}/{path}",
+                             params={"api-version": "3.0", "from": "en",
+                                     "to": target},
+                             headers=headers, json=[{"Text": word}], timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+
+    pos_translations = {}
+    for entry in call("dictionary/lookup")[0].get("translations", []):
+        pos = BING_POS.get((entry.get("posTag") or "").upper(), "other")
+        term = entry.get("displayTarget")
+        if not term:
+            continue
+        terms = pos_translations.setdefault(pos, [])
+        if term not in terms and len(terms) < MAX_TRANSLATIONS:
+            terms.append(term)
+
+    if not pos_translations:
+        plain = ((call("translate")[0]["translations"][0].get("text"))
+                 or "").strip()
+        if plain and plain.lower() != word.lower():
+            pos_translations["other"] = [plain]
+    return pos_translations
+
+
+class Translator(NamedTuple):
+    """One way to translate a word, and what a deployment needs to use it.
+
+    The fetcher is held **by name** and resolved through `fetch`, not stored as
+    the function object. Storing the object captures it at import time, which
+    silently breaks the property the dispatch below has always promised: that
+    monkeypatching a single fetcher is picked up. The first version of this
+    registry did store the object, and the suite caught it -- every test that
+    stubs `_claude_dictionary` was still reaching the real one.
+    """
+    slug: str
+    label: str
+    fetch_name: str
+    key_env: str
+    groups_by_pos: bool
+
+    @property
+    def fetch(self):
+        return globals()[self.fetch_name]
+
+
+# **One declaration.** The Settings panel, the availability check and the
+# dispatch all read this, so adding a fifth provider is one entry rather than
+# one entry and three edits -- the rule `games.ACTIVITIES` follows for the
+# activities (#253).
+#
+# Order is the order the panel offers them, and Claude leads because it is the
+# only one that both licenses this use and returns the part-of-speech grouping
+# the deck is built on.
+TRANSLATORS = (
+    Translator("claude", "Claude", "_claude_dictionary",
+               "ANTHROPIC_API_KEY", True),
+    Translator("microsoft", "Microsoft Translator", "_microsoft_dictionary",
+               "MS_TRANSLATOR_KEY", True),
+    Translator("deepl", "DeepL", "_deepl_dictionary",
+               "DEEPL_API_KEY", False),
+    Translator("google_cloud", "Google Cloud Translation",
+               "_google_cloud_dictionary", "GOOGLE_TRANSLATE_API_KEY", False),
+)
+
+TRANSLATOR_SLUGS = tuple(t.slug for t in TRANSLATORS)
+
+
+def available_translators():
+    """The providers this deployment is configured for, in panel order.
+
+    Read from the environment at **call time**, never captured at import: the
+    same rule `_generation_available()` follows for #237, and it is what lets a
+    key be added without a code change and a test set one without reloading a
+    module.
+    """
+    return tuple(t for t in TRANSLATORS
+                 if os.environ.get(t.key_env, "").strip())
+
+
+def translator(slug):
+    """The named provider, or None."""
+    return next((t for t in TRANSLATORS if t.slug == slug), None)
+
+
+# Resolved at call time (not captured in a module-level dict) so tests can
+# monkeypatch a single fetcher and the dispatch picks the replacement up.
+def _translator_backend(translator_slug):
+    """The fetcher for a chosen provider, falling back to what is configured.
+
+    A stored choice whose key has since been removed falls through to the first
+    available provider rather than failing every lookup -- and when nothing is
+    configured this returns **None**, which `lookup_word()` reads as "no
+    translator" and answers with #349's dictionary-only card.
+    """
+    chosen = translator(translator_slug)
+    available = available_translators()
+    if chosen and chosen in available:
+        return chosen.fetch
+    return available[0].fetch if available else None
 
 
 def _merriam_webster_entry(word):
@@ -593,6 +863,12 @@ def _provider_name(backend):
     Resolved from the function so an unknown setting is logged as the provider
     that really ran, not the one that was asked for."""
     return {
+        _claude_dictionary: "claude",
+        _microsoft_dictionary: "microsoft",
+        _deepl_dictionary: "deepl",
+        _google_cloud_dictionary: "google_cloud",
+        # Retired (#353), and still named here: a log line from before the
+        # change should keep reading as the provider that wrote it.
         _google_dictionary: "google",
         _bing_dictionary: "bing",
         _fetch_oxford_entry: "oxford",
@@ -619,30 +895,38 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     failures never break the lookup.
     """
     overall = applog.Timer()
-    fetch_translations = _translator_backend(translator)
-    primary = _provider_name(fetch_translations)
+    # The chosen provider first, then the rest of what is configured (#353).
+    # The old fallback was hard-coded to Google, which is exactly the coupling
+    # that made one provider's withdrawal an outage; a list means a second
+    # configured provider covers the first, and no list means no translator --
+    # which is a state the app now survives, see below.
+    chosen = _translator_backend(translator)
+    order = ([chosen] + [t.fetch for t in available_translators()
+                         if t.fetch is not chosen]) if chosen else []
     cards = {}  # pos -> entry dict
 
     for key, code in GOOGLE_LANGS.items():
-        error = None
-        with applog.Timer() as timer:
-            try:
-                pos_translations = fetch_translations(word, code)
-            except (requests.RequestException, ValueError) as e:
-                pos_translations = {}
-                error = e
-        applog.translations_fetched(word, primary, code, len(pos_translations),
-                                    timer.ms, error=error)
-        if not pos_translations and fetch_translations is not _google_dictionary:
+        pos_translations = {}
+        for attempt, fetch_translations in enumerate(order):
+            primary = _provider_name(fetch_translations)
             error = None
             with applog.Timer() as timer:
                 try:
-                    pos_translations = _google_dictionary(word, code)
-                except (requests.RequestException, ValueError) as e:
+                    pos_translations = fetch_translations(word, code)
+                except (requests.RequestException, ValueError, KeyError,
+                        IndexError, RuntimeError) as e:
+                    # Wider than the old pair on purpose: these are four
+                    # different providers' response shapes, and a key that has
+                    # moved must degrade to the next one rather than 500.
+                    pos_translations = {}
                     error = e
-            applog.translations_fetched(word, "google", code,
-                                        len(pos_translations), timer.ms,
-                                        fallback_from=primary, error=error)
+            applog.translations_fetched(
+                word, primary, code, len(pos_translations), timer.ms,
+                error=error,
+                **({"fallback_from": _provider_name(order[0])}
+                   if attempt else {}))
+            if pos_translations:
+                break
         for pos, terms in pos_translations.items():
             entry = cards.setdefault(pos, {"word": word, "pos": pos, "topic": topic})
             entry[f"translation_{key}"] = ", ".join(terms)
