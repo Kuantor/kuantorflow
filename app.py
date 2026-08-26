@@ -649,6 +649,34 @@ def _word_already_saved(word):
         return False
 
 
+def _example_list(field):
+    """One submitted examples field as a list of sentences, or None.
+
+    Two shapes reach this and both are the app's own: the hidden JSON a card
+    has carried since #134, and the one-per-line text of a textarea. The edit
+    dialog has always sent lines (#176) and since #357 the review popup does
+    too - but either dialog can still submit untouched JSON, so a reader that
+    knows only one shape drops the other in silence, which is exactly how the
+    popup's examples would be lost the moment they became editable.
+
+    Not a general parser: anything that is neither shape counts as no
+    examples, the same as an empty box.
+    """
+    raw = (request.form.get(field) or "").strip()
+    if not raw:
+        return None
+    if raw.startswith("["):
+        try:
+            value = json.loads(raw)
+        except (ValueError, TypeError):
+            value = None
+        if isinstance(value, list):
+            items = [str(x).strip() for x in value if str(x).strip()]
+            return items or None
+    items = [line.strip() for line in raw.splitlines() if line.strip()]
+    return items or None
+
+
 def _hidden_languages():
     """Language names this identity has hidden in Settings (#46/#79/#111),
     in the form the agent's whitelist expects — e.g. ["Russian"]."""
@@ -2062,20 +2090,6 @@ def add_card():
     def cleaned(field):
         return (request.form.get(field) or "").strip() or None
 
-    def json_list(field):
-        # Examples travel as a hidden JSON array (e.g. from the Reverso parser,
-        # issue #134), so they survive the review popup instead of being lost.
-        raw = (request.form.get(field) or "").strip()
-        if not raw:
-            return None
-        try:
-            value = json.loads(raw)
-        except (ValueError, TypeError):
-            return None
-        items = [str(x).strip() for x in value if str(x).strip()] \
-            if isinstance(value, list) else []
-        return items or None
-
     word = cleaned("word")
     if not word:
         return {"ok": False, "error": "word is required"}, 400
@@ -2084,11 +2098,11 @@ def add_card():
         "pos": cleaned("pos"),
         "topic": cleaned("topic") or "general",
         "explanation_en": cleaned("explanation_en"),
-        "examples_en": json_list("examples_en"),
+        "examples_en": _example_list("examples_en"),
         "translation_ukr": cleaned("translation_ukr"),
-        "examples_ukr": json_list("examples_ukr"),
+        "examples_ukr": _example_list("examples_ukr"),
         "translation_rus": cleaned("translation_rus"),
-        "examples_rus": json_list("examples_rus"),
+        "examples_rus": _example_list("examples_rus"),
     }
     refusal = add_refusal()
     if refusal:
@@ -2292,23 +2306,6 @@ def edit_card(topic, card_id):
     def cleaned(field):
         return (request.form.get(field) or "").strip() or None
 
-    def json_list(field):
-        raw = (request.form.get(field) or "").strip()
-        if not raw:
-            return None
-        # Examples arrive either as the hidden JSON the review popup uses
-        # (#134) or as one-per-line text from the edit dialog's textarea.
-        if raw.startswith("["):
-            try:
-                value = json.loads(raw)
-            except (ValueError, TypeError):
-                value = None
-            if isinstance(value, list):
-                items = [str(x).strip() for x in value if str(x).strip()]
-                return items or None
-        items = [line.strip() for line in raw.splitlines() if line.strip()]
-        return items or None
-
     if is_blocked():
         applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
                                 reason="blocked")
@@ -2333,9 +2330,9 @@ def edit_card(topic, card_id):
         "explanation_en": cleaned,
         "translation_ukr": cleaned,
         "translation_rus": cleaned,
-        "examples_en": json_list,
-        "examples_ukr": json_list,
-        "examples_rus": json_list,
+        "examples_en": _example_list,
+        "examples_ukr": _example_list,
+        "examples_rus": _example_list,
     }
     entry = {field: (read() if field == "word" else read(field))
              for field, read in readers.items() if field in request.form}
