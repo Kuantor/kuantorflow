@@ -1,7 +1,10 @@
 /* KuantorFlow — shared styles.
-   Background: static/img/background.jpg (blue -> yellow "Programming is an
-   Art" wallpaper); the gradient below matches its palette and shows while
-   the image loads or if it is missing. */
+   Background: static/img/background.jpg (a misty Westminster embankment at
+   dusk, #361); the gradient and base colour below are what a visitor sees
+   while it loads or if it is missing, so they are sampled from the image
+   rather than picked — it averages #776562, lighter mist above, dark at the
+   base. Replacing the picture means resampling them, or a slow connection
+   opens on a palette the photograph turns out not to have. */
 
 :root {
     --blue: #2e6ba0;
@@ -15,6 +18,9 @@
     --bad-bg: #fdecea;
     --bad-border: #d93025;
     --bad-ink: #5f2120;
+    /* The background photograph's own average — the page's ground colour
+       before it arrives, and the only place it is used. */
+    --dusk: #776562;
 }
 
 * { box-sizing: border-box; }
@@ -24,9 +30,9 @@ body {
     min-height: 100vh;
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
     color: var(--ink);
-    background-color: var(--blue);
+    background-color: var(--dusk);
     background-image: url("../img/background.jpg"),
-        linear-gradient(115deg, #2e6ba0 0%, #3f7aa8 40%, #d9b13c 78%, #f3c73a 100%);
+        linear-gradient(160deg, #8a7b7c 0%, #776562 55%, #3c3439 100%);
     background-size: cover, cover;
     background-position: center;
     background-attachment: fixed;
@@ -1150,7 +1156,12 @@ button:disabled:hover { background: #9db4c7; }
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
 }
 .gate-image {
-    max-width: 220px;
+    /* The card's content box, which is what the keyword field and the Enter
+       button below it also fill (#361). Capped at 220px the picture sat as a
+       stamp above two full-width controls, reading as an unrelated decoration
+       rather than the top of one card. The file is sized to suit: 700px wide
+       is twice the 349.6px this can ever paint it at, which is as much as a
+       retina screen asks for. */
     width: 100%;
     height: auto;
     border-radius: 12px;
