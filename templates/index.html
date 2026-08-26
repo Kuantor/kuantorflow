@@ -384,27 +384,63 @@
                                 <input type="hidden" name="word" value="{{ card.word }}">
                                 <input type="hidden" name="pos" value="{{ card.pos or '' }}">
                                 <input type="hidden" name="topic" value="{{ proposed_topic }}">
-                                {# Examples (e.g. from the Reverso parser, #134) ride along as
-                                   hidden JSON so they are saved with the card. #}
-                                {% if card.examples_en %}<input type="hidden" name="examples_en" value="{{ card.examples_en | tojson | forceescape }}">{% endif %}
-                                {% if card.examples_ukr %}<input type="hidden" name="examples_ukr" value="{{ card.examples_ukr | tojson | forceescape }}">{% endif %}
-                                {% if card.examples_rus %}<input type="hidden" name="examples_rus" value="{{ card.examples_rus | tojson | forceescape }}">{% endif %}
                                 <label>English explanation</label>
                                 <textarea name="explanation_en" rows="2">{{ card.explanation_en or '' }}</textarea>
+                                {# Examples are read here, not merely carried through (#357).
+                                   They arrive from the dictionary (#225) or the Reverso
+                                   parser (#134), and until now they travelled as hidden
+                                   JSON - saved with the card and shown to nobody, in the
+                                   one panel whose whole job is looking at a card before it
+                                   is written. #349's notice made the gap plain by promising
+                                   examples the popup then did not draw.
+
+                                   One per line and editable, which is the edit dialog's
+                                   shape rather than a second one: the two dialogs are meant
+                                   to read alike, and `add_card()` accepts either these
+                                   lines or the JSON that is still used below.
+
+                                   No examples, no box. An empty textarea would invite
+                                   inventing sentences, where this panel reviews what the
+                                   lookup found.
+
+                                   `rows` is measured, not chosen: at the popup's 300px
+                                   field width an Oxford example wraps to about two lines,
+                                   so two rows per example is what stops a box from being
+                                   shown and scrolled at the same time - which is barely
+                                   better than the hidden input it replaced. Capped at six
+                                   because `parsers.MAX_EXAMPLES` is 3, and the cost of
+                                   being wrong is only pane scroll: the dialog's height is
+                                   fixed and the cards pane absorbs it (#349). #}
+                                {% if card.examples_en %}
+                                <label>English examples <small>(one per line)</small></label>
+                                <textarea name="examples_en" rows="{{ [card.examples_en | length * 2, 6] | min }}">{{ card.examples_en | join('\n') }}</textarea>
+                                {% endif %}
                                 {# A hidden language's translation still travels as a hidden
                                    input (#46/#79/#111): the card is saved complete, the
-                                   field is just not shown for editing. #}
+                                   field is just not shown for editing. Its examples follow
+                                   it, in the JSON they have always used - there is nobody
+                                   to read the lines. #}
                                 {% if settings.show_ukrainian %}
                                 <label>Ukrainian translation</label>
                                 <input type="text" name="translation_ukr" value="{{ card.translation_ukr or '' }}">
+                                {% if card.examples_ukr %}
+                                <label>Ukrainian examples <small>(one per line)</small></label>
+                                <textarea name="examples_ukr" rows="{{ [card.examples_ukr | length * 2, 6] | min }}">{{ card.examples_ukr | join('\n') }}</textarea>
+                                {% endif %}
                                 {% else %}
                                 <input type="hidden" name="translation_ukr" value="{{ card.translation_ukr or '' }}">
+                                {% if card.examples_ukr %}<input type="hidden" name="examples_ukr" value="{{ card.examples_ukr | tojson | forceescape }}">{% endif %}
                                 {% endif %}
                                 {% if settings.show_russian %}
                                 <label>Russian translation</label>
                                 <input type="text" name="translation_rus" value="{{ card.translation_rus or '' }}">
+                                {% if card.examples_rus %}
+                                <label>Russian examples <small>(one per line)</small></label>
+                                <textarea name="examples_rus" rows="{{ [card.examples_rus | length * 2, 6] | min }}">{{ card.examples_rus | join('\n') }}</textarea>
+                                {% endif %}
                                 {% else %}
                                 <input type="hidden" name="translation_rus" value="{{ card.translation_rus or '' }}">
+                                {% if card.examples_rus %}<input type="hidden" name="examples_rus" value="{{ card.examples_rus | tojson | forceescape }}">{% endif %}
                                 {% endif %}
                                 <button type="submit" class="add-btn">Add</button>
                             </form>
@@ -483,6 +519,77 @@
                             btn.textContent = "Add";
                             throw err;
                         });
+                }
+
+                // #357. `rows` is measured for the popup's desktop width, and
+                // the same sentences wrap one line further on a phone - so a
+                // box sized to be read on a laptop is a box you scroll on a
+                // handset, which is most of the way back to hiding it. The
+                // attribute stays as the no-script floor; this fits the box to
+                // what is actually in it, at whatever width it is being read.
+                function fitBox(box) {
+                    // The scrollbar is suppressed and left suppressed, or
+                    // the box fights itself: a height a pixel short shows a
+                    // scrollbar, the scrollbar narrows the text, the narrower
+                    // text needs another line, and the box settles one line
+                    // clipped. Nothing is hidden by that - the box is the
+                    // height of its own content - and it is done from script,
+                    // so a page with no JavaScript keeps a scrollable box.
+                    // `scrollHeight` also excludes the border while these
+                    // boxes are `border-box`, so the border is added by hand.
+                    box.style.overflowY = "hidden";
+                    box.style.height = "auto";
+                    var border = box.offsetHeight - box.clientHeight;
+                    // The two spare pixels are the rounding: line heights are
+                    // fractional and `scrollHeight` is a whole number, so the
+                    // measurement lands just under the text it measured.
+                    box.style.height = (box.scrollHeight + border + 2) + "px";
+                }
+                var boxes = overlay.querySelectorAll(".proposal-card textarea");
+                function fitBoxes() { boxes.forEach(fitBox); }
+                fitBoxes();
+                boxes.forEach(function (box) {
+                    box.addEventListener("input", function () { fitBox(box); });
+                });
+                // A height in pixels is a height for the width it was
+                // measured at: turn a phone sideways and the same sentences
+                // wrap differently, leaving a box either clipped or mostly
+                // empty. A box measured before the layout settles is worse
+                // still - fitted to a width it never really had, it can stand
+                // a thousand pixels tall - and no window event need fire for
+                // either. So each box watches its own width, which is the
+                // thing the height was derived from, and refits only when
+                // that changes: refitting on a height change would be
+                // observing the change it just made.
+                if (window.ResizeObserver) {
+                    var widths = new WeakMap();
+                    var observer = new ResizeObserver(function (entries) {
+                        entries.forEach(function (entry) {
+                            var box = entry.target;
+                            if (widths.get(box) !== box.clientWidth) {
+                                widths.set(box, box.clientWidth);
+                                fitBox(box);
+                            }
+                        });
+                    });
+                    boxes.forEach(function (box) {
+                        widths.set(box, box.clientWidth);
+                        observer.observe(box);
+                    });
+                } else {
+                    // Without an observer the window's own resize is the
+                    // nearest signal there is, and it misses a box whose
+                    // width changed while the window's did not.
+                    window.addEventListener("resize", fitBoxes);
+                }
+                window.addEventListener("load", fitBoxes);
+                if (document.fonts && document.fonts.ready) {
+                    // The first measurement is taken in whatever font is
+                    // available at that instant, and the site's own arrives a
+                    // moment later with different metrics - a few pixels per
+                    // line, which is a clipped last line on a box holding
+                    // three examples.
+                    document.fonts.ready.then(fitBoxes);
                 }
 
                 overlay.querySelectorAll(".proposal-card").forEach(function (form) {
