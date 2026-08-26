@@ -1156,7 +1156,12 @@ button:disabled:hover { background: #9db4c7; }
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
 }
 .gate-image {
-    max-width: 220px;
+    /* The card's content box, which is what the keyword field and the Enter
+       button below it also fill (#361). Capped at 220px the picture sat as a
+       stamp above two full-width controls, reading as an unrelated decoration
+       rather than the top of one card. The file is sized to suit: 700px wide
+       is twice the 349.6px this can ever paint it at, which is as much as a
+       retina screen asks for. */
     width: 100%;
     height: auto;
     border-radius: 12px;
