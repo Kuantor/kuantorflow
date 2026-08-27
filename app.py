@@ -569,6 +569,26 @@ def current_settings():
     return settings_store.load(_current_user_id(), _current_email())
 
 
+def _sections_for_visitor(owner=None):
+    """`get_topics_by_section()` in the order this visitor asked for (#363).
+
+    The single reader of `alphabetical_topics`, and the reason is the shape of
+    the bug it prevents: four pages list topics — the browse tiles, the
+    picker, `/topics.json` behind the widget's own re-render, and Mykola's
+    context — and a fifth that asked the database directly would quietly be
+    the one page ordered differently from the rest. Calling this is how a page
+    gets the ordering; there is nothing to remember.
+
+    Raises what the query raises. Callers that must survive a dead database
+    already catch it, and `_visible_sections()` is the one that does it for
+    the picker.
+    """
+    if owner is None:
+        owner = cards_owner_filter()
+    return get_topics_by_section(
+        owner, alphabetical=current_settings()["alphabetical_topics"])
+
+
 def _save_and_log(entry, source, fills=None):
     """Save one card and record the outcome in logs/cards.log (#30).
 
@@ -1259,7 +1279,7 @@ def _topics_for_chat():
     """Topics and card counts, as this visitor is allowed to see them."""
     owner = cards_owner_filter()
     return [{"topic": name, "cards": count}
-            for _section, topics in get_topics_by_section(owner)
+            for _section, topics in _sections_for_visitor(owner)
             for name, count in topics]
 
 
@@ -1899,7 +1919,7 @@ def topics_json():
     owner = cards_owner_filter()
     try:
         topics = get_topics(owner)
-        sections = get_topics_by_section(owner)
+        sections = _sections_for_visitor(owner)
     except Exception:
         topics, sections = [], []
     # Icons ride alongside as a name -> URL map rather than as a third element
@@ -2068,7 +2088,7 @@ def index():
             message = f"Error: {e}"
 
     try:
-        sections = get_topics_by_section(cards_owner_filter())
+        sections = _sections_for_visitor()
     except Exception:
         sections = []  # DB unreachable (e.g. locally) — page still works
 
@@ -2395,7 +2415,7 @@ def _visible_sections():
     nothing to offer rather than a 500.
     """
     try:
-        return get_topics_by_section(cards_owner_filter())
+        return _sections_for_visitor()
     except Exception:
         app.logger.exception("Could not list topics for the picker")
         return []

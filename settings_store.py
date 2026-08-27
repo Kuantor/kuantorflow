@@ -88,6 +88,14 @@ DEFAULTS = {
     # because the chunky version is what it replaces, and a reader who wants
     # the raw arrival can say so.
     "mykola_typewriter": True,
+    # issue #363 — order the topics inside every section by name. On by
+    # default, which is a judgement about what the browse page is for: it is
+    # somewhere you look a topic up, and the stored order is only knowable by
+    # having learnt it. What it overrides is real, though — `topics.position`
+    # carries the curriculum #203 seeded, running from what a B2 learner meets
+    # first towards what they meet last — so it is a switch rather than a new
+    # ordering, and turning it off gives that back.
+    "alphabetical_topics": True,
     # issue #127 — show only the cards this user added (#89 records who), and
     # hide everyone else's. Off by default: the deck is shared by design, and
     # a learner who has added nothing would otherwise open an empty site.
