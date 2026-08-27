@@ -1085,13 +1085,23 @@ def get_topics(owner_id=None):
     return rows
 
 
-def get_topics_by_section(owner_id=None):
+def get_topics_by_section(owner_id=None, alphabetical=False):
     """The browse page's topics, grouped under their section (#218).
 
     Returns `[(section_name, [(topic_name, count), ...]), ...]` ordered by
     `(section.position, topic.position, topic.name)` — #215's rule. The inner
     pairs are exactly what `get_topics()` returns, so a template can render
     either shape with the same tile.
+
+    `alphabetical=True` (#363) drops `topic.position` from that key, leaving
+    the name. Not a different sort — the *same* one the rule already ends on,
+    asked for on its own, which is why `Other` looks identical either way:
+    every topic there holds position 0 and is already ordered by name. Kept in
+    SQL for that reason as well. Doing it in Python would re-decide the
+    collation, the case-insensitivity and the Cyrillic ordering that this page
+    has always had, on the day a setting was added about something else.
+
+    Sections keep their own order regardless: this orders topics within one.
 
     `get_topics()` is deliberately left alone rather than grown a grouping
     argument: it still answers "which topics are there", which is what
@@ -1141,7 +1151,8 @@ def get_topics_by_section(owner_id=None):
             "LEFT JOIN flashcards f ON f.topic_id = t.id" + clause +
             " GROUP BY t.id, t.section_id, t.name, t.position "
             "HAVING COUNT(f.id) > 0 "
-            "ORDER BY t.position, t.name",
+            + ("ORDER BY t.name" if alphabetical
+               else "ORDER BY t.position, t.name"),
             params,
         )
         rows = cursor.fetchall()

@@ -68,6 +68,22 @@
                    stay visible to others.{% if not current_user %}
                    Needs a signed-in account.{% endif %}</p>
 
+                {# Alphabetical topics (#363). Next to the filter above
+                   because the two answer the same question — what the topic
+                   list shows, and in what order. #}
+                <label class="settings-check">
+                    <input type="checkbox" name="alphabetical_topics"
+                           {% if settings.alphabetical_topics %}checked{% endif %}
+                           {% if settings_read_only %}disabled{% endif %}>
+                    Sort topics alphabetically
+                </label>
+                <p class="settings-hint">On by default: inside every section the
+                   topics are ordered by name. Turn it off for the order the deck
+                   was built in &mdash; the B2&ndash;C1 topics then run from the
+                   ones a learner meets first towards the ones they meet last,
+                   rather than from A to Z. Sections keep their own order either
+                   way.</p>
+
                 {# Two-column grid (#118): providers on the first row,
                    language controls side by side on the second. #}
                 <div class="settings-grid">
@@ -680,18 +696,23 @@
                 settingsError.hidden = true;
                 settingsSave.disabled = true;
                 settingsSave.textContent = "Saving…";
-                // #127 decides which cards this page is showing, so the page
-                // in front of the user goes stale the moment it changes.
-                // Compared against defaultChecked, which holds what the server
-                // rendered (and is moved forward after each save below).
-                var filterChanged = settingsForm.individual_cards.checked
-                    !== settingsForm.individual_cards.defaultChecked;
+                // #127 decides which cards this page is showing and #363 the
+                // order its topics come in, so the page in front of the user
+                // goes stale the moment either changes. Compared against
+                // defaultChecked, which holds what the server rendered (and is
+                // moved forward after each save below).
+                var listChanged = ["individual_cards", "alphabetical_topics"]
+                    .some(function (name) {
+                        return settingsForm[name].checked
+                            !== settingsForm[name].defaultChecked;
+                    });
                 fetch("{{ url_for('save_settings') }}", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         cards_automatically: settingsForm.cards_automatically.checked,
                         individual_cards: settingsForm.individual_cards.checked,
+                        alphabetical_topics: settingsForm.alphabetical_topics.checked,
                         translator: settingsForm.translator.value,
                         explanatory_dictionary: settingsForm.explanatory_dictionary.value,
                         show_ukrainian: settingsForm.show_ukrainian.checked,
@@ -742,7 +763,7 @@
                         window.mykolaSetTypewriter(settingsForm.mykola_typewriter.checked);
                     }
                     closeSettings();
-                    if (filterChanged) window.location.reload();
+                    if (listChanged) window.location.reload();
                 }).catch(function () {
                     settingsError.hidden = false;
                 }).then(function () {

@@ -223,7 +223,8 @@ If you have been away for a few hours he starts a fresh conversation and opens i
 | --- | --- |
 | Add cards automatically | Skip the review popup: *Look up & save* writes straight to the deck. Off by default. |
 | Show only my cards | Hide everyone else's cards from every page, and from Mykola. Off by default — the deck is shared. |
-| Translator | Google Translate or Bing Translator. |
+| Sort topics alphabetically | Order the topics inside every section by name. On by default. Turn it off and the B2–C1 topics run in the order the deck was built in, from the ones a learner meets first towards the ones they meet last. |
+| Translator | Claude, Microsoft Translator, DeepL or Google Cloud Translation. Only the ones this site has a key for can be chosen; the rest are greyed out and say which key they need. |
 | Explanatory dictionary | Oxford or Merriam-Webster. |
 | Ukrainian / Russian | Hide a language everywhere: on the cards and in Mykola's answers. |
 | Quiz language | The language a quiz opens in. The in-page switch still takes it in the other. |
