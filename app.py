@@ -1497,6 +1497,11 @@ def inject_settings():
         # unfinished game tile: greyed and labelled beats absent, because
         # absent looks like the feature does not exist.
         "all_translators": parsers.TRANSLATORS,
+        # The same pair for the dictionaries (#365). Oxford needs no
+        # key, so `dictionaries` is never empty -- which is why the
+        # panel has no "none configured" branch on this half.
+        "dictionaries": parsers.available_dictionaries(),
+        "all_dictionaries": parsers.DICTIONARIES,
     }
 
 
