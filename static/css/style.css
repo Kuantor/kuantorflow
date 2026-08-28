@@ -2240,3 +2240,17 @@ button:disabled:hover { background: #9db4c7; }
    covering the eleven beside it. */
 .proposal-error { margin: 0.6rem 0 0; font-size: 0.9rem; }
 .proposal-lookup { margin-top: 0.8rem; margin-right: 0.5rem; }
+
+/* Look up & update's popups open **on top of another dialog** — the edit
+   dialog, or the review popup — so they need a layer above `.modal-overlay`'s
+   100 (#372). Without it the stack is decided by document order, and since
+   #372 put them in base.html *before* the content block, every dialog they
+   are supposed to sit above paints over them instead: the question is asked
+   where nobody can see it, the promise it answers never settles, and the
+   button that opened it stays on "Looking up…" for good.
+
+   150 rather than more: Mykola's widget (200) still sits above everything,
+   which is the arrangement #296 chose deliberately so the chat keeps working
+   while a dialog is open. */
+#field-rewrite-confirm-popup,
+#lookup-pos-modal { z-index: 150; }
