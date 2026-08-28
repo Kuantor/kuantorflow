@@ -410,14 +410,47 @@ def _capped(elements, limit, text=None):
     return out
 
 
+def _oxford_entry_href(slug):
+    r"""Matches a related-entries link that is *another entry of this word* (#231).
+
+    Oxford's internal slug for a homograph is not the shape the link asks for.
+    `do` links to `do1_1`, `do1_2`, `do1_3`; `can_2` answers at `can2_1`. The
+    first version of this matched `{slug}_\d+` only, which is why a lookup of
+    `do` came back explained as an abbreviation: the three real entries were
+    linked from the page and none of them matched.
+
+    Deliberately still narrow. `do`'s box also offers `ditto_1`, `do-in`,
+    `do-up` and `to-do`, and none of those is the word being looked up.
+    """
+    return re.compile(rf"/definition/english/{re.escape(slug)}\d*(_\d+)?$")
+
+
 def _fetch_oxford_entry(word):
     """
     `(definitions, examples)` from Oxford Learner's Dictionaries, each
     `{pos: [text, ...]}` — issue #21 for the definitions, #225 for the examples.
 
-    The base URL redirects to the word's first entry; entries for its other
-    parts of speech are sibling pages (run_2, ...) linked from the page's
-    'Other results' box, so up to OXFORD_MAX_PAGES pages are fetched.
+    Most words answer on the bare slug and link their other parts of speech
+    from the page's 'Other results' box. **A word whose senses differ in
+    pronunciation or origin does not** (#231): Oxford numbers those entries and
+    lets the bare slug 404, so `can`, `lead`, `tear`, `wind`, `row`, `close`,
+    `minute`, `live` and `content` all returned nothing at all. Measured on 28
+    August: ten of thirty-eight common words, not the two the ticket was filed
+    about.
+
+    Two mechanisms, because neither covers the other's case:
+
+    * **the bare slug 404s** -> the entries are at `word_1`, `word_2`, ...,
+      which are probed until one 404s. Following links cannot do this job:
+      `can_1`'s own related-entries box is **empty**, so nothing on it leads to
+      `can_2`.
+    * **the bare slug answers, but with a minor entry** -> `do` is the
+      abbreviation, and its real entries are linked as `do1_1`. That is what
+      `_oxford_entry_href()` widened the pattern for.
+
+    An ordinary word costs exactly what it did before: one request, no links
+    that match, no probing. An unknown word costs one extra (`qwertyzzz_1`
+    404s and the loop stops).
 
     Both halves come from **one** pass over those pages. Definitions and
     examples live in the same `li.sense`, and an Oxford lookup is already up to
@@ -429,13 +462,11 @@ def _fetch_oxford_entry(word):
     sentences because the definition did not parse.
     """
     slug = quote(word.strip().lower().replace(" ", "-"))
-    resp = requests.get(OXFORD_URL.format(slug=slug), headers=HEADERS, timeout=10)
-    if resp.status_code == 404:
-        return {}, {}  # word not in this dictionary
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "lxml")
-
     definitions, examples = {}, {}
+    # Keyed on the URL that **answered**, not the one that was asked for:
+    # `can_2` answers at `can2_1` and an ordinary word's `_1` redirects back to
+    # its bare page, so asking-side keys would fetch the same entry twice.
+    fetched = set()
 
     def collect(page):
         # One entry can head several parts of speech (#228), and its text belongs
@@ -447,23 +478,56 @@ def _fetch_oxford_entry(word):
             if exs:
                 examples.setdefault(pos, exs)
 
-    collect(soup)
+    def fetch(url):
+        """One entry page, collected. Its soup, or None when there is none.
 
-    entry_href = re.compile(rf"/definition/english/{re.escape(slug)}_\d+$")
-    fetched = {resp.url.split("?")[0]}
+        The soup comes back so the caller can read the page's own links
+        without asking for it twice -- an ordinary word must still cost one
+        request, which is the whole reason this fix is free for the words that
+        already worked.
+        """
+        if len(fetched) >= OXFORD_MAX_PAGES:
+            return None
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=10)
+        except requests.RequestException:
+            return None         # what is already collected is still useful
+        if resp.status_code == 404:
+            return None
+        try:
+            resp.raise_for_status()
+        except requests.RequestException:
+            return None
+        landed = resp.url.split("?")[0]
+        soup = BeautifulSoup(resp.text, "lxml")
+        if landed in fetched:
+            return soup         # the same entry by another name, already read
+        fetched.add(landed)
+        collect(soup)
+        return soup
+
+    soup = fetch(OXFORD_URL.format(slug=slug))
+    if soup is None:
+        # The bare slug is not there. Numbered entries are, contiguously, so
+        # the first miss ends the run -- and the page cap ends it either way,
+        # which is what stops `qwertyzzz` costing more than one extra request.
+        number = 1
+        while len(fetched) < OXFORD_MAX_PAGES:
+            if fetch(OXFORD_URL.format(slug=f"{slug}_{number}")) is None:
+                break
+            number += 1
+        return definitions, examples
+
+    # The bare slug answered. Its siblings are linked from the page, and the
+    # answer may still be a minor entry with the real ones beside it.
+    entry_href = _oxford_entry_href(slug)
     for link in soup.select("#relatedentries a"):
         href = (link.get("href") or "").split("?")[0]
-        if not entry_href.search(href) or href in fetched:
+        if not entry_href.search(href):
             continue
         if len(fetched) >= OXFORD_MAX_PAGES:
             break
-        fetched.add(href)
-        try:
-            sibling = requests.get(href, headers=HEADERS, timeout=10)
-            sibling.raise_for_status()
-        except requests.RequestException:
-            continue  # the entries already collected are still useful
-        collect(BeautifulSoup(sibling.text, "lxml"))
+        fetch(href)
     return definitions, examples
 
 
