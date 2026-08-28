@@ -2320,6 +2320,66 @@ def move_card(topic, card_id):
     return redirect(url_for("flashcards", topic=from_topic))
 
 
+@app.route("/lookup.json", methods=["POST"])
+def lookup_json():
+    """One word, looked up with this visitor's providers, as JSON (#191).
+
+    A **read**. Nothing is stored: the edit dialog fills its own fields from
+    the answer and `edit_card()` remains the only way a card changes, keeping
+    its ownership rule, its duplicate check and its logging as the single
+    write path. That is the whole design constraint of #191 -- a second write
+    path would be a second place to get permissions wrong.
+
+    Guarded like the dialog it serves rather than like the home page's lookup.
+    A lookup used to be free scraping and #125 lets an anonymous visitor read;
+    since #353 it is a licensed API call that costs money per word, so this is
+    not something to leave open, and the edit dialog behind it is signed-in
+    only anyway (#176).
+
+    **The part of speech is matched here**, not in the browser. #228's synonym
+    map lives in `parsers` because a translator and a dictionary name the same
+    thing differently, and a second copy of it in JavaScript would drift from
+    the first within a month. The answer carries both halves: `match` for the
+    part of speech that was asked about, and `entries` for everything the
+    lookup found, so the dialog can offer a choice when nothing matched.
+    """
+    if is_blocked():
+        return {"ok": False, "error": blocked_notice()}, 403
+    if not is_admin() and _current_user_id() is None:
+        return {"ok": False, "error": EDIT_SIGN_IN_PROMPT}, 403
+
+    payload = request.get_json(silent=True) or {}
+    word = (payload.get("word") or "").strip()
+    if not word:
+        return {"ok": False, "error": "word is required"}, 400
+    pos = (payload.get("pos") or "").strip()
+
+    prefs = current_settings()
+    applog.lookup_started(word, prefs["translator"],
+                          prefs["explanatory_dictionary"],
+                          user=_current_email())
+    try:
+        entries = lookup_word(
+            word,
+            translator=prefs["translator"],
+            explanatory_dictionary=prefs["explanatory_dictionary"],
+        )
+    except Exception:
+        # The same tolerance the home page has: a provider outage is not a
+        # 500, and the dialog says so with its fields untouched.
+        app.logger.exception("Look up & update failed for %r", word)
+        return {"ok": False, "error": (
+            "The lookup did not answer. Your card is unchanged.")}, 502
+
+    entries = [{k: v for k, v in entry.items() if k != "topic"}
+               for entry in entries]
+    wanted = parsers._pos_key(pos.lower()) if pos else None
+    match = next((e for e in entries
+                  if wanted and parsers._pos_key((e.get("pos") or "").lower())
+                  == wanted), None)
+    return {"ok": True, "match": match, "entries": entries}
+
+
 @app.route("/flashcards/<topic>/edit/<int:card_id>", methods=["POST"])
 def edit_card(topic, card_id):
     """Change a saved card's content (#176). JSON, so the dialog can stay open
