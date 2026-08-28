@@ -699,9 +699,16 @@
             });
             settingsOverlay.querySelector(".modal-close").addEventListener("click", closeSettings);
             document.getElementById("settings-cancel").addEventListener("click", closeSettings);
-            settingsOverlay.addEventListener("click", function (e) {
-                if (e.target === settingsOverlay) closeSettings();
-            });
+            // **No click-outside-to-close** (#369). Settings is a form whose
+            // changes are committed by Save and by nothing else, so a slip
+            // outside it discards the slider that was just dragged and the
+            // provider that was just chosen, silently. #296 set this rule for
+            // the review popup; this dialog is in base.html, so it had the
+            // same flaw on every page of the site.
+            //
+            // The About popup and the confirmations keep their outside click:
+            // they hold nothing, and dismissing by looking away is right when
+            // there is nothing to lose.
 
             settingsForm.addEventListener("submit", function (e) {
                 e.preventDefault();

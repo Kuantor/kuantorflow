@@ -449,6 +449,14 @@
             // Examples are one per line in this dialog and a list in the
             // answer; every other field is a string. One place that knows it.
             var LIST_FIELDS = ["examples_en", "examples_ukr", "examples_rus"];
+            // Both popups below hold a promise the lookup is waiting on, so
+            // every way of dismissing one has to answer it. Escape used to
+            // hide the overlay directly, which left that promise pending for
+            // good: the button stayed disabled on "Looking up…" and the next
+            // press did nothing at all. These carry each popup's own dismissal
+            // so the keyboard takes exactly the path the buttons take.
+            var dismissPos = null;
+            var dismissRewrite = null;
 
             function incomingValue(entry, field) {
                 var value = entry[field];
@@ -503,17 +511,21 @@
                         btn.textContent = entry.pos || "no part of speech";
                         btn.addEventListener("click", function () {
                             posOverlay.hidden = true;
+                            dismissPos = null;
                             resolve(entry);
                         });
                         posOptions.appendChild(btn);
                     });
-                    function cancel() { posOverlay.hidden = true; resolve(null); }
-                    posOverlay.dataset.cancel = "1";
+                    function cancel() {
+                        posOverlay.hidden = true;
+                        dismissPos = null;
+                        resolve(null);
+                    }
+                    dismissPos = cancel;
                     document.getElementById("pos-cancel").onclick = cancel;
                     document.getElementById("pos-close").onclick = cancel;
-                    posOverlay.onclick = function (e) {
-                        if (e.target === posOverlay) cancel();
-                    };
+                    // No outside click (#369): behind this question is a
+                    // lookup that has been paid for and not yet applied.
                     posOverlay.hidden = false;
                 });
             }
@@ -547,6 +559,7 @@
                     });
                     function finish(fields) {
                         rewriteOverlay.hidden = true;
+                        dismissRewrite = null;
                         resolve(fields);
                     }
                     document.getElementById("rewrite-apply").onclick = function () {
@@ -557,11 +570,11 @@
                     document.getElementById("rewrite-keep").onclick = function () {
                         finish([]);
                     };
-                    function dismiss() { rewriteOverlay.hidden = true; resolve(null); }
+                    function dismiss() { finish(null); }
+                    dismissRewrite = dismiss;
                     document.getElementById("rewrite-close").onclick = dismiss;
-                    rewriteOverlay.onclick = function (e) {
-                        if (e.target === rewriteOverlay) dismiss();
-                    };
+                    // No outside click (#369): same lookup, and the two
+                    // buttons below are the answer to the question asked.
                     rewriteOverlay.hidden = false;
                 });
             }
@@ -620,9 +633,15 @@
 
             document.getElementById("edit-cancel").addEventListener("click", closeEdit);
             document.getElementById("edit-close").addEventListener("click", closeEdit);
-            editOverlay.addEventListener("click", function (e) {
-                if (e.target === editOverlay) closeEdit();
-            });
+            // **No click-outside-to-close** (#369), the rule #296 set for the
+            // review popup: a dialog that discards work when it closes does
+            // not close on a slip. Everything typed here goes, including a
+            // field the lookup above has just filled -- and since #353 that
+            // lookup was a licensed call somebody paid for. The cross and
+            // Cancel are the ways out, and both say what they do.
+            //
+            // Nothing replaces it. The overlay already covers the viewport, so
+            // the page behind cannot be reached anyway.
 
             function closeRefused() { refusedOverlay.hidden = true; }
             document.getElementById("delete-refused-ok")
@@ -640,8 +659,8 @@
                 if (e.key === "Escape") {
                     // The two #191 popups first: Escape should answer the
                     // question in front of you, not close the dialog behind it.
-                    if (!posOverlay.hidden) { posOverlay.hidden = true; return; }
-                    if (!rewriteOverlay.hidden) { rewriteOverlay.hidden = true; return; }
+                    if (!posOverlay.hidden) { dismissPos(); return; }
+                    if (!rewriteOverlay.hidden) { dismissRewrite(); return; }
                     close(); closeEdit(); closeMove();
                 }
             });
