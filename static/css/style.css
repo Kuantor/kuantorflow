@@ -2224,8 +2224,20 @@ button:disabled:hover { background: #9db4c7; }
 .rewrite-was { color: var(--muted); text-decoration: line-through; }
 .rewrite-now { color: var(--ink); }
 
-.pos-options { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; }
+/* The row of parts of speech to choose from. Two spacing corrections, both
+   measured: the gap above it was 32px because the question's own 17.6px
+   margin was joined by the 14.4px every `button` inherits, and the gap below
+   it was **zero** -- `.modal-actions button` sets `margin-top: 0`, so nothing
+   separated a chip from the button under it and they touched. */
+.pos-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 1.2rem;
+}
 .pos-option {
+    margin-top: 0;
     padding: 0.45rem 0.9rem;
     border: 1px solid var(--blue);
     border-radius: 999px;
@@ -2235,3 +2247,32 @@ button:disabled:hover { background: #9db4c7; }
     cursor: pointer;
 }
 .pos-option:hover { background: var(--blue); color: #fff; }
+
+/* #372: one card's lookup failure said on that card, rather than in an alert
+   covering the eleven beside it. */
+.proposal-error { margin: 0.6rem 0 0; font-size: 0.9rem; }
+/* Add at the left edge, Look up & update at the right, whatever the card's
+   width. `space-between` rather than a margin, so the gap belongs to the row
+   and not to one of the buttons. */
+.proposal-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+.proposal-actions .add-btn { margin-top: 0.8rem; }
+.proposal-lookup { margin-top: 0.8rem; }
+
+/* Look up & update's popups open **on top of another dialog** — the edit
+   dialog, or the review popup — so they need a layer above `.modal-overlay`'s
+   100 (#372). Without it the stack is decided by document order, and since
+   #372 put them in base.html *before* the content block, every dialog they
+   are supposed to sit above paints over them instead: the question is asked
+   where nobody can see it, the promise it answers never settles, and the
+   button that opened it stays on "Looking up…" for good.
+
+   150 rather than more: Mykola's widget (200) still sits above everything,
+   which is the arrangement #296 chose deliberately so the chat keeps working
+   while a dialog is open. */
+#field-rewrite-confirm-popup,
+#lookup-pos-modal { z-index: 150; }

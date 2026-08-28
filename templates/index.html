@@ -384,8 +384,8 @@
                                 <input type="hidden" name="word" value="{{ card.word }}">
                                 <input type="hidden" name="pos" value="{{ card.pos or '' }}">
                                 <input type="hidden" name="topic" value="{{ proposed_topic }}">
-                                <label>English explanation</label>
-                                <textarea name="explanation_en" rows="2">{{ card.explanation_en or '' }}</textarea>
+                                <label for="proposal-{{ loop.index }}-explanation_en">English explanation</label>
+                                <textarea name="explanation_en" id="proposal-{{ loop.index }}-explanation_en" rows="2">{{ card.explanation_en or '' }}</textarea>
                                 {# Examples are read here, not merely carried through (#357).
                                    They arrive from the dictionary (#225) or the Reverso
                                    parser (#134), and until now they travelled as hidden
@@ -412,8 +412,8 @@
                                    being wrong is only pane scroll: the dialog's height is
                                    fixed and the cards pane absorbs it (#349). #}
                                 {% if card.examples_en %}
-                                <label>English examples <small>(one per line)</small></label>
-                                <textarea name="examples_en" rows="{{ [card.examples_en | length * 2, 6] | min }}">{{ card.examples_en | join('\n') }}</textarea>
+                                <label for="proposal-{{ loop.index }}-examples_en">English examples <small>(one per line)</small></label>
+                                <textarea name="examples_en" id="proposal-{{ loop.index }}-examples_en" rows="{{ [card.examples_en | length * 2, 6] | min }}">{{ card.examples_en | join('\n') }}</textarea>
                                 {% endif %}
                                 {# A hidden language's translation still travels as a hidden
                                    input (#46/#79/#111): the card is saved complete, the
@@ -421,28 +421,60 @@
                                    it, in the JSON they have always used - there is nobody
                                    to read the lines. #}
                                 {% if settings.show_ukrainian %}
-                                <label>Ukrainian translation</label>
-                                <input type="text" name="translation_ukr" value="{{ card.translation_ukr or '' }}">
+                                <label for="proposal-{{ loop.index }}-translation_ukr">Ukrainian translation</label>
+                                <input type="text" name="translation_ukr" id="proposal-{{ loop.index }}-translation_ukr" value="{{ card.translation_ukr or '' }}">
                                 {% if card.examples_ukr %}
-                                <label>Ukrainian examples <small>(one per line)</small></label>
-                                <textarea name="examples_ukr" rows="{{ [card.examples_ukr | length * 2, 6] | min }}">{{ card.examples_ukr | join('\n') }}</textarea>
+                                <label for="proposal-{{ loop.index }}-examples_ukr">Ukrainian examples <small>(one per line)</small></label>
+                                <textarea name="examples_ukr" id="proposal-{{ loop.index }}-examples_ukr" rows="{{ [card.examples_ukr | length * 2, 6] | min }}">{{ card.examples_ukr | join('\n') }}</textarea>
                                 {% endif %}
                                 {% else %}
                                 <input type="hidden" name="translation_ukr" value="{{ card.translation_ukr or '' }}">
                                 {% if card.examples_ukr %}<input type="hidden" name="examples_ukr" value="{{ card.examples_ukr | tojson | forceescape }}">{% endif %}
                                 {% endif %}
                                 {% if settings.show_russian %}
-                                <label>Russian translation</label>
-                                <input type="text" name="translation_rus" value="{{ card.translation_rus or '' }}">
+                                <label for="proposal-{{ loop.index }}-translation_rus">Russian translation</label>
+                                <input type="text" name="translation_rus" id="proposal-{{ loop.index }}-translation_rus" value="{{ card.translation_rus or '' }}">
                                 {% if card.examples_rus %}
-                                <label>Russian examples <small>(one per line)</small></label>
-                                <textarea name="examples_rus" rows="{{ [card.examples_rus | length * 2, 6] | min }}">{{ card.examples_rus | join('\n') }}</textarea>
+                                <label for="proposal-{{ loop.index }}-examples_rus">Russian examples <small>(one per line)</small></label>
+                                <textarea name="examples_rus" id="proposal-{{ loop.index }}-examples_rus" rows="{{ [card.examples_rus | length * 2, 6] | min }}">{{ card.examples_rus | join('\n') }}</textarea>
                                 {% endif %}
                                 {% else %}
                                 <input type="hidden" name="translation_rus" value="{{ card.translation_rus or '' }}">
                                 {% if card.examples_rus %}<input type="hidden" name="examples_rus" value="{{ card.examples_rus | tojson | forceescape }}">{% endif %}
                                 {% endif %}
-                                <button type="submit" class="add-btn">Add</button>
+                                {# #372. Only for a file review: these are the
+                                   cards that arrive with a translation and
+                                   nothing else, which is the case #191 was
+                                   written for. In the word-lookup popup every
+                                   card was *just* built by a lookup, so the
+                                   button would ask the same providers the same
+                                   question and pay for the same answer.
+
+                                   The behaviour is `lookup_update.js`, shared
+                                   with the edit dialog. It fills only fields
+                                   the learner can see, so a language hidden in
+                                   Settings keeps the value the parser gave it
+                                   in its hidden input. #}
+                                <p class="settings-error proposal-error" hidden></p>
+                                {# Add on the left, Look up & update pushed to
+                                   the right edge: the one that writes the card
+                                   is where the eye lands first and stays put
+                                   from card to card, and the optional one sits
+                                   apart from it rather than in front of it.
+
+                                   Add is also first in the DOM, so it stays
+                                   the form's implicit submit -- Enter in a
+                                   field saves the card rather than spending a
+                                   lookup on it. #}
+                                <div class="proposal-actions">
+                                    <button type="submit" class="add-btn">Add</button>
+                                    {% if source_content %}
+                                        <button type="button" class="secondary proposal-lookup"
+                                                title="Fill this card's empty fields from your translator and dictionary. Nothing is saved until you press Add.">
+                                            Look up &amp; update
+                                        </button>
+                                    {% endif %}
+                                </div>
                             </form>
                         {% endfor %}
                     </div>
@@ -592,6 +624,27 @@
                     document.fonts.ready.then(fitBoxes);
                 }
 
+                // #372: one lookup per card, pressed deliberately. The
+                // shared module does the asking; this says which form, which
+                // button, and where a failure gets said.
+                overlay.querySelectorAll(".proposal-lookup").forEach(
+                    function (btn) {
+                        btn.addEventListener("click", function () {
+                            var form = btn.closest(".proposal-card");
+                            var error = form.querySelector(".proposal-error");
+                            error.hidden = true;
+                            window.kfLookupUpdate({
+                                url: "{{ url_for('lookup_json') }}",
+                                form: form,
+                                button: btn,
+                                onError: function (message) {
+                                    error.textContent = message;
+                                    error.hidden = false;
+                                },
+                            });
+                        });
+                    });
+
                 overlay.querySelectorAll(".proposal-card").forEach(function (form) {
                     form.addEventListener("submit", function (e) {
                         e.preventDefault();
@@ -678,7 +731,14 @@
                 // user expects of a dialog, and the visible cross does the
                 // same job for everyone else.
                 document.addEventListener("keydown", function (e) {
-                    if (e.key === "Escape" && !overlay.hidden) close();
+                    if (e.key === "Escape" && !overlay.hidden) {
+                        // #372's popups answer first: Escape should answer the
+                        // question in front of you rather than discarding the
+                        // cards behind it, and through their own dismissal or
+                        // the lookup's promise never settles (#369).
+                        if (window.kfLookupEscape && window.kfLookupEscape()) return;
+                        close();
+                    }
                 });
             })();
         </script>
