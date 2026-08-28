@@ -878,6 +878,67 @@ def _attach_dictionary_text(cards, definitions, examples):
             cards["other"]["examples_en"] = examples[pos]
 
 
+class Dictionary(NamedTuple):
+    """One EN->EN dictionary, and what a deployment needs to use it.
+
+    The same shape as `Translator` above and for the same reasons: the fetcher
+    is held **by name** so patching it is picked up, and `key_env` is read from
+    the environment at call time rather than captured at import.
+
+    `key_env` is None for a dictionary that needs no key. Oxford is one, which
+    is why it is always offered and why `available_dictionaries()` can never
+    come back empty -- unlike the translators, where "none configured" is a
+    real state that #349 answers with a dictionary-only card.
+    """
+    slug: str
+    label: str
+    fetch_name: str
+    key_env: str | None
+
+    @property
+    def fetch(self):
+        return globals()[self.fetch_name]
+
+
+# **One declaration**, read by the Settings panel and by the dispatch, the way
+# TRANSLATORS is (#353) and ACTIVITIES before it (#253).
+#
+# **`MERRIAM_WEBSTER_API_KEY` gates the choice; it does not yet buy anything.**
+# `_fetch_merriam_webster_definitions()` scrapes merriam-webster.com and sends
+# no key anywhere, so setting that variable today unlocks a backend that is
+# still a scraper and still answers 403 to PythonAnywhere's IPs (#110, verified
+# 17 July 2026). It is named here rather than invented later because it is the
+# variable the real thing will need, and #110 is what makes it mean something:
+# the official API, and a choice between the Learner's and Collegiate
+# dictionaries. Until that lands the honest reading of this entry is that
+# Merriam-Webster is **off**, and the panel says so instead of letting a
+# learner pick it and get a card with no explanation.
+DICTIONARIES = (
+    Dictionary("oxford", "Oxford Learner's Dictionaries",
+               "_fetch_oxford_entry", None),
+    Dictionary("merriam-webster", "Merriam-Webster",
+               "_merriam_webster_entry", "MERRIAM_WEBSTER_API_KEY"),
+)
+
+DICTIONARY_SLUGS = tuple(d.slug for d in DICTIONARIES)
+
+
+def available_dictionaries():
+    """The dictionaries this deployment is configured for, in panel order.
+
+    Read at **call time**, never captured at import -- `available_translators()`
+    follows the same rule, and it is what lets a key be added without a code
+    change and a test set one without reloading a module.
+    """
+    return tuple(d for d in DICTIONARIES
+                 if not d.key_env or os.environ.get(d.key_env, "").strip())
+
+
+def _dictionary_by_slug(slug):
+    """The named dictionary, or None."""
+    return next((d for d in DICTIONARIES if d.slug == slug), None)
+
+
 def _dictionary_backend(explanatory_dictionary):
     """The chosen dictionary, as a function returning `(definitions, examples)`.
 
@@ -887,11 +948,19 @@ def _dictionary_backend(explanatory_dictionary):
     returning `_fetch_oxford_definitions` and had `lookup_word()` reach past it to
     the richer fetcher — which meant a stubbed backend was bypassed and the
     offline tests silently made live requests to Oxford.
+
+    A choice this deployment cannot use falls back to the first one it can
+    (#365), which is what `_translator_backend()` does with a key that has been
+    removed. The stored setting is **left alone** rather than coerced onto the
+    fallback: a deployment that configures Merriam-Webster tomorrow should find
+    the account still asking for it. #352 did coerce, but that was a provider
+    being retired, which is a different thing from one not set up here.
     """
-    return {
-        "oxford": _fetch_oxford_entry,
-        "merriam-webster": _merriam_webster_entry,
-    }.get(explanatory_dictionary, _fetch_oxford_entry)
+    chosen = _dictionary_by_slug(explanatory_dictionary)
+    available = available_dictionaries()
+    if chosen and chosen in available:
+        return chosen.fetch
+    return available[0].fetch if available else _fetch_oxford_entry
 
 
 def _provider_name(backend):

@@ -225,7 +225,7 @@ If you have been away for a few hours he starts a fresh conversation and opens i
 | Show only my cards | Hide everyone else's cards from every page, and from Mykola. Off by default — the deck is shared. |
 | Sort topics alphabetically | Order the topics inside every section by name. On by default. Turn it off and the B2–C1 topics run in the order the deck was built in, from the ones a learner meets first towards the ones they meet last. |
 | Translator | Claude, Microsoft Translator, DeepL or Google Cloud Translation. Only the ones this site has a key for can be chosen; the rest are greyed out and say which key they need. |
-| Explanatory dictionary | Oxford or Merriam-Webster. |
+| Explanatory dictionary | Oxford Learner's, which needs no key and is the default. Merriam-Webster is greyed out unless this site is configured for it, and says which key it needs — the same rule the translators follow. |
 | Ukrainian / Russian | Hide a language everywhere: on the cards and in Mykola's answers. |
 | Quiz language | The language a quiz opens in. The in-page switch still takes it in the other. |
 | Cards per round | How many cards *Fill the gap* deals, between 5 and 50. Ten by default. |

@@ -130,18 +130,31 @@
 
                 <fieldset class="settings-group">
                     <legend>Explanatory dictionary (ENG &rarr; ENG)</legend>
-                    <label>
-                        <input type="radio" name="explanatory_dictionary" value="oxford"
-                               {% if settings.explanatory_dictionary == 'oxford' %}checked{% endif %}
-                               {% if settings_read_only %}disabled{% endif %}>
-                        Oxford Learner's Dictionaries
-                    </label>
-                    <label>
-                        <input type="radio" name="explanatory_dictionary" value="merriam-webster"
-                               {% if settings.explanatory_dictionary == 'merriam-webster' %}checked{% endif %}
-                               {% if settings_read_only %}disabled{% endif %}>
-                        Merriam-Webster
-                    </label>
+                    {# #365, and the same block as the translators above it,
+                       for the same reason: rendered from
+                       `parsers.DICTIONARIES` so a third dictionary is one
+                       entry rather than one entry plus this markup, and an
+                       option this deployment cannot use is greyed with the
+                       variable it needs rather than hidden (#261).
+
+                       Merriam-Webster is the one that needed saying. It has
+                       been offered here exactly like Oxford while answering
+                       403 to PythonAnywhere's IPs since #110 measured it in
+                       July -- so choosing it on the deployed site produced
+                       cards with no English explanation, and nothing on this
+                       panel said why. #}
+                    {% for option in all_dictionaries %}
+                        {% set usable = option in dictionaries %}
+                        <label class="{% if not usable %}settings-option-off{% endif %}">
+                            <input type="radio" name="explanatory_dictionary" value="{{ option.slug }}"
+                                   {% if settings.explanatory_dictionary == option.slug %}checked{% endif %}
+                                   {% if settings_read_only or not usable %}disabled{% endif %}>
+                            {{ option.label }}
+                            {% if not usable %}
+                                <span class="hint settings-inline-hint">needs <code>{{ option.key_env }}</code></span>
+                            {% endif %}
+                        </label>
+                    {% endfor %}
                 </fieldset>
 
                 {# Language visibility (#46/#79/#111): hides translations from
