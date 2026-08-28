@@ -455,14 +455,26 @@
                                    the learner can see, so a language hidden in
                                    Settings keeps the value the parser gave it
                                    in its hidden input. #}
-                                {% if source_content %}
-                                    <button type="button" class="secondary proposal-lookup"
-                                            title="Fill this card's empty fields from your translator and dictionary. Nothing is saved until you press Add.">
-                                        Look up &amp; update
-                                    </button>
-                                {% endif %}
                                 <p class="settings-error proposal-error" hidden></p>
-                                <button type="submit" class="add-btn">Add</button>
+                                {# Add on the left, Look up & update pushed to
+                                   the right edge: the one that writes the card
+                                   is where the eye lands first and stays put
+                                   from card to card, and the optional one sits
+                                   apart from it rather than in front of it.
+
+                                   Add is also first in the DOM, so it stays
+                                   the form's implicit submit -- Enter in a
+                                   field saves the card rather than spending a
+                                   lookup on it. #}
+                                <div class="proposal-actions">
+                                    <button type="submit" class="add-btn">Add</button>
+                                    {% if source_content %}
+                                        <button type="button" class="secondary proposal-lookup"
+                                                title="Fill this card's empty fields from your translator and dictionary. Nothing is saved until you press Add.">
+                                            Look up &amp; update
+                                        </button>
+                                    {% endif %}
+                                </div>
                             </form>
                         {% endfor %}
                     </div>

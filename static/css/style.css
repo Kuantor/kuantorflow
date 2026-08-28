@@ -2239,7 +2239,17 @@ button:disabled:hover { background: #9db4c7; }
 /* #372: one card's lookup failure said on that card, rather than in an alert
    covering the eleven beside it. */
 .proposal-error { margin: 0.6rem 0 0; font-size: 0.9rem; }
-.proposal-lookup { margin-top: 0.8rem; margin-right: 0.5rem; }
+/* Add at the left edge, Look up & update at the right, whatever the card's
+   width. `space-between` rather than a margin, so the gap belongs to the row
+   and not to one of the buttons. */
+.proposal-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+.proposal-actions .add-btn { margin-top: 0.8rem; }
+.proposal-lookup { margin-top: 0.8rem; }
 
 /* Look up & update's popups open **on top of another dialog** — the edit
    dialog, or the review popup — so they need a layer above `.modal-overlay`'s
