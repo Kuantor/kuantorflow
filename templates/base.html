@@ -491,6 +491,56 @@
             </div>
         {% endfor %}
 
+    {# Look up & update's two popups (#191), here rather than on the
+       flashcards page because #372 gave the review popup the same button and
+       a second copy of a dialog is a second thing to keep in step. The
+       behaviour that drives them is `static/js/lookup_update.js`, for the
+       same reason. #}
+    {# The rewrite confirmation (#191). A lookup can return text for a field
+       that already holds some, and which of the two is better is not the
+       app's call to make silently -- a translation typed from somebody's own
+       notes is often the one worth keeping, and it is exactly the case this
+       button exists for. So an empty field is filled without asking, and
+       every field that would be *replaced* is listed here with both values
+       side by side.
+
+       Two ways out rather than one, because "no" has two meanings: fill the
+       empty fields and leave the rest alone, or take the ticked replacements
+       as well. Dismissing the popup does neither -- the dialog is left
+       exactly as it was found. #}
+    <div class="modal-overlay" id="field-rewrite-confirm-popup" hidden>
+        <div class="modal modal-dialog rewrite-dialog">
+            <button type="button" class="modal-close" id="rewrite-close"
+                    aria-label="Close and change nothing">&times;</button>
+            <p class="proposal-title">These fields already have something in them</p>
+            <p class="settings-hint">Empty fields are filled either way. Tick the
+               ones you want replaced by what the lookup found.</p>
+            <div class="modal-scroll" id="rewrite-fields"></div>
+            <div class="modal-actions">
+                <button type="button" id="rewrite-apply">Replace the ticked fields</button>
+                <button type="button" class="secondary" id="rewrite-keep">Fill only the empty ones</button>
+            </div>
+        </div>
+    </div>
+
+    {# The part-of-speech picker (#191). A lookup answers with one entry per
+       part of speech and this dialog edits one card, so when none of them
+       matches the card's own -- the translator and the dictionary disagree
+       often enough that #228 exists -- the choice is the learner's rather
+       than the first entry's by default. #}
+    <div class="modal-overlay" id="lookup-pos-modal" hidden>
+        <div class="modal modal-dialog">
+            <button type="button" class="modal-close" id="pos-close"
+                    aria-label="Close and change nothing">&times;</button>
+            <p class="proposal-title">Which one is this card?</p>
+            <p class="settings-hint" id="pos-question"></p>
+            <div id="pos-options" class="pos-options"></div>
+            <div class="modal-actions">
+                <button type="button" class="secondary" id="pos-cancel">Leave the card alone</button>
+            </div>
+        </div>
+    </div>
+
         {% block content %}{% endblock %}
     </main>
 
@@ -1848,5 +1898,10 @@
        the review popup, on quiz results, or #272's listening game — then needs
        markup and nothing else. #}
     <script src="{{ url_for('static', filename='js/speech.js') }}" defer></script>
+    {# Look up & update (#191/#372), beside the popups it drives. `defer` is
+       safe because nothing reads it at parse time -- both call sites use it
+       inside a click handler, which is the ordering #272 got wrong when a
+       probe read `window.kfSpeech` while speech.js was still deferred. #}
+    <script src="{{ url_for('static', filename='js/lookup_update.js') }}" defer></script>
 </body>
 </html>

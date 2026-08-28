@@ -2235,3 +2235,8 @@ button:disabled:hover { background: #9db4c7; }
     cursor: pointer;
 }
 .pos-option:hover { background: var(--blue); color: #fff; }
+
+/* #372: one card's lookup failure said on that card, rather than in an alert
+   covering the eleven beside it. */
+.proposal-error { margin: 0.6rem 0 0; font-size: 0.9rem; }
+.proposal-lookup { margin-top: 0.8rem; margin-right: 0.5rem; }

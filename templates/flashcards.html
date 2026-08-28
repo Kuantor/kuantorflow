@@ -216,51 +216,6 @@
         </div>
     </div>
 
-    {# The rewrite confirmation (#191). A lookup can return text for a field
-       that already holds some, and which of the two is better is not the
-       app's call to make silently -- a translation typed from somebody's own
-       notes is often the one worth keeping, and it is exactly the case this
-       button exists for. So an empty field is filled without asking, and
-       every field that would be *replaced* is listed here with both values
-       side by side.
-
-       Two ways out rather than one, because "no" has two meanings: fill the
-       empty fields and leave the rest alone, or take the ticked replacements
-       as well. Dismissing the popup does neither -- the dialog is left
-       exactly as it was found. #}
-    <div class="modal-overlay" id="field-rewrite-confirm-popup" hidden>
-        <div class="modal modal-dialog rewrite-dialog">
-            <button type="button" class="modal-close" id="rewrite-close"
-                    aria-label="Close and change nothing">&times;</button>
-            <p class="proposal-title">These fields already have something in them</p>
-            <p class="settings-hint">Empty fields are filled either way. Tick the
-               ones you want replaced by what the lookup found.</p>
-            <div class="modal-scroll" id="rewrite-fields"></div>
-            <div class="modal-actions">
-                <button type="button" id="rewrite-apply">Replace the ticked fields</button>
-                <button type="button" class="secondary" id="rewrite-keep">Fill only the empty ones</button>
-            </div>
-        </div>
-    </div>
-
-    {# The part-of-speech picker (#191). A lookup answers with one entry per
-       part of speech and this dialog edits one card, so when none of them
-       matches the card's own -- the translator and the dictionary disagree
-       often enough that #228 exists -- the choice is the learner's rather
-       than the first entry's by default. #}
-    <div class="modal-overlay" id="lookup-pos-modal" hidden>
-        <div class="modal modal-dialog">
-            <button type="button" class="modal-close" id="pos-close"
-                    aria-label="Close and change nothing">&times;</button>
-            <p class="proposal-title">Which one is this card?</p>
-            <p class="settings-hint" id="pos-question"></p>
-            <div id="pos-options" class="pos-options"></div>
-            <div class="modal-actions">
-                <button type="button" class="secondary" id="pos-cancel">Leave the card alone</button>
-            </div>
-        </div>
-    </div>
-
     {# Move a card to another topic (#177). Free text with the existing topics
        offered as suggestions, not as the only choices — topics are derived
        from the cards, so typing a new one simply creates it. #}
@@ -440,196 +395,23 @@
             });
 
             // --- Look up & update (#191) ------------------------------
-            var editLookup = document.getElementById("edit-lookup");
-            var rewriteOverlay = document.getElementById("field-rewrite-confirm-popup");
-            var rewriteFields = document.getElementById("rewrite-fields");
-            var posOverlay = document.getElementById("lookup-pos-modal");
-            var posOptions = document.getElementById("pos-options");
-            var posQuestion = document.getElementById("pos-question");
-            // Examples are one per line in this dialog and a list in the
-            // answer; every other field is a string. One place that knows it.
-            var LIST_FIELDS = ["examples_en", "examples_ukr", "examples_rus"];
-            // Both popups below hold a promise the lookup is waiting on, so
-            // every way of dismissing one has to answer it. Escape used to
-            // hide the overlay directly, which left that promise pending for
-            // good: the button stayed disabled on "Looking up…" and the next
-            // press did nothing at all. These carry each popup's own dismissal
-            // so the keyboard takes exactly the path the buttons take.
-            var dismissPos = null;
-            var dismissRewrite = null;
-
-            function incomingValue(entry, field) {
-                var value = entry[field];
-                if (value === null || value === undefined) return "";
-                return LIST_FIELDS.indexOf(field) === -1
-                    ? String(value) : value.join("\n");
-            }
-
-            function fieldLabel(field) {
-                var input = editForm.elements[field];
-                var label = input && input.labels && input.labels[0];
-                return label ? label.textContent.replace(/\s+/g, " ").trim()
-                             : field;
-            }
-
-            // The word is never a conflict: the lookup was made *for* whatever
-            // is currently typed there, so it can only come back as itself.
-            function conflictsFor(entry) {
-                return EDIT_FIELDS.filter(function (f) {
-                    if (f === "word") return false;
-                    var incoming = incomingValue(entry, f);
-                    var current = editForm.elements[f].value.trim();
-                    return incoming && current && incoming !== current;
-                });
-            }
-
-            function applyEntry(entry, replace) {
-                EDIT_FIELDS.forEach(function (f) {
-                    if (f === "word") return;
-                    var incoming = incomingValue(entry, f);
-                    // Nothing found for a field leaves it alone. An empty
-                    // lookup result must not empty a card.
-                    if (!incoming) return;
-                    var current = editForm.elements[f].value.trim();
-                    if (!current || replace.indexOf(f) !== -1) {
-                        editForm.elements[f].value = incoming;
-                    }
-                });
-            }
-
-            function askWhichPos(entries) {
-                return new Promise(function (resolve) {
-                    posQuestion.textContent =
-                        "The lookup found " + entries.length + " entr"
-                        + (entries.length === 1 ? "y" : "ies")
-                        + ", none of them matching this card's part of speech.";
-                    posOptions.innerHTML = "";
-                    entries.forEach(function (entry) {
-                        var btn = document.createElement("button");
-                        btn.type = "button";
-                        btn.className = "pos-option";
-                        btn.textContent = entry.pos || "no part of speech";
-                        btn.addEventListener("click", function () {
-                            posOverlay.hidden = true;
-                            dismissPos = null;
-                            resolve(entry);
-                        });
-                        posOptions.appendChild(btn);
+            // The behaviour is `static/js/lookup_update.js`, shared with the
+            // review popup since #372 -- one fetch, one conflict rule, one
+            // pair of popups. This is only the dialog's half: which form,
+            // which button, and where a failure gets said.
+            document.getElementById("edit-lookup").addEventListener(
+                "click", function () {
+                    editError.hidden = true;
+                    window.kfLookupUpdate({
+                        url: "{{ url_for('lookup_json') }}",
+                        form: editForm,
+                        button: this,
+                        onError: function (message) {
+                            editError.textContent = message;
+                            editError.hidden = false;
+                        },
                     });
-                    function cancel() {
-                        posOverlay.hidden = true;
-                        dismissPos = null;
-                        resolve(null);
-                    }
-                    dismissPos = cancel;
-                    document.getElementById("pos-cancel").onclick = cancel;
-                    document.getElementById("pos-close").onclick = cancel;
-                    // No outside click (#369): behind this question is a
-                    // lookup that has been paid for and not yet applied.
-                    posOverlay.hidden = false;
                 });
-            }
-
-            function confirmRewrites(entry, conflicts) {
-                return new Promise(function (resolve) {
-                    rewriteFields.innerHTML = "";
-                    conflicts.forEach(function (field) {
-                        var row = document.createElement("label");
-                        row.className = "rewrite-row";
-                        var box = document.createElement("input");
-                        box.type = "checkbox";
-                        box.checked = true;   // they pressed *update*
-                        box.dataset.field = field;
-                        var text = document.createElement("div");
-                        var name = document.createElement("div");
-                        name.className = "rewrite-field";
-                        name.textContent = fieldLabel(field);
-                        var was = document.createElement("div");
-                        was.className = "rewrite-was";
-                        was.textContent = editForm.elements[field].value.trim();
-                        var now = document.createElement("div");
-                        now.className = "rewrite-now";
-                        now.textContent = incomingValue(entry, field);
-                        text.appendChild(name);
-                        text.appendChild(was);
-                        text.appendChild(now);
-                        row.appendChild(box);
-                        row.appendChild(text);
-                        rewriteFields.appendChild(row);
-                    });
-                    function finish(fields) {
-                        rewriteOverlay.hidden = true;
-                        dismissRewrite = null;
-                        resolve(fields);
-                    }
-                    document.getElementById("rewrite-apply").onclick = function () {
-                        finish(Array.prototype.slice.call(
-                            rewriteFields.querySelectorAll("input:checked"))
-                            .map(function (b) { return b.dataset.field; }));
-                    };
-                    document.getElementById("rewrite-keep").onclick = function () {
-                        finish([]);
-                    };
-                    function dismiss() { finish(null); }
-                    dismissRewrite = dismiss;
-                    document.getElementById("rewrite-close").onclick = dismiss;
-                    // No outside click (#369): same lookup, and the two
-                    // buttons below are the answer to the question asked.
-                    rewriteOverlay.hidden = false;
-                });
-            }
-
-            editLookup.addEventListener("click", function () {
-                var word = editForm.elements.word.value.trim();
-                if (!word) {
-                    editError.textContent = "Type a word to look up.";
-                    editError.hidden = false;
-                    return;
-                }
-                editError.hidden = true;
-                editLookup.disabled = true;
-                editLookup.textContent = "Looking up…";
-                fetch("{{ url_for('lookup_json') }}", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(
-                        { word: word, pos: editForm.elements.pos.value.trim() }),
-                }).then(function (resp) {
-                    return resp.json().then(function (data) {
-                        if (!resp.ok) throw new Error(data.error || "The lookup failed.");
-                        return data;
-                    });
-                }).then(function (data) {
-                    // "Nothing to apply" is the question, not "how long is
-                    // the list". A match is what gets applied, and asking the
-                    // list first meant a usable answer could be refused for
-                    // the shape of the field beside it.
-                    if (!data.match && !data.entries.length) {
-                        throw new Error("Nothing came back for that word. "
-                                        + "Your card is unchanged.");
-                    }
-                    return data.match || askWhichPos(data.entries);
-                }).then(function (entry) {
-                    if (!entry) return;             // the picker was dismissed
-                    var conflicts = conflictsFor(entry);
-                    if (!conflicts.length) {
-                        applyEntry(entry, []);
-                        return;
-                    }
-                    return confirmRewrites(entry, conflicts)
-                        .then(function (replace) {
-                            // null is "changed my mind" and touches nothing;
-                            // an empty array is "fill the empty ones only".
-                            if (replace !== null) applyEntry(entry, replace);
-                        });
-                }).catch(function (err) {
-                    editError.textContent = err.message;
-                    editError.hidden = false;
-                }).then(function () {
-                    editLookup.disabled = false;
-                    editLookup.innerHTML = "Look up &amp; update";
-                });
-            });
 
             document.getElementById("edit-cancel").addEventListener("click", closeEdit);
             document.getElementById("edit-close").addEventListener("click", closeEdit);
@@ -657,10 +439,11 @@
             });
             document.addEventListener("keydown", function (e) {
                 if (e.key === "Escape") {
-                    // The two #191 popups first: Escape should answer the
-                    // question in front of you, not close the dialog behind it.
-                    if (!posOverlay.hidden) { dismissPos(); return; }
-                    if (!rewriteOverlay.hidden) { dismissRewrite(); return; }
+                    // The lookup popups answer first: Escape should answer the
+                    // question in front of you, not close the dialog behind
+                    // it. Through their own dismissal, which is what resolves
+                    // the promise the lookup is waiting on (#369).
+                    if (window.kfLookupEscape && window.kfLookupEscape()) return;
                     close(); closeEdit(); closeMove();
                 }
             });
