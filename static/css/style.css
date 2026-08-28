@@ -839,7 +839,17 @@ body.welcome-active {
 .modal-scroll {
     max-height: 65vh;
     overflow-y: auto;
-    padding-right: 0.4rem;  /* keep the scroll bar off the content */
+    /* Two jobs, one on each side, and neither is decoration (#370).
+       Right: keep the scroll bar off the content.
+       Left: leave room for a focus ring. `overflow-y: auto` cannot be
+       one-directional -- the other axis computes to `auto` with it -- so this
+       box clips horizontally at its padding edge, and an outline is painted
+       *outside* the border box. With no padding here the 2px ring on a
+       full-width field was sliced off flat down the left of every field in the
+       edit dialog, while the right kept its corner on the scroll bar's gutter.
+       Measured: 0px of room on the left against the 2px the ring needs. */
+    padding-right: 0.4rem;
+    padding-left: 0.4rem;
 }
 .proposal-card {
     position: relative;
