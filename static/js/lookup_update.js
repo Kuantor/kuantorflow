@@ -93,10 +93,14 @@
     function askWhichPos(entries) {
         return new Promise(function (resolve) {
             var overlay = el("lookup-pos-modal");
-            el("pos-question").textContent =
-                "The lookup found " + entries.length + " entr"
-                + (entries.length === 1 ? "y" : "ies")
-                + ", none of them matching this card's part of speech.";
+            // One entry is not "none of them": the plural was pluralised and
+            // the rest of the sentence was not, which reads as broken English
+            // to the people this app is for.
+            el("pos-question").textContent = entries.length === 1
+                ? "The lookup found one entry, and it does not match this "
+                  + "card's part of speech."
+                : "The lookup found " + entries.length + " entries, none of "
+                  + "them matching this card's part of speech.";
             var options = el("pos-options");
             options.innerHTML = "";
             entries.forEach(function (entry) {

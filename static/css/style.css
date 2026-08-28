@@ -2224,8 +2224,20 @@ button:disabled:hover { background: #9db4c7; }
 .rewrite-was { color: var(--muted); text-decoration: line-through; }
 .rewrite-now { color: var(--ink); }
 
-.pos-options { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; }
+/* The row of parts of speech to choose from. Two spacing corrections, both
+   measured: the gap above it was 32px because the question's own 17.6px
+   margin was joined by the 14.4px every `button` inherits, and the gap below
+   it was **zero** -- `.modal-actions button` sets `margin-top: 0`, so nothing
+   separated a chip from the button under it and they touched. */
+.pos-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 1.2rem;
+}
 .pos-option {
+    margin-top: 0;
     padding: 0.45rem 0.9rem;
     border: 1px solid var(--blue);
     border-radius: 999px;
