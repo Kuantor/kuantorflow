@@ -576,7 +576,22 @@
                         })
                         .then(function (data) {
                             form.classList.add("added");
-                            if (data.duplicate) {
+                            if (data.duplicate && data.filled) {
+                                // A duplicate that gained something (#377).
+                                // No card was written, so this must not say
+                                // "Added" — that is #308, the app confirming
+                                // a save that never happened. But "Already in
+                                // DB" over a card this press has just changed
+                                // is the other half of the same mistake: it
+                                // reads as "nothing happened", when the fields
+                                // the confirmation promised to fill were
+                                // filled. So it says which of the two it was.
+                                btn.textContent = "Filled in ✓";
+                                btn.title = "No second card was made — "
+                                    + data.filled.join(", ")
+                                    + " filled in on the card you already had.";
+                                form.classList.add("filled");
+                            } else if (data.duplicate) {
                                 // Already in the database (issue #101):
                                 // nothing was written, so no refresh needed.
                                 btn.textContent = "Already in DB";

@@ -42,6 +42,8 @@ Cards you already have are marked before you press anything. **Already in DB** b
 
 Press *Add* on a marked card and KuantorFlow asks first, so a press is never spent by surprise. *Add All* asks once for the whole batch instead, and offers to add only the words that are new.
 
+The button then says what the press did: **Added ✓** for a new card, **Filled in ✓** when no second card was needed but the one you already had gained the fields it was missing — hover it to see which — and **Already in DB** when your card was complete and nothing changed.
+
 ### Uploading notes
 
 If your vocabulary already lives in a file, hand it over: `.txt`, `.docx` and `.mht` are all read, including OneNote pages pasted from Reverso Context. The file is parsed into proposed cards and shown in the same review popup, side by side with its own text, so you can see where each card came from before you keep it.

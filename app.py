@@ -635,6 +635,20 @@ def _save_and_log(entry, source, fills=None):
     return True
 
 
+# What a fill actually filled, in the words the popup uses for those fields
+# (#377). A map rather than the labels on the card, because a language hidden
+# in Settings travels as a hidden input with no label to borrow -- and a card
+# whose Russian was filled should say so whether or not that field is on
+# screen.
+FILLED_FIELD_LABELS = {
+    "explanation_en": "English explanation",
+    "examples_en": "English examples",
+    "translation_ukr": "Ukrainian translation",
+    "examples_ukr": "Ukrainian examples",
+    "translation_rus": "Russian translation",
+    "examples_rus": "Russian examples",
+}
+
 # #186's sentence, said in two places since #377: after a save was skipped as a
 # duplicate, and on the chip that says the card is a duplicate before anything
 # is pressed. One string, because they are one fact told at two moments.
@@ -2226,11 +2240,22 @@ def add_card():
                                user=_current_email(),
                                reason="blocked" if is_blocked() else "anonymous")
         return {"ok": False, "sign_in_required": True, "error": refusal}, 403
-    if not _save_and_log(entry, source="review popup"):
+    # What the press *did* when it did not write a card (#377). A skipped
+    # duplicate still fills whatever the stored card left empty (#349), and
+    # this route was the one surface that never said so: the automatic-add
+    # path has reported "Completed N of them with this lookup" since #349,
+    # while the popup's button said "Already in DB" over a card it had just
+    # changed. Which reads as "nothing happened" -- the wrong half of the
+    # truth, and the half that matters least to somebody who pressed Add.
+    fills = []
+    if not _save_and_log(entry, source="review popup", fills=fills):
         # #101 skipped it; #186 explains when the blocking card is hidden.
-        # The key is present only when there is something extra to say, so the
-        # ordinary duplicate answer keeps its existing shape.
+        # The keys are present only when there is something extra to say, so
+        # the ordinary duplicate answer keeps its existing shape.
         body = {"ok": True, "saved": False, "duplicate": True}
+        if fills:
+            body["filled"] = [FILLED_FIELD_LABELS.get(field, field)
+                              for field in fills[0]]
         note = duplicate_notice([entry])
         if note:
             body["note"] = note
