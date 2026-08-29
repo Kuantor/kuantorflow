@@ -590,7 +590,7 @@ def _sections_for_visitor(owner=None):
         owner, alphabetical=current_settings()["alphabetical_topics"])
 
 
-def _save_and_log(entry, source, fills=None):
+def _save_and_log(entry, source, fills=None, allow_duplicate=False):
     """Save one card and record the outcome in logs/cards.log (#30).
 
     Every card written by the app goes through here or through the explicit
@@ -612,7 +612,20 @@ def _save_and_log(entry, source, fills=None):
         applog.card_add_denied(entry, source=source, user=_current_email(),
                                reason="blocked" if is_blocked() else "anonymous")
         raise PermissionError(refusal)
-    card_id = save_flashcard(entry, added_by_user_id=_current_user_id())
+    # Which card this one is about to sit beside (#379), read *before* the
+    # write while "the card with this word and pos" still names exactly one
+    # row. Only for a deliberate duplicate, and only so the log line can say
+    # what it duplicated -- a second row is otherwise indistinguishable later
+    # from the accident #101 exists to prevent.
+    alongside = None
+    if allow_duplicate:
+        try:
+            existing = find_duplicate(entry.get("word"), entry.get("pos"))
+            alongside = existing[0] if existing else None
+        except Exception:
+            app.logger.exception("Could not read the card being duplicated")
+    card_id = save_flashcard(entry, added_by_user_id=_current_user_id(),
+                             allow_duplicate=allow_duplicate)
     if card_id is None:
         # A duplicate, but this lookup may still carry what the stored card is
         # missing -- which is the exit from #349's trap: a card saved during a
@@ -631,7 +644,7 @@ def _save_and_log(entry, source, fills=None):
             applog.card_skipped(entry, source=source, user=_current_email())
         return False
     applog.card_created(entry, source=source, user=_current_email(),
-                        card_id=card_id)
+                        card_id=card_id, alongside=alongside)
     return True
 
 
@@ -740,9 +753,9 @@ def _mark_already_saved(cards):
         word = card.get("word")
         pos = (card.get("pos") or "").strip()
         if state["exact"]:
-            detail = ("You already have a card for “%s”%s. Adding it "
-                      "again will not create a second card — it will only "
-                      "fill in anything the saved one is missing."
+            detail = ("You already have a card for “%s”%s. Adding "
+                      "this one keeps that card and saves this text beside it, "
+                      "as a second card."
                       % (word, " (%s)" % pos if pos else ""))
             if hidden_matters and state["exact"][1] != owner:
                 detail += " " + HIDDEN_DUPLICATE_NOTE
@@ -2240,6 +2253,17 @@ def add_card():
                                user=_current_email(),
                                reason="blocked" if is_blocked() else "anonymous")
         return {"ok": False, "sign_in_required": True, "error": refusal}, 403
+    # The learner was shown the card they already have and answered "add it
+    # anyway" (#379). #101 is lifted for this one press: it exists to stop
+    # repeated lookups piling up rows nobody asked for, and somebody who has
+    # read the confirmation is not making that mistake. Everything else --
+    # every other save path, and this one without the flag -- still refuses.
+    #
+    # Read from the form because the popup is the only thing that can have
+    # asked. A hand-made POST can set it too, and the cost is a second card in
+    # the sender's own deck.
+    anyway = (request.form.get("confirmed_duplicate") or "").strip() in (
+        "1", "true", "yes")
     # What the press *did* when it did not write a card (#377). A skipped
     # duplicate still fills whatever the stored card left empty (#349), and
     # this route was the one surface that never said so: the automatic-add
@@ -2248,7 +2272,8 @@ def add_card():
     # changed. Which reads as "nothing happened" -- the wrong half of the
     # truth, and the half that matters least to somebody who pressed Add.
     fills = []
-    if not _save_and_log(entry, source="review popup", fills=fills):
+    if not _save_and_log(entry, source="review popup", fills=fills,
+                         allow_duplicate=anyway):
         # #101 skipped it; #186 explains when the blocking card is hidden.
         # The keys are present only when there is something extra to say, so
         # the ordinary duplicate answer keeps its existing shape.

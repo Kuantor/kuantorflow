@@ -138,10 +138,18 @@ def topic_placed(name, section, position, topic_id=None):
            section=section, position=position)
 
 
-def card_created(entry, source, user=None, card_id=None):
-    """A new card reached the database."""
+def card_created(entry, source, user=None, card_id=None, alongside=None):
+    """A new card reached the database.
+
+    `alongside` is the id of the card this one deliberately duplicates (#379):
+    a learner was shown what they already had, answered "add it anyway", and
+    #101 was lifted for that one press. Recorded because a second row for the
+    same word and part of speech is otherwise indistinguishable, later, from
+    the accident #101 exists to prevent.
+    """
     _write(CARDS, "CREATE", **_card_fields(entry), id=card_id,
-           langs=_languages(entry), source=source, user=_user(user))
+           langs=_languages(entry), alongside=alongside,
+           source=source, user=_user(user))
 
 
 def card_filled(entry, fields, source, user=None):

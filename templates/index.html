@@ -553,12 +553,19 @@
                 }
                 // Save one card via /cards/add. Returns a promise that rejects
                 // on failure. Shared by the per-card button and "Add All".
-                function addCard(form) {
+                function addCard(form, anyway) {
                     if (form.classList.contains("added")) return Promise.resolve();
                     var btn = form.querySelector(".add-btn");
                     btn.disabled = true;
                     btn.textContent = "Adding…";
-                    return fetch(form.dataset.addUrl, { method: "POST", body: new FormData(form) })
+                    var body = new FormData(form);
+                    // #379: the learner read the confirmation and said add it
+                    // anyway, so this press is allowed past #101. Sent only
+                    // for a card the popup marked and the learner answered
+                    // for -- an ordinary press carries nothing and is refused
+                    // as a duplicate exactly as before.
+                    if (anyway) body.append("confirmed_duplicate", "1");
+                    return fetch(form.dataset.addUrl, { method: "POST", body: body })
                         .then(function (resp) {
                             if (resp.status === 403) {
                                 // Refused for want of an account (#125). A
@@ -577,38 +584,33 @@
                         .then(function (data) {
                             form.classList.add("added");
                             if (data.duplicate) {
-                                // #377. The learner pressed Add, was told this
-                                // word is already saved, said add it anyway --
-                                // and the word is in their deck. "Added" is the
-                                // answer to what they asked. The button used to
-                                // say "Already in DB" here, which reads as a
-                                // refusal of the thing they had just confirmed.
-                                //
-                                // What did **not** happen is the tooltip's job
-                                // rather than the caption's: no second card,
-                                // and either the fields #349 filled on the card
-                                // they already had, or nothing at all because
-                                // that card was complete. The response still
-                                // says `saved: false` and cards.log still
-                                // records a FILL or a SKIP, so nothing that
-                                // reports on the database has been softened --
-                                // only the word on the button, where the reader
-                                // is a learner who is looking at their own
-                                // deck. Mykola's contract is the opposite case
-                                // and keeps its own rule (#308): he speaks
-                                // about cards nobody can see.
-                                btn.textContent = "Added ✓";
-                                btn.title = data.filled
-                                    ? "No second card was made — "
-                                      + data.filled.join(", ")
-                                      + " filled in on the card you already had."
-                                    : "No second card was made — you already "
-                                      + "had this one, with nothing missing.";
-                                if (data.filled) form.classList.add("filled");
+                                // A press that was **not** confirmed: no chip
+                                // on this card, so nothing asked and nothing
+                                // was written (#101). Since #379 a confirmed
+                                // press really does add the card, and comes
+                                // back `saved: true` -- so this branch is the
+                                // honest one for the case where the popup
+                                // could not warn: the word was already there,
+                                // and "Added" would be the lie #308 is about.
+                                if (data.filled) {
+                                    // #349 still filled what the stored card
+                                    // was missing, and #377's point stands:
+                                    // "Already in DB" over a card this press
+                                    // just changed reads as nothing happening.
+                                    btn.textContent = "Filled in ✓";
+                                    btn.title = "No second card was made — "
+                                        + data.filled.join(", ")
+                                        + " filled in on the card you already had.";
+                                    form.classList.add("filled");
+                                } else {
+                                    btn.textContent = "Already in DB";
+                                }
                                 // #186: when the blocking card is hidden by the
-                                // individual-cards filter, say where it is.
+                                // individual-cards filter, "already there" is
+                                // baffling on its own — say where it is.
                                 if (data.note) {
-                                    btn.title += " " + data.note;
+                                    btn.title = (btn.title ? btn.title + " " : "")
+                                        + data.note;
                                     form.classList.add("duplicate-hidden");
                                 }
                             } else {
@@ -786,9 +788,13 @@
                             : Promise.resolve("add"))
                             .then(function (answer) {
                                 if (answer !== "add") return;
-                                return addCard(form).then(function () {
-                                    setTimeout(maybeAutoClose, 700);
-                                });
+                                // Confirmed, so this press may pass #101
+                                // (#379). Only a card the popup marked can
+                                // reach here with an answer at all.
+                                return addCard(form, !!form.dataset.already)
+                                    .then(function () {
+                                        setTimeout(maybeAutoClose, 700);
+                                    });
                             })
                             .catch(function (err) {
                                 if (err && err.signInRequired) {
@@ -821,11 +827,9 @@
                         (known.length
                             ? askDuplicate({
                                   question: "Some of these are already in your "
-                                      + "deck. Adding one that is saved under "
-                                      + "the same part of speech will not "
-                                      + "create a second card — it will only "
-                                      + "fill in anything the saved one is "
-                                      + "missing.",
+                                      + "deck. Adding them anyway keeps the "
+                                      + "cards you have and saves these beside "
+                                      + "them, as second cards for those words.",
                                   items: known.map(function (form) {
                                       return form.dataset.word + " — "
                                           + (form.dataset.already === "card"
@@ -839,14 +843,17 @@
                             : Promise.resolve("add"))
                             .then(function (answer) {
                                 if (!answer) return;   // dismissed: add nothing
+                                // "Add them anyway" is the confirmation #379
+                                // needs; "add only the new ones" confirms
+                                // nothing, and those cards are new anyway.
                                 addAll(answer === "add" ? pending
                                     : pending.filter(function (form) {
                                           return !form.dataset.already;
-                                      }));
+                                      }), answer === "add");
                             });
                     });
 
-                    function addAll(forms) {
+                    function addAll(forms, anyway) {
                         if (!forms.length) {
                             maybeAutoClose();
                             return;
@@ -864,7 +871,8 @@
                                     // account, the rest would be too: sending
                                     // them is a queue of certain failures.
                                     if (refused) return;
-                                    return addCard(form);
+                                    return addCard(
+                                        form, anyway && !!form.dataset.already);
                                 })
                                 .catch(function (err) {
                                     if (err && err.signInRequired) {

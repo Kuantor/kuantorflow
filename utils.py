@@ -485,7 +485,7 @@ def place_topic(name, section, position, created_by_user_id=None):
     return "moved", topic_id
 
 
-def save_flashcard(entry, added_by_user_id=None):
+def save_flashcard(entry, added_by_user_id=None, allow_duplicate=False):
     """
     Insert a flashcard entry into the `flashcards` table, unless a card with
     the same word and part of speech already exists anywhere in the database
@@ -493,6 +493,14 @@ def save_flashcard(entry, added_by_user_id=None):
 
     Returns the new row id, or None when the card was skipped as a duplicate
     (callers use that to tell the user the word is already present).
+
+    `allow_duplicate` writes the row anyway (#379). #101 exists to stop
+    repeated lookups *piling up* rows nobody asked for, and that is still the
+    default everywhere -- but a learner who has been shown the card they
+    already have, and has answered "add it anyway", is not making that
+    mistake. Only the review popup's confirmation passes it, and only for the
+    card the popup marked: every other save path, Mykola's included (#308),
+    keeps refusing.
     Ukrainian and Russian fields are optional; missing keys are stored as NULL.
 
     `added_by_user_id` (issue #89) records who saved the card; None means an
@@ -523,13 +531,14 @@ def save_flashcard(entry, added_by_user_id=None):
         # default); the NULL-safe <=> lets pos-less cards (e.g. .mht imports)
         # be deduplicated too, which a UNIQUE index could not do — MySQL
         # treats NULLs in a unique key as distinct.
-        cursor.execute(
-            "SELECT id FROM flashcards WHERE word = %s AND pos <=> %s LIMIT 1",
-            (entry.get("word"), entry.get("pos")),
-        )
-        if cursor.fetchone() is not None:
-            cursor.close()
-            return None
+        if not allow_duplicate:
+            cursor.execute(
+                "SELECT id FROM flashcards WHERE word = %s AND pos <=> %s LIMIT 1",
+                (entry.get("word"), entry.get("pos")),
+            )
+            if cursor.fetchone() is not None:
+                cursor.close()
+                return None
         # After the duplicate check, never before it: a card that is not going
         # to be written must not leave a new topic behind.
         topic_id, topic_name, topic_created = _get_or_create_topic(
