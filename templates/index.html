@@ -352,7 +352,15 @@
                         {% endif %}
 
                         {% for card in proposed %}
-                            <form class="proposal-card" data-add-url="{{ url_for('add_card') }}">
+                            {# #377. What the deck already holds for this card
+                               travels on the form, because two different things
+                               read it: the chip beside the word, and the
+                               confirmation the Add button opens. The sentence is
+                               built in app.py so both say the same one. #}
+                            <form class="proposal-card" data-add-url="{{ url_for('add_card') }}"
+                                  data-word="{{ card.word }}"
+                                  {% if card.already %}data-already="{{ card.already }}"
+                                  data-already-detail="{{ card.already_detail }}"{% endif %}>
                                 <button type="button" class="card-delete proposal-remove"
                                         aria-label="Remove this card">&times;</button>
                                 <div class="word">{{ card.word }}
@@ -380,6 +388,18 @@
                                             data-say="{{ card.word }}"
                                             title="Hear it"
                                             aria-label="Pronounce {{ card.word }}">&#128266;</button>
+                                    {# #377: said here, before anything is
+                                       pressed, rather than on the Add button
+                                       afterwards. Two states and two words for
+                                       them -- "Already in DB" is the card #101
+                                       will refuse, "Word already saved" is a
+                                       card that will be added beside the ones
+                                       already there. The tooltip is the whole
+                                       sentence, and the confirmation asks it. #}
+                                    {% if card.already %}
+                                        <span class="proposal-saved proposal-saved--{{ card.already }}"
+                                              title="{{ card.already_detail }}">{{ card.already_label }}</span>
+                                    {% endif %}
                                 </div>
                                 <input type="hidden" name="word" value="{{ card.word }}">
                                 <input type="hidden" name="pos" value="{{ card.pos or '' }}">
@@ -487,6 +507,35 @@
             </div>
         </div>
 
+        {# The duplicate confirmation (#377). #145 asks this question before a
+           word lookup -- "you already have card(s) for X, add anyway?" -- and
+           the review popup had no equivalent: pressing Add on a card that is
+           already saved simply reported it afterwards, with the press spent.
+
+           Only for a **file review**. In the word-lookup popup #145 has already
+           asked one step earlier, and asking again here would be the second
+           dialog about one word.
+
+           A sibling of the popup rather than a child, and above it: it opens on
+           top of another dialog, which is the arrangement #372 got wrong and
+           #375 measured. Escape and the cross both answer the promise it holds,
+           and a click on the backdrop does not close it (#369). #}
+        {% if source_content %}
+        <div class="modal-overlay" id="duplicate-confirm-popup" hidden>
+            <div class="modal modal-dialog">
+                <button type="button" class="modal-close" id="dup-confirm-close"
+                        aria-label="Close and add nothing">&times;</button>
+                <p class="proposal-title" id="dup-confirm-title">Already in your deck</p>
+                <p class="settings-hint" id="dup-confirm-question"></p>
+                <ul class="modal-scroll dup-confirm-list" id="dup-confirm-list" hidden></ul>
+                <div class="modal-actions">
+                    <button type="button" id="dup-confirm-add">Add anyway</button>
+                    <button type="button" class="secondary" id="dup-confirm-skip">Leave it</button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <script>
             (function () {
                 var overlay = document.getElementById("proposal-modal");
@@ -551,6 +600,58 @@
                             btn.textContent = "Add";
                             throw err;
                         });
+                }
+
+                // #377. The question #145 asks before a lookup, asked here
+                // before a press: this card is already in the deck, add it
+                // anyway?
+                //
+                // A promise like #191's popups, and for the same reason -- the
+                // answer decides whether a save happens, so the caller waits
+                // for it rather than the dialog reaching back into the save.
+                // Resolves "add", "skip", or null for a dismissal, which is a
+                // third answer rather than a synonym for skip: Add All's skip
+                // still adds the cards that are new.
+                //
+                // Without the dialog on the page it resolves "add" and asks
+                // nothing. That is the word-lookup popup, where #145 asked one
+                // step earlier and a second dialog about one word is one too
+                // many.
+                var dupOverlay = document.getElementById("duplicate-confirm-popup");
+                var dismissDuplicate = null;
+                function askDuplicate(spec) {
+                    if (!dupOverlay) return Promise.resolve("add");
+                    return new Promise(function (resolve) {
+                        document.getElementById("dup-confirm-question")
+                            .textContent = spec.question;
+                        var list = document.getElementById("dup-confirm-list");
+                        list.innerHTML = "";
+                        list.hidden = !(spec.items && spec.items.length);
+                        (spec.items || []).forEach(function (item) {
+                            var li = document.createElement("li");
+                            li.textContent = item;
+                            list.appendChild(li);
+                        });
+                        var addBtn = document.getElementById("dup-confirm-add");
+                        var skipBtn = document.getElementById("dup-confirm-skip");
+                        addBtn.textContent = spec.addLabel;
+                        skipBtn.textContent = spec.skipLabel;
+                        function finish(answer) {
+                            dupOverlay.hidden = true;
+                            dismissDuplicate = null;
+                            resolve(answer);
+                        }
+                        addBtn.onclick = function () { finish("add"); };
+                        skipBtn.onclick = function () { finish("skip"); };
+                        // Every way out answers the promise (#369): a dialog
+                        // hidden without resolving leaves the Add button
+                        // disabled on "Adding..." for good.
+                        dismissDuplicate = function () { finish(null); };
+                        document.getElementById("dup-confirm-close").onclick =
+                            dismissDuplicate;
+                        dupOverlay.hidden = false;
+                        addBtn.focus();
+                    });
                 }
 
                 // #357. `rows` is measured for the popup's desktop width, and
@@ -648,8 +749,23 @@
                 overlay.querySelectorAll(".proposal-card").forEach(function (form) {
                     form.addEventListener("submit", function (e) {
                         e.preventDefault();
-                        addCard(form)
-                            .then(function () { setTimeout(maybeAutoClose, 700); })
+                        // #377: ask first when this card is already in the
+                        // deck. The sentence is the one app.py built, so the
+                        // chip's tooltip and the question cannot drift.
+                        (form.dataset.already
+                            ? askDuplicate({
+                                  question: form.dataset.alreadyDetail,
+                                  addLabel: form.dataset.already === "card"
+                                      ? "Add anyway" : "Add it",
+                                  skipLabel: "Leave it",
+                              })
+                            : Promise.resolve("add"))
+                            .then(function (answer) {
+                                if (answer !== "add") return;
+                                return addCard(form).then(function () {
+                                    setTimeout(maybeAutoClose, 700);
+                                });
+                            })
                             .catch(function (err) {
                                 if (err && err.signInRequired) {
                                     window.kfSignInRequired(err.message);
@@ -666,11 +782,53 @@
 
                 var addAllBtn = document.getElementById("proposal-add-all");
                 if (addAllBtn) {
+                    // #377. One question for the batch, not one per card: a
+                    // parsed file can carry thirty, and a dozen dialogs in a
+                    // row is a worse answer than the silence it replaces. The
+                    // third button is the one that matters here -- "add only
+                    // the new ones" is what somebody uploading a file of mostly
+                    // familiar words actually wants.
                     addAllBtn.addEventListener("click", function () {
+                        var pending = Array.prototype.slice.call(
+                            overlay.querySelectorAll(".proposal-card:not(.added)"));
+                        var known = pending.filter(function (form) {
+                            return form.dataset.already;
+                        });
+                        (known.length
+                            ? askDuplicate({
+                                  question: "Some of these are already in your "
+                                      + "deck. Adding one that is saved under "
+                                      + "the same part of speech will not "
+                                      + "create a second card — it will only "
+                                      + "fill in anything the saved one is "
+                                      + "missing.",
+                                  items: known.map(function (form) {
+                                      return form.dataset.word + " — "
+                                          + (form.dataset.already === "card"
+                                              ? "already saved"
+                                              : "the word is saved under "
+                                                + "another part of speech");
+                                  }),
+                                  addLabel: "Add them anyway",
+                                  skipLabel: "Add only the new ones",
+                              })
+                            : Promise.resolve("add"))
+                            .then(function (answer) {
+                                if (!answer) return;   // dismissed: add nothing
+                                addAll(answer === "add" ? pending
+                                    : pending.filter(function (form) {
+                                          return !form.dataset.already;
+                                      }));
+                            });
+                    });
+
+                    function addAll(forms) {
+                        if (!forms.length) {
+                            maybeAutoClose();
+                            return;
+                        }
                         addAllBtn.disabled = true;
                         addAllBtn.textContent = "Adding…";
-                        var forms = Array.prototype.slice.call(
-                            overlay.querySelectorAll(".proposal-card:not(.added)"));
                         var failed = 0;
                         var refused = false;  // #125: no account — stop, don't retry
                         // Add sequentially so we don't hammer the database.
@@ -701,12 +859,23 @@
                                 addAllBtn.disabled = false;
                                 addAllBtn.textContent = "Add All";
                                 alert(failed + " card(s) could not be saved — please try again.");
+                            } else if (overlay.querySelector(
+                                    ".proposal-card:not(.added)")) {
+                                // #377: "add only the new ones" leaves the
+                                // known cards sitting there, and a button
+                                // reading "Added ✓" over them says the batch
+                                // is finished when two of it were deliberately
+                                // not sent. They can still be added one at a
+                                // time, or by pressing this again and choosing
+                                // the other answer.
+                                addAllBtn.disabled = false;
+                                addAllBtn.textContent = "Add All";
                             } else {
                                 addAllBtn.textContent = "Added ✓";
                             }
                             setTimeout(maybeAutoClose, 700);
                         });
-                    });
+                    }
                 }
 
                 // The popup-wide cross (#146). Cards already added stay saved;
@@ -735,7 +904,10 @@
                         // #372's popups answer first: Escape should answer the
                         // question in front of you rather than discarding the
                         // cards behind it, and through their own dismissal or
-                        // the lookup's promise never settles (#369).
+                        // the lookup's promise never settles (#369). #377's
+                        // confirmation is in the same queue, and ahead of them:
+                        // it is the innermost thing that can be open.
+                        if (dismissDuplicate) { dismissDuplicate(); return; }
                         if (window.kfLookupEscape && window.kfLookupEscape()) return;
                         close();
                     }
