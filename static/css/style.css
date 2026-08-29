@@ -1793,17 +1793,6 @@ button:disabled:hover { background: #9db4c7; }
     border: 1px solid #e0d0a8;
 }
 
-/* A duplicate that gained something (#377). Green rather than the plain
-   "Already in DB" grey, because the press *worked* -- the card the learner
-   already had is better than it was a moment ago. Not the same green as
-   "Added ✓" would be, and not the same words either: no card was written, and
-   #308 is what saying otherwise costs. */
-.proposal-card.filled .add-btn {
-    background: var(--ok-bg);
-    color: var(--ok-ink);
-    border: 1px solid var(--ok-border);
-}
-
 /* Topic picker (#250) — the step between an activity button and a round.
    A list rather than a grid: these are checkboxes to scan and tick, where the
    tiles on the front page are pictures to choose between. Reusing .topic-tile

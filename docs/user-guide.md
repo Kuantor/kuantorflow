@@ -42,7 +42,7 @@ Cards you already have are marked before you press anything. **Already in DB** b
 
 Press *Add* on a marked card and KuantorFlow asks first, so a press is never spent by surprise. *Add All* asks once for the whole batch instead, and offers to add only the words that are new.
 
-The button then says what the press did: **Added ✓** for a new card, **Filled in ✓** when no second card was needed but the one you already had gained the fields it was missing — hover it to see which — and **Already in DB** when your card was complete and nothing changed.
+The button says **Added ✓** either way — the word is in your deck. Hover it on a card you already had and it tells you the rest: no second copy was made, and which empty fields of the saved card were filled in from this one, if any.
 
 ### Uploading notes
 

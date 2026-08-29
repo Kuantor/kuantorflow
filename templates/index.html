@@ -576,30 +576,39 @@
                         })
                         .then(function (data) {
                             form.classList.add("added");
-                            if (data.duplicate && data.filled) {
-                                // A duplicate that gained something (#377).
-                                // No card was written, so this must not say
-                                // "Added" — that is #308, the app confirming
-                                // a save that never happened. But "Already in
-                                // DB" over a card this press has just changed
-                                // is the other half of the same mistake: it
-                                // reads as "nothing happened", when the fields
-                                // the confirmation promised to fill were
-                                // filled. So it says which of the two it was.
-                                btn.textContent = "Filled in ✓";
-                                btn.title = "No second card was made — "
-                                    + data.filled.join(", ")
-                                    + " filled in on the card you already had.";
-                                form.classList.add("filled");
-                            } else if (data.duplicate) {
-                                // Already in the database (issue #101):
-                                // nothing was written, so no refresh needed.
-                                btn.textContent = "Already in DB";
+                            if (data.duplicate) {
+                                // #377. The learner pressed Add, was told this
+                                // word is already saved, said add it anyway --
+                                // and the word is in their deck. "Added" is the
+                                // answer to what they asked. The button used to
+                                // say "Already in DB" here, which reads as a
+                                // refusal of the thing they had just confirmed.
+                                //
+                                // What did **not** happen is the tooltip's job
+                                // rather than the caption's: no second card,
+                                // and either the fields #349 filled on the card
+                                // they already had, or nothing at all because
+                                // that card was complete. The response still
+                                // says `saved: false` and cards.log still
+                                // records a FILL or a SKIP, so nothing that
+                                // reports on the database has been softened --
+                                // only the word on the button, where the reader
+                                // is a learner who is looking at their own
+                                // deck. Mykola's contract is the opposite case
+                                // and keeps its own rule (#308): he speaks
+                                // about cards nobody can see.
+                                btn.textContent = "Added ✓";
+                                btn.title = data.filled
+                                    ? "No second card was made — "
+                                      + data.filled.join(", ")
+                                      + " filled in on the card you already had."
+                                    : "No second card was made — you already "
+                                      + "had this one, with nothing missing.";
+                                if (data.filled) form.classList.add("filled");
                                 // #186: when the blocking card is hidden by the
-                                // individual-cards filter, "already there" is
-                                // baffling on its own — say where it is.
+                                // individual-cards filter, say where it is.
                                 if (data.note) {
-                                    btn.title = data.note;
+                                    btn.title += " " + data.note;
                                     form.classList.add("duplicate-hidden");
                                 }
                             } else {
