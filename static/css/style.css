@@ -2305,22 +2305,39 @@ button:disabled:hover { background: #9db4c7; }
 #duplicate-confirm-popup,
 #word-edit-popup { z-index: 150; }
 
-/* Edit the word (#380). Quiet next to the word it belongs to, and the same
-   shape as the speaker beside it (#283): a small glyph that colours on hover
-   rather than a button competing with the headword. A dozen cards means a
-   dozen of these, and they are not what the eye is looking for. */
+/* Edit the word (#380). Quiet next to the word it belongs to, and **the same
+   box as the speaker beside it**: they are a pair of small controls on one
+   headword, and a pencil measured 23x15 against the speaker's 30x30 read as an
+   afterthought and was a poor target on a phone. So it borrows `.say`'s
+   geometry -- the square inline-flex, the em sizing, and `vertical-align:
+   baseline` for the reason written out at length up there (`middle` drops a
+   glyph 7.2px against the pill beside it).
+
+   Colour rather than the speaker's greyscale: this one is a glyph, not an
+   emoji, so there is nothing to desaturate. */
 .word-edit {
-    margin: 0 0 0 0.15rem;
-    padding: 0 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6em;
+    height: 1.6em;
+    margin-left: 0.4rem;
+    padding: 0;
     border: none;
     background: none;
     color: var(--muted);
     font-size: 0.95rem;
     line-height: 1;
+    vertical-align: baseline;
     cursor: pointer;
-    vertical-align: middle;
+    transition: color 0.15s ease;
 }
-.word-edit:hover { background: none; color: var(--blue); }
+.word-edit:hover, .word-edit:focus-visible { background: none; color: var(--blue); }
+/* The same comfortable target the speaker takes on a phone, and for the same
+   reason: it is pressed with a thumb there. */
+@media (max-width: 640px) {
+    .word-edit { font-size: 1.05rem; width: 1.9em; height: 1.9em; }
+}
 /* The mark's container is always in the markup so a rename has somewhere to
    draw into (#380). Empty, it must take no room -- otherwise every unmarked
    card carries a gap where a chip is not. */
