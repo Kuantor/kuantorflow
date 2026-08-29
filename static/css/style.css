@@ -851,6 +851,32 @@ body.welcome-active {
     padding-right: 0.4rem;
     padding-left: 0.4rem;
 }
+
+/* ...and the dialog around it has to contain it (#375).
+
+   `.modal` caps a dialog at 90vh and `.modal-scroll` caps its list at a
+   **fixed** 65vh, so everything else in the dialog -- title, hint, action row,
+   padding -- is added on top of that cap. A plain block cannot give, and past
+   90vh the content simply carries on past a box with no `overflow` of its own:
+   the rewrite confirmation's two buttons were painted below the dialog's
+   rounded corner, over the overlay. The threshold is arithmetic rather than a
+   matter of how much came back, since the pane is already at its cap --
+   150px of chrome escapes at any viewport shorter than about 740px, and
+   `elementFromPoint` 3px under the edge returned the Apply button.
+
+   #349 fixed the same shape in the review popup; this is the rule it was an
+   instance of. The scroll region may now shrink below its content, which is
+   what leaves the room -- and `min-height: 0` is the load-bearing half, since
+   a flex item defaults to `min-height: auto` and refuses to, which is exactly
+   how a child escapes its parent.
+
+   Deliberately no `max-height: none` beside it: the cap stays a maximum and
+   only shrinking is new, so a window with room to spare renders as it did.
+   That also leaves the edit dialog's own 58vh (`.edit-fields`) alone -- it has
+   the same latent defect, out of reach at any viewport taller than ~366px,
+   and its sizing belongs to #227. */
+.modal-dialog:has(> .modal-scroll) { display: flex; flex-direction: column; }
+.modal-dialog > .modal-scroll { flex: 1 1 auto; min-height: 0; }
 .proposal-card {
     position: relative;
     border: 1px solid #c5d0da;
