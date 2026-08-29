@@ -2301,4 +2301,43 @@ button:disabled:hover { background: #9db4c7; }
    which is the arrangement #296 chose deliberately so the chat keeps working
    while a dialog is open. */
 #field-rewrite-confirm-popup,
-#lookup-pos-modal { z-index: 150; }
+#lookup-pos-modal,
+#duplicate-confirm-popup { z-index: 150; }
+
+/* Already in the deck (#377), said on the card rather than on the button after
+   the press. Two states and two colours, because they mean opposite things
+   about what Add will do:
+
+   `--card` is the word **and** part of speech #101 will refuse, so nothing new
+   is written -- muted and grey, the same "you cannot act here" register as
+   #261's greyed tiles and #353's unreachable translators;
+   `--word` is the same word under a different part of speech, which *will* be
+   added beside the ones already there -- a plain outline, a note rather than a
+   warning.
+
+   Neither is red. A word the learner has already studied is not an error, and
+   the popup is full of cards they chose to parse. */
+.proposal-saved {
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 0.15rem 0.65rem;
+    vertical-align: middle;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    cursor: help;    /* the whole sentence is the tooltip */
+}
+.proposal-saved--card { color: #445; background: #dfe5ea; }
+.proposal-saved--word { color: var(--muted); background: #fff; border: 1px solid #c5d0da; }
+
+/* The words the batch confirmation found, one per line. A list rather than a
+   sentence: a file of thirty can hold a dozen of these, and a comma-separated
+   dozen is a paragraph nobody reads before pressing a button. */
+.dup-confirm-list {
+    margin: 0 0 1.1rem;
+    padding-left: 1.2rem;
+    text-align: left;
+    font-size: 0.92rem;
+    color: var(--ink);
+}
+.dup-confirm-list li { margin: 0.15rem 0; }

@@ -38,6 +38,12 @@ If a word is already in your deck you are warned before it is looked up again. T
 
 Unless you have asked for cards to be saved automatically, the results arrive in a **review popup** first. It names the topic they are going to, and every field is editable — fix a translation, cut an example — then *Add* the cards you want, or *Add All*. Each word carries a speaker button here too, so you can hear it before deciding to keep it.
 
+Cards you already have are marked before you press anything. **Already in DB** beside a word means that word *and that part of speech* is saved already. **Word already saved** means you have the word under a different part of speech, so this card would be added beside the ones already there; hover either label for the whole sentence.
+
+Press *Add* on a marked card and KuantorFlow asks first, so a press is never spent by surprise. *Add All* asks once for the whole batch instead, and offers to add only the words that are new.
+
+Saying yes really adds it: KuantorFlow keeps the card you had and saves the new one beside it, so the word ends up with two cards and you can delete whichever you like less. Saying no leaves your deck exactly as it was. Only a card you confirmed is added this way — an ordinary *Add* on a word already in your deck is still skipped, and says so.
+
 ### Uploading notes
 
 If your vocabulary already lives in a file, hand it over: `.txt`, `.docx` and `.mht` are all read, including OneNote pages pasted from Reverso Context. The file is parsed into proposed cards and shown in the same review popup, side by side with its own text, so you can see where each card came from before you keep it.

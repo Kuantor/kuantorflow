@@ -485,7 +485,7 @@ def place_topic(name, section, position, created_by_user_id=None):
     return "moved", topic_id
 
 
-def save_flashcard(entry, added_by_user_id=None):
+def save_flashcard(entry, added_by_user_id=None, allow_duplicate=False):
     """
     Insert a flashcard entry into the `flashcards` table, unless a card with
     the same word and part of speech already exists anywhere in the database
@@ -493,6 +493,14 @@ def save_flashcard(entry, added_by_user_id=None):
 
     Returns the new row id, or None when the card was skipped as a duplicate
     (callers use that to tell the user the word is already present).
+
+    `allow_duplicate` writes the row anyway (#379). #101 exists to stop
+    repeated lookups *piling up* rows nobody asked for, and that is still the
+    default everywhere -- but a learner who has been shown the card they
+    already have, and has answered "add it anyway", is not making that
+    mistake. Only the review popup's confirmation passes it, and only for the
+    card the popup marked: every other save path, Mykola's included (#308),
+    keeps refusing.
     Ukrainian and Russian fields are optional; missing keys are stored as NULL.
 
     `added_by_user_id` (issue #89) records who saved the card; None means an
@@ -523,13 +531,14 @@ def save_flashcard(entry, added_by_user_id=None):
         # default); the NULL-safe <=> lets pos-less cards (e.g. .mht imports)
         # be deduplicated too, which a UNIQUE index could not do — MySQL
         # treats NULLs in a unique key as distinct.
-        cursor.execute(
-            "SELECT id FROM flashcards WHERE word = %s AND pos <=> %s LIMIT 1",
-            (entry.get("word"), entry.get("pos")),
-        )
-        if cursor.fetchone() is not None:
-            cursor.close()
-            return None
+        if not allow_duplicate:
+            cursor.execute(
+                "SELECT id FROM flashcards WHERE word = %s AND pos <=> %s LIMIT 1",
+                (entry.get("word"), entry.get("pos")),
+            )
+            if cursor.fetchone() is not None:
+                cursor.close()
+                return None
         # After the duplicate check, never before it: a card that is not going
         # to be written must not leave a new topic behind.
         topic_id, topic_name, topic_created = _get_or_create_topic(
@@ -720,6 +729,72 @@ def find_duplicate(word, pos, exclude_id=None):
         return (row[0], row[1]) if row else None
     finally:
         conn.close()
+
+
+def _pos_match_key(pos):
+    """How `save_flashcard()`'s duplicate check sees a part of speech.
+
+    `pos <=> %s` under the column's collation: NULL-safe, so two pos-less cards
+    are duplicates of each other, and case-insensitive. Not `parsers._pos_key()`
+    -- that maps synonyms (`modal verb` and `auxiliary verb` are one part of
+    speech to #228), which is a question about matching a *dictionary entry* to
+    a card. The database has no such rule, and a chip that promised one would
+    be describing a duplicate check that does not exist.
+    """
+    return (pos or "").strip().lower() or None
+
+
+def find_saved_words(pairs):
+    """What the deck already holds for each (word, pos) about to be offered (#377).
+
+    One query for a whole review popup rather than one per card: a notes upload
+    can carry thirty, and the answer is wanted while the page is being built,
+    before anything is pressed.
+
+    Returns a list aligned with `pairs`, each item:
+
+    - `exact`   -- `(id, added_by_user_id)` of the card that already holds this
+      word **and** part of speech, or None. This is precisely what #101 will
+      refuse, so it is what decides whether pressing Add writes anything;
+    - `others`  -- the other parts of speech this word is already saved under,
+      in the spelling they are stored in. A card here still saves; the learner
+      simply has the word already, which is what #145 warns about one step
+      earlier in the lookup panel.
+
+    Matching mirrors `save_flashcard()` exactly and deliberately -- the whole
+    value of the chip is that it predicts what Add will do.
+    """
+    words = [word for word, _ in pairs if word]
+    saved = {}
+    if words:
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            places = ", ".join(["%s"] * len(words))
+            cursor.execute(
+                "SELECT word, pos, id, added_by_user_id FROM flashcards "
+                f"WHERE word IN ({places})",
+                tuple(words),
+            )
+            for word, pos, card_id, owner in cursor.fetchall():
+                saved.setdefault((word or "").strip().lower(), []).append(
+                    (pos, card_id, owner))
+            cursor.close()
+        finally:
+            conn.close()
+
+    states = []
+    for word, pos in pairs:
+        stored = saved.get((word or "").strip().lower(), [])
+        key = _pos_match_key(pos)
+        exact = next(((card_id, owner) for stored_pos, card_id, owner in stored
+                      if _pos_match_key(stored_pos) == key), None)
+        others = []
+        for stored_pos, _card_id, _owner in stored:
+            if _pos_match_key(stored_pos) != key and stored_pos not in others:
+                others.append(stored_pos)
+        states.append({"exact": exact, "others": others})
+    return states
 
 
 def update_flashcard(card_id, entry, owner_id=None, admin=False):

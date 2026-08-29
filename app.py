@@ -51,6 +51,7 @@ from utils import (
     get_topics_by_section,
     get_user_block,
     find_duplicate,
+    find_saved_words,
     move_flashcard,
     set_preferred_name,
     update_flashcard,
@@ -589,7 +590,7 @@ def _sections_for_visitor(owner=None):
         owner, alphabetical=current_settings()["alphabetical_topics"])
 
 
-def _save_and_log(entry, source, fills=None):
+def _save_and_log(entry, source, fills=None, allow_duplicate=False):
     """Save one card and record the outcome in logs/cards.log (#30).
 
     Every card written by the app goes through here or through the explicit
@@ -611,7 +612,20 @@ def _save_and_log(entry, source, fills=None):
         applog.card_add_denied(entry, source=source, user=_current_email(),
                                reason="blocked" if is_blocked() else "anonymous")
         raise PermissionError(refusal)
-    card_id = save_flashcard(entry, added_by_user_id=_current_user_id())
+    # Which card this one is about to sit beside (#379), read *before* the
+    # write while "the card with this word and pos" still names exactly one
+    # row. Only for a deliberate duplicate, and only so the log line can say
+    # what it duplicated -- a second row is otherwise indistinguishable later
+    # from the accident #101 exists to prevent.
+    alongside = None
+    if allow_duplicate:
+        try:
+            existing = find_duplicate(entry.get("word"), entry.get("pos"))
+            alongside = existing[0] if existing else None
+        except Exception:
+            app.logger.exception("Could not read the card being duplicated")
+    card_id = save_flashcard(entry, added_by_user_id=_current_user_id(),
+                             allow_duplicate=allow_duplicate)
     if card_id is None:
         # A duplicate, but this lookup may still carry what the stored card is
         # missing -- which is the exit from #349's trap: a card saved during a
@@ -630,8 +644,29 @@ def _save_and_log(entry, source, fills=None):
             applog.card_skipped(entry, source=source, user=_current_email())
         return False
     applog.card_created(entry, source=source, user=_current_email(),
-                        card_id=card_id)
+                        card_id=card_id, alongside=alongside)
     return True
+
+
+# What a fill actually filled, in the words the popup uses for those fields
+# (#377). A map rather than the labels on the card, because a language hidden
+# in Settings travels as a hidden input with no label to borrow -- and a card
+# whose Russian was filled should say so whether or not that field is on
+# screen.
+FILLED_FIELD_LABELS = {
+    "explanation_en": "English explanation",
+    "examples_en": "English examples",
+    "translation_ukr": "Ukrainian translation",
+    "examples_ukr": "Ukrainian examples",
+    "translation_rus": "Russian translation",
+    "examples_rus": "Russian examples",
+}
+
+# #186's sentence, said in two places since #377: after a save was skipped as a
+# duplicate, and on the chip that says the card is a duplicate before anything
+# is pressed. One string, because they are one fact told at two moments.
+HIDDEN_DUPLICATE_NOTE = ("It is in the shared deck, hidden from you by your "
+                         "'Use only individual cards' setting.")
 
 
 def duplicate_notice(entries):
@@ -652,8 +687,7 @@ def duplicate_notice(entries):
         for entry in entries:
             existing = find_duplicate(entry.get("word"), entry.get("pos"))
             if existing and existing[1] != owner:
-                return ("It is in the shared deck, hidden from you by your "
-                        "'Use only individual cards' setting.")
+                return HIDDEN_DUPLICATE_NOTE
     except Exception:
         # A dead database here costs a nicety, not the save path's answer.
         app.logger.exception("Could not check whether the duplicate is hidden")
@@ -667,6 +701,80 @@ def _word_already_saved(word):
         return flashcard_word_exists(word)
     except Exception:
         return False
+
+
+def _mark_already_saved(cards):
+    """Tell each proposed card what the deck already holds for it (#377).
+
+    The review popup used to say nothing until Add was pressed, and then said
+    it on the button -- so with a dozen cards parsed from a file, finding out
+    which ones were worth pressing cost a dozen presses.
+
+    Two states, because #101 deduplicates on **word + part of speech** and a
+    card parsed from notes often carries no part of speech at all:
+
+    * `card` -- the same word and part of speech is already saved, so Add
+      writes nothing. Not nothing at all: `fill_missing_fields()` still fills
+      what the stored card left empty (#349), and the sentence says so rather
+      than implying a second copy;
+    * `word` -- the word is saved under some other part of speech. This card
+      *will* be added, as a second card, which is what #145 warns about one
+      step earlier in the lookup panel.
+
+    Telling them apart is the point. A chip reading "already in DB" on a card
+    that is about to be added perfectly well is the same lie in the other
+    direction.
+
+    The sentence is built here rather than in the template or the script
+    because it is shown in both -- as the chip's tooltip and as the question
+    the confirmation asks -- and two copies of a sentence is two wordings by
+    the end of the month.
+    """
+    try:
+        states = find_saved_words([(card.get("word"), card.get("pos"))
+                                   for card in cards])
+        # #186: duplicate detection is global while #127 hides other people's
+        # cards, so "already in DB" can be said about a card the visitor
+        # cannot find. Read once for the popup rather than per card.
+        hidden_matters = current_settings()["individual_cards"]
+        owner = _current_user_id()
+    except Exception:
+        # Unknown, so nothing is claimed. The same answer #145's
+        # `_word_already_saved()` gives to an unreachable database, for the
+        # same reason: a popup that says less is better than one that does not
+        # open. Everything the chips need is read in here for that reason --
+        # the cards were parsed or looked up before this ran, and losing them
+        # to a failed nicety would be the expensive half of the request thrown
+        # away for the cheap one.
+        app.logger.exception("Could not check which proposed cards are saved")
+        return
+
+    for card, state in zip(cards, states):
+        word = card.get("word")
+        pos = (card.get("pos") or "").strip()
+        if state["exact"]:
+            detail = ("You already have a card for “%s”%s. Adding "
+                      "this one keeps that card and saves this text beside it, "
+                      "as a second card."
+                      % (word, " (%s)" % pos if pos else ""))
+            if hidden_matters and state["exact"][1] != owner:
+                detail += " " + HIDDEN_DUPLICATE_NOTE
+            card["already"] = "card"
+            card["already_label"] = "Already in DB"
+        elif state["others"]:
+            saved_as = ", ".join(other or "no part of speech"
+                                 for other in state["others"])
+            detail = ("You already have “%s” saved as %s. %s"
+                      % (word, saved_as,
+                         "This card is %s, so it will be added as a separate "
+                         "card." % pos if pos else
+                         "This card has no part of speech, so it will be added "
+                         "as a separate card."))
+            card["already"] = "word"
+            card["already_label"] = "Word already saved"
+        else:
+            continue
+        card["already_detail"] = detail
 
 
 def _example_list(field):
@@ -2092,6 +2200,12 @@ def index():
         except Exception as e:
             message = f"Error: {e}"
 
+    if proposed:
+        # #377. Here rather than in either branch above: both the word lookup
+        # and the notes upload end at the same popup, and what the deck already
+        # holds is a question about the cards, not about where they came from.
+        _mark_already_saved(proposed)
+
     try:
         sections = _sections_for_visitor()
     except Exception:
@@ -2139,11 +2253,34 @@ def add_card():
                                user=_current_email(),
                                reason="blocked" if is_blocked() else "anonymous")
         return {"ok": False, "sign_in_required": True, "error": refusal}, 403
-    if not _save_and_log(entry, source="review popup"):
+    # The learner was shown the card they already have and answered "add it
+    # anyway" (#379). #101 is lifted for this one press: it exists to stop
+    # repeated lookups piling up rows nobody asked for, and somebody who has
+    # read the confirmation is not making that mistake. Everything else --
+    # every other save path, and this one without the flag -- still refuses.
+    #
+    # Read from the form because the popup is the only thing that can have
+    # asked. A hand-made POST can set it too, and the cost is a second card in
+    # the sender's own deck.
+    anyway = (request.form.get("confirmed_duplicate") or "").strip() in (
+        "1", "true", "yes")
+    # What the press *did* when it did not write a card (#377). A skipped
+    # duplicate still fills whatever the stored card left empty (#349), and
+    # this route was the one surface that never said so: the automatic-add
+    # path has reported "Completed N of them with this lookup" since #349,
+    # while the popup's button said "Already in DB" over a card it had just
+    # changed. Which reads as "nothing happened" -- the wrong half of the
+    # truth, and the half that matters least to somebody who pressed Add.
+    fills = []
+    if not _save_and_log(entry, source="review popup", fills=fills,
+                         allow_duplicate=anyway):
         # #101 skipped it; #186 explains when the blocking card is hidden.
-        # The key is present only when there is something extra to say, so the
-        # ordinary duplicate answer keeps its existing shape.
+        # The keys are present only when there is something extra to say, so
+        # the ordinary duplicate answer keeps its existing shape.
         body = {"ok": True, "saved": False, "duplicate": True}
+        if fills:
+            body["filled"] = [FILLED_FIELD_LABELS.get(field, field)
+                              for field in fills[0]]
         note = duplicate_notice([entry])
         if note:
             body["note"] = note
