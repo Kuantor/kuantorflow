@@ -822,7 +822,7 @@
                         wordOverlay.hidden = true;
                         dismissWordEdit = null;
                     }
-                    save.onclick = function () {
+                    function commit() {
                         var word = input.value.trim();
                         if (!word) {
                             // Refused here rather than at the route: add_card()
@@ -835,6 +835,22 @@
                         }
                         finish();
                         if (word !== form.elements.word.value) renameCard(form, word);
+                    }
+                    save.onclick = commit;
+                    // Enter saves, which is what a one-field dialog is for, and
+                    // the other half of an Escape that already cancels. The
+                    // same `commit()` the button runs, so the empty-word
+                    // refusal cannot be walked past with a keypress.
+                    //
+                    // `preventDefault` because this box is *not* inside the
+                    // card's form -- the popup is a sibling of the review
+                    // popup, so Enter has no submit to find and would do
+                    // nothing at all. Stopping it anyway costs nothing and
+                    // keeps that true if the markup ever moves.
+                    input.onkeydown = function (e) {
+                        if (e.key !== "Enter") return;
+                        e.preventDefault();
+                        commit();
                     };
                     dismissWordEdit = finish;
                     cancel.onclick = finish;
