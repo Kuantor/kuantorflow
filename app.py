@@ -750,31 +750,42 @@ def _mark_already_saved(cards):
         return
 
     for card, state in zip(cards, states):
-        word = card.get("word")
-        pos = (card.get("pos") or "").strip()
-        if state["exact"]:
-            detail = ("You already have a card for “%s”%s. Adding "
-                      "this one keeps that card and saves this text beside it, "
-                      "as a second card."
-                      % (word, " (%s)" % pos if pos else ""))
-            if hidden_matters and state["exact"][1] != owner:
-                detail += " " + HIDDEN_DUPLICATE_NOTE
-            card["already"] = "card"
-            card["already_label"] = "Already in DB"
-        elif state["others"]:
-            saved_as = ", ".join(other or "no part of speech"
-                                 for other in state["others"])
-            detail = ("You already have “%s” saved as %s. %s"
-                      % (word, saved_as,
-                         "This card is %s, so it will be added as a separate "
-                         "card." % pos if pos else
-                         "This card has no part of speech, so it will be added "
-                         "as a separate card."))
-            card["already"] = "word"
-            card["already_label"] = "Word already saved"
-        else:
-            continue
-        card["already_detail"] = detail
+        card.update(_saved_mark(card.get("word"), card.get("pos"), state,
+                                hidden_matters, owner))
+
+
+def _saved_mark(word, pos, state, hidden_matters, owner):
+    """The chip and the sentence for one card, or `{}` for a word nobody has.
+
+    Its own function because #380 asks the same question again: the pencil
+    changes the word in the browser, and the mark rendered here was an answer
+    about the word the *parser* produced. `/saved.json` re-asks and hands back
+    what this returns, so a renamed card cannot end up wearing a mark from a
+    different word -- which would be #101 refusing in silence again, the
+    failure #377 and #379 both exist to end.
+    """
+    pos = (pos or "").strip()
+    if state["exact"]:
+        detail = ("You already have a card for “%s”%s. Adding "
+                  "this one keeps that card and saves this text beside it, "
+                  "as a second card."
+                  % (word, " (%s)" % pos if pos else ""))
+        if hidden_matters and state["exact"][1] != owner:
+            detail += " " + HIDDEN_DUPLICATE_NOTE
+        return {"already": "card", "already_label": "Already in DB",
+                "already_detail": detail}
+    if state["others"]:
+        saved_as = ", ".join(other or "no part of speech"
+                             for other in state["others"])
+        detail = ("You already have “%s” saved as %s. %s"
+                  % (word, saved_as,
+                     "This card is %s, so it will be added as a separate "
+                     "card." % pos if pos else
+                     "This card has no part of speech, so it will be added "
+                     "as a separate card."))
+        return {"already": "word", "already_label": "Word already saved",
+                "already_detail": detail}
+    return {}
 
 
 def _example_list(field):
@@ -2455,6 +2466,44 @@ def move_card(topic, card_id):
     if from_topic not in remaining:
         return redirect(url_for("index"))
     return redirect(url_for("flashcards", topic=from_topic))
+
+
+@app.route("/saved.json", methods=["POST"])
+def saved_json():
+    """Whether one word is already in the deck, as JSON (#380).
+
+    #377 marks every proposed card when the popup is built, on the server, for
+    the word the *parser* produced. The pencil changes that word afterwards in
+    the browser, so the card asks this and re-marks itself: the chip appears,
+    changes or goes, and the confirmation #379 made worth answering asks about
+    the word that will actually be saved. Without it a rename onto a word the
+    deck already holds would be refused in silence by #101 -- the failure both
+    of those tickets exist to end.
+
+    A **read**, and cheaper than the page that asks it: one query, no provider
+    call, nothing written. So it asks for no permission the review popup does
+    not already have -- unlike `/lookup.json`, which spends money and wants an
+    account for it (#125).
+
+    An unreachable database answers `known: false` rather than an error, and
+    the card drops its mark instead of wearing one from a different word: the
+    same "say nothing rather than something wrong" `_mark_already_saved()`
+    answers with, and #145 before it.
+    """
+    data = request.get_json(silent=True) or {}
+    word = (data.get("word") or "").strip()
+    pos = (data.get("pos") or "").strip()
+    if not word:
+        return {"ok": False, "error": "word is required"}, 400
+    try:
+        state = find_saved_words([(word, pos or None)])[0]
+        hidden_matters = current_settings()["individual_cards"]
+        owner = _current_user_id()
+    except Exception:
+        app.logger.exception("Could not check whether a renamed word is saved")
+        return {"ok": True, "known": False, "mark": {}}
+    return {"ok": True, "known": True,
+            "mark": _saved_mark(word, pos, state, hidden_matters, owner)}
 
 
 @app.route("/lookup.json", methods=["POST"])

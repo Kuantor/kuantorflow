@@ -363,7 +363,13 @@
                                   data-already-detail="{{ card.already_detail }}"{% endif %}>
                                 <button type="button" class="card-delete proposal-remove"
                                         aria-label="Remove this card">&times;</button>
-                                <div class="word">{{ card.word }}
+                                <div class="word">
+                                    {# The word is read, not typed (#380): a
+                                       heading, as it was, with the pencil
+                                       beside it. Wrapped so the rename has one
+                                       place to write, rather than hunting for a
+                                       text node among the controls. #}
+                                    <span class="word-text">{{ card.word }}</span>
                                     {% if card.pos %}<span class="pos">{{ card.pos }}</span>{% endif %}
                                     {# Hear it before deciding to keep it (#301).
                                        The same control as the topic page and the
@@ -396,9 +402,32 @@
                                        card that will be added beside the ones
                                        already there. The tooltip is the whole
                                        sentence, and the confirmation asks it. #}
-                                    {% if card.already %}
+                                    {# The mark lives in a container that is
+                                       always here, even when empty: #380's
+                                       rename re-asks the server and rewrites
+                                       it, and a chip that only exists when the
+                                       server drew one has nowhere to appear. #}
+                                    <span class="proposal-mark">
+                                        {%- if card.already -%}
                                         <span class="proposal-saved proposal-saved--{{ card.already }}"
                                               title="{{ card.already_detail }}">{{ card.already_label }}</span>
+                                        {%- endif -%}
+                                    </span>
+                                    {# #380. Only for a file review: a word
+                                       typed into the lookup panel is the
+                                       learner's own and can be typed again,
+                                       where a word parsed out of a file is
+                                       whatever the file said -- `dist'inct`,
+                                       stress mark and all, which no provider
+                                       and no game can match.
+
+                                       `type="button"` for the reason the
+                                       speaker above says twice: this card is a
+                                       form and its submit is Add. #}
+                                    {% if source_content %}
+                                        <button type="button" class="word-edit"
+                                                title="Edit the word"
+                                                aria-label="Edit the word {{ card.word }}">&#9998;</button>
                                     {% endif %}
                                 </div>
                                 <input type="hidden" name="word" value="{{ card.word }}">
@@ -506,6 +535,41 @@
                 {% endif %}
             </div>
         </div>
+
+        {# Editing the word (#380). A word parsed out of a file is whatever
+           the file said: one card in the deck is saved as `dist'inct`, stress
+           mark and all, and nothing about it works -- Oxford has no such
+           headword, the games' matcher cannot find it in any text, the
+           speaker pronounces the apostrophe, and *Look up & update*, the one
+           button that could repair it, asks the providers for `dist'inct` and
+           comes back empty.
+
+           Every other field on the card was already editable. This one was a
+           heading, so the two seconds before Add was pressed were the only
+           moment it could have been fixed, and there was no way to do it.
+
+           A popup rather than a text box, so the word stays the big blue
+           thing you read a card by. Same layer and same dismissal rules as
+           #377's confirmation, for the same reason: it opens on top of the
+           review popup. #}
+        {% if source_content %}
+        <div class="modal-overlay" id="word-edit-popup" hidden>
+            <div class="modal modal-dialog">
+                <button type="button" class="modal-close" id="word-edit-close"
+                        aria-label="Close and change nothing">&times;</button>
+                <p class="proposal-title">Edit the word</p>
+                <p class="settings-hint">This is what the card will be saved
+                   as, and what a lookup will ask the dictionary for.</p>
+                <label for="word-edit-input">Word</label>
+                <input type="text" id="word-edit-input" autocomplete="off">
+                <p class="settings-error" id="word-edit-error" hidden></p>
+                <div class="modal-actions">
+                    <button type="button" id="word-edit-save">Save the word</button>
+                    <button type="button" class="secondary" id="word-edit-cancel">Cancel</button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         {# The duplicate confirmation (#377). #145 asks this question before a
            word lookup -- "you already have card(s) for X, add anyway?" -- and
@@ -679,6 +743,128 @@
                         addBtn.focus();
                     });
                 }
+
+                // #380. The word is the one field that was not editable,
+                // and the one that decides everything else about the card:
+                // what is saved, what a lookup asks the providers for, what
+                // the games can find in a text, what the speaker says, and
+                // whether #377 thinks the deck already holds it.
+                var wordOverlay = document.getElementById("word-edit-popup");
+                var dismissWordEdit = null;
+
+                // Draw the "already in the deck" mark, or take it away. The
+                // server decides what it says (#377 builds that sentence, and
+                // the chip and the confirmation must not drift), so this only
+                // renders what it was handed.
+                function markCard(form, mark, known) {
+                    var holder = form.querySelector(".proposal-mark");
+                    holder.innerHTML = "";
+                    delete form.dataset.already;
+                    delete form.dataset.alreadyDetail;
+                    if (!known || !mark || !mark.already) return;
+                    var chip = document.createElement("span");
+                    chip.className = "proposal-saved proposal-saved--"
+                        + mark.already;
+                    chip.title = mark.already_detail;
+                    chip.textContent = mark.already_label;
+                    holder.appendChild(chip);
+                    form.dataset.already = mark.already;
+                    form.dataset.alreadyDetail = mark.already_detail;
+                }
+
+                // One word, in the five places a card carries it -- and then
+                // the sixth, which is a question rather than a copy: the mark
+                // on screen was an answer about the *old* word, so the card
+                // asks again. A rename onto a word the deck already holds has
+                // to get #377's confirmation, or #101 refuses in silence and
+                // the press does nothing (#379).
+                function renameCard(form, word) {
+                    form.querySelector(".word-text").textContent = word;
+                    form.elements.word.value = word;
+                    form.dataset.word = word;
+                    var say = form.querySelector(".say");
+                    if (say) {
+                        say.setAttribute("data-say", word);
+                        say.setAttribute("aria-label", "Pronounce " + word);
+                    }
+                    var pencil = form.querySelector(".word-edit");
+                    if (pencil) {
+                        pencil.setAttribute("aria-label", "Edit the word " + word);
+                    }
+                    return fetch("{{ url_for('saved_json') }}", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            word: word,
+                            pos: (form.elements.pos.value || "").trim(),
+                        }),
+                    }).then(function (resp) {
+                        return resp.json();
+                    }).then(function (data) {
+                        markCard(form, data.mark, data.known);
+                    }).catch(function () {
+                        // Unknown, so the card wears nothing rather than a
+                        // mark about a word it no longer holds.
+                        markCard(form, null, false);
+                    });
+                }
+
+                function editWord(form) {
+                    if (!wordOverlay) return;
+                    var input = document.getElementById("word-edit-input");
+                    var error = document.getElementById("word-edit-error");
+                    var save = document.getElementById("word-edit-save");
+                    var cancel = document.getElementById("word-edit-cancel");
+                    var close = document.getElementById("word-edit-close");
+                    input.value = form.elements.word.value;
+                    error.hidden = true;
+                    function finish() {
+                        wordOverlay.hidden = true;
+                        dismissWordEdit = null;
+                    }
+                    function commit() {
+                        var word = input.value.trim();
+                        if (!word) {
+                            // Refused here rather than at the route: add_card()
+                            // answers 400 for an empty word, but by then the
+                            // popup is gone and the card with it.
+                            error.textContent = "A card needs a word.";
+                            error.hidden = false;
+                            input.focus();
+                            return;
+                        }
+                        finish();
+                        if (word !== form.elements.word.value) renameCard(form, word);
+                    }
+                    save.onclick = commit;
+                    // Enter saves, which is what a one-field dialog is for, and
+                    // the other half of an Escape that already cancels. The
+                    // same `commit()` the button runs, so the empty-word
+                    // refusal cannot be walked past with a keypress.
+                    //
+                    // `preventDefault` because this box is *not* inside the
+                    // card's form -- the popup is a sibling of the review
+                    // popup, so Enter has no submit to find and would do
+                    // nothing at all. Stopping it anyway costs nothing and
+                    // keeps that true if the markup ever moves.
+                    input.onkeydown = function (e) {
+                        if (e.key !== "Enter") return;
+                        e.preventDefault();
+                        commit();
+                    };
+                    dismissWordEdit = finish;
+                    cancel.onclick = finish;
+                    close.onclick = finish;
+                    wordOverlay.hidden = false;
+                    input.focus();
+                    input.select();
+                }
+
+                overlay.querySelectorAll(".word-edit").forEach(function (btn) {
+                    btn.addEventListener("click", function () {
+                        editWord(btn.closest(".proposal-card"));
+                    });
+                });
 
                 // #357. `rows` is measured for the popup's desktop width, and
                 // the same sentences wrap one line further on a phone - so a
@@ -937,8 +1123,12 @@
                         // question in front of you rather than discarding the
                         // cards behind it, and through their own dismissal or
                         // the lookup's promise never settles (#369). #377's
-                        // confirmation is in the same queue, and ahead of them:
-                        // it is the innermost thing that can be open.
+                        // confirmation and #380's word editor are in the same
+                        // queue, innermost first -- and the word editor is
+                        // ahead of the confirmation because the two cannot be
+                        // open together and it is the one a stray Escape would
+                        // otherwise close the whole popup behind.
+                        if (dismissWordEdit) { dismissWordEdit(); return; }
                         if (dismissDuplicate) { dismissDuplicate(); return; }
                         if (window.kfLookupEscape && window.kfLookupEscape()) return;
                         close();
