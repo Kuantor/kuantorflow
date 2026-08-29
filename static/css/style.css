@@ -2343,6 +2343,20 @@ button:disabled:hover { background: #9db4c7; }
    card carries a gap where a chip is not. */
 .proposal-mark:empty { display: none; }
 #word-edit-popup input[type="text"] { width: 100%; }
+/* The action row sat flat against the text box -- measured at 0px, where every
+   other gap in this dialog is the 17.6px `.modal-dialog p` sets. `.modal-actions`
+   has no spacing of its own (it is usually preceded by a paragraph or a list
+   that carries its own margin, and #372 gave the part-of-speech chips theirs for
+   the same reason), and a bare `<input>` carries none.
+
+   On the row rather than on the input, so the gap is the same whether or not
+   the error line is showing: those two margins collapse to this one, and the
+   error stays tight under the field it is about. */
+#word-edit-popup .modal-actions { margin-top: 1.1rem; }
+/* And the error line, which was flat against the box for the same reason:
+   `.settings-error` carries a bottom margin and no top one. Smaller than
+   the gap below it, because it belongs to the field above. */
+#word-edit-popup .settings-error { margin-top: 0.4rem; }
 
 /* Already in the deck (#377), said on the card rather than on the button after
    the press. Two states and two colours, because they mean opposite things
