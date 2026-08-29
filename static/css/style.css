@@ -2302,7 +2302,30 @@ button:disabled:hover { background: #9db4c7; }
    while a dialog is open. */
 #field-rewrite-confirm-popup,
 #lookup-pos-modal,
-#duplicate-confirm-popup { z-index: 150; }
+#duplicate-confirm-popup,
+#word-edit-popup { z-index: 150; }
+
+/* Edit the word (#380). Quiet next to the word it belongs to, and the same
+   shape as the speaker beside it (#283): a small glyph that colours on hover
+   rather than a button competing with the headword. A dozen cards means a
+   dozen of these, and they are not what the eye is looking for. */
+.word-edit {
+    margin: 0 0 0 0.15rem;
+    padding: 0 0.25rem;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+    vertical-align: middle;
+}
+.word-edit:hover { background: none; color: var(--blue); }
+/* The mark's container is always in the markup so a rename has somewhere to
+   draw into (#380). Empty, it must take no room -- otherwise every unmarked
+   card carries a gap where a chip is not. */
+.proposal-mark:empty { display: none; }
+#word-edit-popup input[type="text"] { width: 100%; }
 
 /* Already in the deck (#377), said on the card rather than on the button after
    the press. Two states and two colours, because they mean opposite things

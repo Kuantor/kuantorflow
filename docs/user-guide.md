@@ -38,6 +38,8 @@ If a word is already in your deck you are warned before it is looked up again. T
 
 Unless you have asked for cards to be saved automatically, the results arrive in a **review popup** first. It names the topic they are going to, and every field is editable — fix a translation, cut an example — then *Add* the cards you want, or *Add All*. Each word carries a speaker button here too, so you can hear it before deciding to keep it.
 
+The word itself has a **pencil** beside it. A word parsed out of a file is whatever the file said — a stress mark, a typo, a stray letter — and a wrong word cannot be looked up, cannot be found in a text by the games, and is pronounced wrongly by the speaker. Press the pencil, fix it, and the card follows: what gets saved, what *Look up & update* asks for, and whether the card is marked as one you already have.
+
 Cards you already have are marked before you press anything. **Already in DB** beside a word means that word *and that part of speech* is saved already. **Word already saved** means you have the word under a different part of speech, so this card would be added beside the ones already there; hover either label for the whole sentence.
 
 Press *Add* on a marked card and KuantorFlow asks first, so a press is never spent by surprise. *Add All* asks once for the whole batch instead, and offers to add only the words that are new.
