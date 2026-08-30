@@ -370,11 +370,24 @@ def _get_or_create_topic(cursor, name, created_by_user_id=None):
 
     Matching a name follows the column collation, so 'Work' finds 'work': the
     same rule the old GROUP BY applied when it displayed them as one topic.
+
+    Since #382 a name can match **two** rows -- the public one and a private one
+    belonging to whoever is asking -- and the caller's own wins. That is the
+    whole of what private topics cost this function: a learner with a private
+    'Work' files into it, everybody else files into the public 'Work', and
+    neither can see the other's. An anonymous caller has no namespace of their
+    own, so `namespace = NULL` matches nothing and they can only ever reach the
+    public row.
     """
     name = (name or "").strip()
     if not name:
         return None, None, False
-    cursor.execute("SELECT id, name FROM topics WHERE name = %s", (name,))
+    cursor.execute(
+        "SELECT id, name FROM topics "
+        "WHERE name = %s AND (namespace = 0 OR namespace = %s) "
+        "ORDER BY (namespace = %s) DESC LIMIT 1",
+        (name, created_by_user_id, created_by_user_id),
+    )
     row = cursor.fetchone()
     if row is not None:
         return row[0], row[1], False
@@ -403,6 +416,169 @@ def _get_or_create_topic(cursor, name, created_by_user_id=None):
     cursor.execute("SELECT name FROM topics WHERE id = %s", (topic_id,))
     row = cursor.fetchone()
     return topic_id, (row[0] if row else name), False
+
+
+def resolve_topic(name, viewer_id=None, admin=False, topic_id=None):
+    """The one topic this visitor means by `name` (#382), or None.
+
+    Returns `{"id", "name", "is_public", "created_by_user_id"}`.
+
+    A name is no longer a key. Two rows can hold one name -- the public topic
+    and a private one -- so this resolves the same way `_get_or_create_topic()`
+    files a card: **the visitor's own first, then the public one.** Nobody but
+    the admin can see more than one candidate, which is why the ambiguity has
+    exactly one reader.
+
+    `topic_id` settles it outright, and is how the browse page links the admin
+    to a private topic that shares a name with something else. It is still
+    checked against the visibility rule: an id in a URL is a guess like any
+    other.
+
+    None means "no topic you may see by that name", which the topic page turns
+    into a 404 -- a private topic must be refused when named, not merely left
+    out of the lists that name it.
+    """
+    name = (name or "").strip()
+    if not name and topic_id is None:
+        return None
+    visible, visible_params = _visible_clause(viewer_id, admin)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        columns = ("SELECT t.id, t.name, t.is_public, t.created_by_user_id, "
+                   # The creator's name, for the one visitor who can see a
+                   # topic that is not theirs: a padlock the admin cannot
+                   # attribute is a padlock they have to go and query for.
+                   "       COALESCE(u.preferred_name, u.display_name, u.email) "
+                   "FROM topics t LEFT JOIN users u "
+                   "  ON u.id = t.created_by_user_id ")
+        if topic_id is not None:
+            cursor.execute(
+                columns + "WHERE t.id = %s" + visible,
+                (topic_id,) + visible_params)
+        else:
+            cursor.execute(
+                columns + "WHERE t.name = %s" + visible +
+                # Yours first, then the public one -- and "yours" is the
+                # **namespace**, not the creator: a learner who created the
+                # public 'Work' as well as their own private one would
+                # otherwise tie on the creator and be handed the public row,
+                # which is not the topic they mean. The final tiebreak is the
+                # id, so that the admin -- who can see several -- gets a stable
+                # answer rather than whichever row the engine felt like.
+                " ORDER BY (t.namespace = %s) DESC, t.is_public DESC,"
+                " t.id LIMIT 1",
+                (name,) + visible_params + (viewer_id,))
+        row = cursor.fetchone()
+        cursor.close()
+    finally:
+        conn.close()
+    if row is None:
+        return None
+    return {"id": row[0], "name": row[1], "is_public": bool(row[2]),
+            "created_by_user_id": row[3], "creator": row[4]}
+
+
+def private_topics(viewer_id=None, admin=False):
+    """The private topics this visitor can see, as `{name: {...}}` (#382).
+
+    A map beside the page's data rather than a third element in
+    `get_topics_by_section()`'s pairs -- the shape #223's icons already
+    established, and for the same reason: that pair is read by the index page,
+    the move dialog and the Mykola widget's own renderer, and widening it would
+    be a change to all three for something only the browse page draws.
+
+    Carries the id, because the admin is the one visitor who can see two topics
+    with the same name and needs a link that says which. And the creator's
+    name, because a padlock that does not say *whose* is no use to somebody
+    monitoring the deck.
+    """
+    visible, visible_params = _visible_clause(viewer_id, admin)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT t.id, t.name, t.created_by_user_id, "
+            "       COALESCE(u.preferred_name, u.display_name, u.email) "
+            "FROM topics t LEFT JOIN users u ON u.id = t.created_by_user_id "
+            "WHERE t.is_public = 0" + visible + " ORDER BY t.name, t.id",
+            visible_params)
+        rows = cursor.fetchall()
+        cursor.close()
+    finally:
+        conn.close()
+    return {name: {"id": topic_id, "created_by_user_id": creator,
+                   "creator": owner, "mine": creator is not None
+                   and creator == viewer_id}
+            for topic_id, name, creator, owner in rows}
+
+
+def set_topic_visibility(topic_id, public, viewer_id=None, admin=False):
+    """Make one topic public or private (#382). Returns a status string.
+
+    - `"changed"`    -- done;
+    - `"unchanged"`  -- it was already that way;
+    - `"denied"`     -- not this visitor's topic to change;
+    - `"nobodys"`    -- the topic has no creator, so it cannot be private;
+    - `"shared"`     -- it holds cards other people added;
+    - `"taken"`      -- the name is already used in the namespace it would move
+      into;
+    - `"missing"`    -- no such topic.
+
+    **`shared` is the rule that keeps the promise simple.** A topic may hold
+    anyone's cards, so hiding one could take a card out of the deck of the
+    learner who added it -- silently, and from a page they are not looking at.
+    Refusing the flip means "private" needs no asterisk: everything in a
+    private topic belongs to the one person who can see it. Cards with no owner
+    at all count as somebody else's: the seeded deck (#203) is unowned, and it
+    is shared by construction.
+
+    Both columns are written in **one** statement, because `namespace` is the
+    app's job only for want of a generated column MySQL would not give us (see
+    schema.sql), and the two disagreeing is the one way this feature breaks
+    quietly: the key would then be reserving the wrong name.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT name, is_public, created_by_user_id FROM topics "
+            "WHERE id = %s", (topic_id,))
+        row = cursor.fetchone()
+        if row is None:
+            return "missing"
+        name, is_public, creator = row[0], bool(row[1]), row[2]
+        if not admin and (creator is None or creator != viewer_id):
+            return "denied"
+        if public == is_public:
+            return "unchanged"
+        if not public:
+            if creator is None:
+                return "nobodys"
+            cursor.execute(
+                "SELECT 1 FROM flashcards WHERE topic_id = %s "
+                "  AND (added_by_user_id IS NULL OR added_by_user_id <> %s) "
+                "LIMIT 1",
+                (topic_id, creator))
+            if cursor.fetchone() is not None:
+                return "shared"
+        namespace = 0 if public else creator
+        try:
+            cursor.execute(
+                "UPDATE topics SET is_public = %s, namespace = %s "
+                "WHERE id = %s",
+                (1 if public else 0, namespace, topic_id))
+        except mysql.connector.IntegrityError:
+            # uq_topics_namespace: a public topic of that name already exists,
+            # or this learner already has a private one. The database answering
+            # rather than a check beforehand is deliberate -- a check has a gap
+            # between the question and the write, and this is the guarantee.
+            return "taken"
+        conn.commit()
+        cursor.close()
+        return "changed"
+    finally:
+        conn.close()
 
 
 def place_topic(name, section, position, created_by_user_id=None):
@@ -1017,6 +1193,45 @@ def resolve_user_cards(user_id, keep_cards=True) -> int:
             cursor.execute(
                 "DELETE FROM flashcards WHERE added_by_user_id = %s", (user_id,))
         affected = cursor.rowcount
+        # Their private topics become public first (#382). `fk_topics_user` is
+        # ON DELETE SET NULL, so a moment later this topic has no creator -- and
+        # a private topic with no creator is one **nobody** can see and nobody
+        # can un-hide, since every visibility test is `created_by_user_id = me`
+        # and the control belongs to the creator. Its name would also stay
+        # reserved in a namespace whose owner no longer exists.
+        #
+        # Public is the only outcome that leaves the deck usable, and it is the
+        # honest one: a departing account's cards either stay as community
+        # property or go, and this is the same question answered the same way
+        # for the topic around them.
+        cursor.execute(
+            "SELECT id, name FROM topics "
+            "WHERE created_by_user_id = %s AND is_public = 0", (user_id,))
+        for topic_id, name in list(cursor.fetchall()):
+            try:
+                cursor.execute(
+                    "UPDATE topics SET is_public = 1, namespace = 0 "
+                    "WHERE id = %s", (topic_id,))
+                continue
+            except mysql.connector.IntegrityError:
+                pass
+            # A public topic already holds that name, so this one cannot take
+            # it. Its cards move there and the empty private row goes: that is
+            # where they would have been if the topic had never been private,
+            # and it is the only outcome that neither loses a card nor fails
+            # the deletion the learner asked for. An empty topic row is kept
+            # everywhere else (#207) because its name, creator and age are
+            # worth keeping -- none of which survives here anyway.
+            cursor.execute(
+                "SELECT id FROM topics WHERE name = %s AND namespace = 0",
+                (name,))
+            public = cursor.fetchone()
+            if public is None:            # cannot happen; do not lose the row
+                continue
+            cursor.execute(
+                "UPDATE flashcards SET topic_id = %s, topic = %s "
+                "WHERE topic_id = %s", (public[0], name, topic_id))
+            cursor.execute("DELETE FROM topics WHERE id = %s", (topic_id,))
         conn.commit()
         cursor.close()
         return affected
@@ -1110,7 +1325,33 @@ def _owner_clause(owner_id):
     return " AND f.added_by_user_id = %s", (owner_id,)
 
 
-def get_topics(owner_id=None):
+def _visible_clause(viewer_id, admin=False):
+    """SQL and parameters hiding topics this visitor may not see (#382).
+
+    **Not `_owner_clause()`, and not a variant of it.** That one is #127's
+    setting -- a preference about whose *cards* a learner wants to look at,
+    which they can switch off. This is a permission about a *topic*, and no
+    setting reaches past it: `owner_id` is None whenever the preference is off,
+    where `viewer_id` is simply who is asking, always.
+
+    Qualified with `t.`, and reading `t.created_by_user_id` -- the column the
+    table's own comment described as attribution that nothing reads to decide
+    permissions. #382 is what made that sentence out of date.
+
+    An anonymous visitor (`viewer_id` None) sees public topics only: `= NULL`
+    is never true, so writing the comparison anyway would work, but saying it
+    plainly is worth more than the shared branch. The admin (#158) sees
+    everything, which is the one deliberate hole in the promise and is why the
+    user guide says "only you and the admin" rather than "only you".
+    """
+    if admin:
+        return "", ()
+    if viewer_id is None:
+        return " AND t.is_public = 1", ()
+    return " AND (t.is_public = 1 OR t.created_by_user_id = %s)", (viewer_id,)
+
+
+def get_topics(owner_id=None, viewer_id=None, admin=False):
     """
     Return all topics that have flashcards, as (topic, card_count) tuples
     sorted by topic name.
@@ -1143,15 +1384,16 @@ def get_topics(owner_id=None):
     URLs stay readable because of it.
     """
     clause, params = _owner_clause(owner_id)
+    visible, visible_params = _visible_clause(viewer_id, admin)
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT t.name, COUNT(*) FROM flashcards f "
             "JOIN topics t ON f.topic_id = t.id "
-            "WHERE f.topic_id IS NOT NULL" + clause +
+            "WHERE f.topic_id IS NOT NULL" + clause + visible +
             " GROUP BY t.id, t.name ORDER BY t.name",
-            params,
+            params + visible_params,
         )
         rows = cursor.fetchall()
         cursor.close()
@@ -1160,7 +1402,8 @@ def get_topics(owner_id=None):
     return rows
 
 
-def get_topics_by_section(owner_id=None, alphabetical=False):
+def get_topics_by_section(owner_id=None, alphabetical=False, viewer_id=None,
+                          admin=False):
     """The browse page's topics, grouped under their section (#218).
 
     Returns `[(section_name, [(topic_name, count), ...]), ...]` ordered by
@@ -1204,6 +1447,7 @@ def get_topics_by_section(owner_id=None, alphabetical=False):
     and the next `apply_schema.py` adopts it.
     """
     clause, params = _owner_clause(owner_id)
+    visible, visible_params = _visible_clause(viewer_id, admin)
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -1220,15 +1464,20 @@ def get_topics_by_section(owner_id=None, alphabetical=False):
         # sits in the ON clause so that a topic holding only other people's
         # cards comes back with a count of 0 and is dropped by the HAVING,
         # rather than vanishing before it can be counted.
+        # The visibility clause is a WHERE, where the owner filter above is an
+        # ON (#382): the owner filter is about the *cards* and has to leave a
+        # topic standing with a count of 0, but a topic this visitor may not
+        # see should not be counted, grouped or returned at all.
         cursor.execute(
             "SELECT t.section_id, t.name, COUNT(f.id) "
             "FROM topics t "
             "LEFT JOIN flashcards f ON f.topic_id = t.id" + clause +
+            (" WHERE 1=1" + visible if visible else "") +
             " GROUP BY t.id, t.section_id, t.name, t.position "
             "HAVING COUNT(f.id) > 0 "
             + ("ORDER BY t.name" if alphabetical
                else "ORDER BY t.position, t.name"),
-            params,
+            params + visible_params,
         )
         rows = cursor.fetchall()
         cursor.close()
@@ -1268,7 +1517,7 @@ def _to_list(value):
     return [value]
 
 
-def get_flashcards_by_topic(topic, owner_id=None):
+def get_flashcards_by_topic(topic, owner_id=None, viewer_id=None, admin=False):
     """
     Fetch all flashcards for the given topic as a list of dictionaries.
     The examples_* fields are deserialized back into lists.
@@ -1286,10 +1535,11 @@ def get_flashcards_by_topic(topic, owner_id=None):
     unchanged — that function's `t.name, f.word` is `f.word` when there is only
     one topic to order by.
     """
-    return get_flashcards_by_topics([topic], owner_id)
+    return get_flashcards_by_topics([topic], owner_id, viewer_id, admin)
 
 
-def get_flashcards_by_topics(topics, owner_id=None):
+def get_flashcards_by_topics(topics, owner_id=None, viewer_id=None,
+                             admin=False):
     """Fetch the flashcards of **several** topics in one query (#248).
 
     Every activity in #233 draws from a selection of topics rather than one, so
@@ -1326,16 +1576,22 @@ def get_flashcards_by_topics(topics, owner_id=None):
         return []
 
     clause, params = _owner_clause(owner_id)
+    visible, visible_params = _visible_clause(viewer_id, admin)
     placeholders = ", ".join(["%s"] * len(names))
     conn = get_db_connection()
     try:
         cursor = conn.cursor(dictionary=True)
+        # The visibility clause matters most *here* (#382). A name reaches this
+        # from a URL or a remembered selection, so a topic left out of every
+        # list is still asked for by anyone who kept the link -- and two topics
+        # can now share a name, one public and one private, which is the other
+        # reason a name alone is not enough to decide what comes back.
         cursor.execute(
             "SELECT f.*, t.name AS topic "
             "FROM flashcards f JOIN topics t ON f.topic_id = t.id "
-            f"WHERE t.name IN ({placeholders})" + clause +
+            f"WHERE t.name IN ({placeholders})" + clause + visible +
             " ORDER BY t.name, f.word",
-            tuple(names) + params,
+            tuple(names) + params + visible_params,
         )
         rows = cursor.fetchall()
         cursor.close()

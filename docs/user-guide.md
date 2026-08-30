@@ -56,6 +56,16 @@ If your vocabulary already lives in a file, hand it over: `.txt`, `.docx` and `.
 
 The front page lists the **topics**, grouped into sections and shown as tiles with a card count. A topic you invent by naming it in a lookup is filed under *Other*; the curated **B2–C1 Conversational Topics** section holds the eighteen topics the starting deck is built from. Click a section's heading to fold it away when you are not working on it, and it stays folded on that device until you click it again.
 
+### Private topics
+
+Every topic starts **public**: the deck is shared, and that is the point of it. A topic you created can be made **private**, and then only you can see it — it disappears from everybody else's front page, their games and their chat with Mykola, and its address answers *not found* if they have kept the link. The one exception is the site's admin, who can see every topic in order to look after the deck, so the honest promise is *only you and the admin*.
+
+The switch is on the topic's own page, beside its heading: **Topic visibility**, *Public* or *Private*. It changes as soon as you choose, and only the person who created the topic sees it at all.
+
+Two things it will refuse, and both say why. A topic holding cards **other people added** cannot be made private, because that would take their own cards out of their deck — move those cards elsewhere first. And a private topic cannot be made public again while a public topic of the same name exists, since two public topics cannot share a name; rename one of them first.
+
+A private topic *may* share its name with a public one, or with somebody else's private topic. Your own always wins: type that name when saving a card and the card goes to yours.
+
 ### The flashcard list
 
 Opening a topic gives you every card in full, with its definition, examples and translations.

@@ -1502,6 +1502,29 @@
                                 count.className = "topic-tile-count";
                                 count.textContent = t[1] + (t[1] === 1 ? " card" : " cards");
                                 a.appendChild(name);
+                                // The padlock (#382), from the map beside the
+                                // sections for the same reason the icon is:
+                                // this block and index.html draw the same tile,
+                                // and a mark on one and not the other would
+                                // disappear the moment a card is saved from
+                                // chat. The id goes in the link only for a
+                                // private topic -- two topics can share a name
+                                // now, and only the admin can see both.
+                                var locked = (data.private || {})[t[0]];
+                                if (locked) {
+                                    a.className += " topic-tile--private";
+                                    a.href += "?t=" + locked.id;
+                                    var lock = document.createElement("span");
+                                    lock.className = "topic-tile-private";
+                                    lock.textContent = String.fromCodePoint(128274)
+                                        + (locked.mine || !locked.creator
+                                            ? "" : " " + locked.creator);
+                                    lock.title = locked.mine
+                                        ? "Only you (and the admin) can see this topic"
+                                        : "Private topic, created by "
+                                          + (locked.creator || "somebody with no account");
+                                    a.appendChild(lock);
+                                }
                                 a.appendChild(count);
                                 grid.appendChild(a);
                             });

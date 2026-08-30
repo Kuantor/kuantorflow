@@ -134,8 +134,51 @@ CREATE TABLE IF NOT EXISTS topics (
     -- that predates the column. Attribution only; nothing reads it to decide
     -- permissions, and #127 keeps filtering on *card* ownership.
     created_by_user_id INT NULL,
+    -- Who may see it (#382). True for every topic that predates the column and
+    -- for every topic created since: a topic is public unless its creator says
+    -- otherwise, and only its creator (and the admin, who monitors the deck)
+    -- sees it when they do.
+    --
+    -- This is not #127's 'Use only individual cards', and the two must not be
+    -- confused. That is a *preference*, per visitor, about which cards they
+    -- want to look at; turn it off and the whole deck is back. This is a
+    -- *permission*, and no setting reaches past it.
+    is_public          TINYINT(1) NOT NULL DEFAULT 1,
+    -- Which namespace the name is unique in (#382), and the whole of how
+    -- private topics escape the shared one. Public rows all land in 0, so a
+    -- public name is unique across the site exactly as it always was -- the
+    -- shared deck stays shared, and every URL, link and remembered game
+    -- selection that carries a *name* keeps working. A private row lands in
+    -- its creator's id, so each learner may hold one private 'Work' and it can
+    -- sit beside the public one.
+    --
+    -- Written by the app, not derived by the database, and **not** for want of
+    -- trying. `IF(is_public, 0, created_by_user_id)` as a STORED generated
+    -- column is what this wants to be, and MySQL 8.0.46 refuses it:
+    --
+    --     3823: Column 'created_by_user_id' cannot be used in a check
+    --     constraint: needed in a foreign key constraint referential action
+    --
+    -- for a CHECK, and 1215 for the generated column. The cause is
+    -- fk_topics_user's ON DELETE SET NULL just below, which #165 depends on and
+    -- which is not worth trading away for a derivation. So the *uniqueness* is
+    -- still the database's (the key below cannot be talked out of it, race or
+    -- no race) and only the *derivation* is the app's -- in one UPDATE, in
+    -- `set_topic_visibility()`, which is the only writer of either column.
+    --
+    -- A topic with **no creator** would land in (name, NULL) if it were ever
+    -- private, and MySQL treats NULLs in a unique key as distinct -- so the key
+    -- could not stop two private 'Orphan' rows. Nothing does:
+    -- `set_topic_visibility()` refuses to make a creatorless topic private, and
+    -- deleting an account makes that account's private topics public before the
+    -- FK sets their creator to NULL (#165) -- otherwise they would be topics
+    -- nobody can see and nobody can un-hide.
+    namespace          INT NOT NULL DEFAULT 0,
     created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_topics_name (name),
+    -- Replaced uq_topics_name (name) in #382. On the pair, so that 'unique
+    -- among public topics' and 'unique among one learner's private topics' are
+    -- one key rather than two rules the app has to remember.
+    UNIQUE KEY uq_topics_namespace (name, namespace),
     INDEX idx_topics_created_by (created_by_user_id),
     INDEX idx_topics_section (section_id),
     -- ON DELETE SET NULL, where flashcards uses RESTRICT — deliberately. #165

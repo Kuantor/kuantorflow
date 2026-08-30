@@ -292,13 +292,42 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   reached from `save_flashcard()` and `move_flashcard()` — so every producer
   upstream (the parsers, the review popup, Mykola's tool schema) keeps speaking
   names, and an unknown name still creates the topic (#177's promise).
-  `created_by_user_id` is **attribution only**: nothing reads it to decide
-  permissions, and #127 still filters on *card* ownership. Its foreign key is
+  `created_by_user_id` **decides who may see a private topic** (#382) and is
+  attribution everywhere else; #127 still filters on *card* ownership, and the
+  two are different questions asked with different arguments — `owner_id` is
+  the preference (None whenever it is off), `viewer_id` is who is asking. Its foreign key is
   `ON DELETE SET NULL`, unlike `flashcards`' `RESTRICT` — a topic may hold other
   people's cards, so deleting its creator's account must leave it standing.
   `get_topics()` still lists only topics that **have cards**; empty topic rows do
   occur (delete the last card in one) and are deliberately kept, because the row
   is where the name, creator and age live.
+- **`topics.is_public` + `topics.namespace`** (#382) — a topic only its creator
+  (and the admin) can see. `is_public` defaults to true and every existing topic
+  is public. `namespace` is the second half of `uq_topics_namespace (name,
+  namespace)`: **0 for a public topic**, so a public name stays unique across
+  the site, and **the creator's id for a private one**, so each learner may hold
+  one private `Work` beside the public one. That is what lets private topics
+  leave the shared namespace *without* a name ceasing to identify a topic
+  everywhere else — every URL, link and remembered game selection still carries
+  a name.
+  The app writes `namespace`, and only because MySQL will not:
+  `IF(is_public, 0, created_by_user_id)` is refused as a generated column (1215)
+  and as a CHECK (3823), both because `fk_topics_user`'s ON DELETE SET NULL
+  needs that column for its referential action. So the *uniqueness* is still the
+  database's and only the *derivation* is ours — in one UPDATE, in
+  `set_topic_visibility()`, which is the only writer of either column and
+  refuses the two flips that cannot work: a topic holding **other people's
+  cards** (hiding it would take their card out of their own deck) and a
+  creatorless topic (nobody to own it). Deleting an account makes that account's
+  private topics public *before* the foreign key nulls their creator, merging
+  the one name a public topic already holds — otherwise they would be topics
+  nobody can see and nobody can un-hide, and #165 would fail on them.
+  Reads take a `viewer_id`/`admin` pair beside #127's `owner_id`;
+  `resolve_topic()` turns a name into the one topic this visitor means (theirs
+  first, then the public one) and the topic page **404s** what it cannot
+  resolve, since a name reaches it from whatever URL somebody kept. The games
+  need no check of their own: `resolve_selection()` already drops names that are
+  not visible.
 - **`topic_sections`** (#215) — topics are grouped, and `topics.section_id`
   points at the section. Two sections exist: **`Other`**, holding every topic
   that predates the table and every topic created since, and **`B2–C1
@@ -432,6 +461,25 @@ behind, since the foreign key is what a later section feature will rely on:
 
 ```bash
 python -c "from utils import get_db_connection; c=get_db_connection(); u=c.cursor(); u.execute('SELECT COUNT(*) FROM topics WHERE section_id IS NULL'); print('topics with no section (want 0):', u.fetchone()[0])"
+```
+
+For the **#382 deploy**, pull **ai_agent first** — or at least confirm the
+deployed one is #68 or later. Mykola reads the deck through callables the app
+injects (`topic_reader`, `card_reader`), which is what makes the chat obey the
+same visibility as the page; the injection is feature-detected, so an ai_agent
+that predates #68 silently falls back to `cards_db`'s own
+`SELECT * FROM flashcards` and a private topic is readable in chat. Nothing
+errors, which is why it is worth checking rather than noticing.
+
+The dry run should list three pending steps —
+`topics.is_public`, `topics.namespace` and `topics.uq_topics_namespace` — and
+`=` against everything else. The third one **replaces** `uq_topics_name`, which
+is the only part of this that a rollback cannot undo by reverting code: after it,
+two topics may share a name. Nothing on any page changes, because every existing
+topic is public and lands in namespace 0. Worth confirming afterwards:
+
+```bash
+python -c "from utils import get_db_connection; c=get_db_connection(); u=c.cursor(); u.execute('SELECT COUNT(*) FROM topics WHERE is_public=0 OR namespace<>0'); print('topics that are not plain public (want 0 on the day):', u.fetchone()[0])"
 ```
 
 For the **#237 deploy**, `apply_schema.py` is needed again after several
