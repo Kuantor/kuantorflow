@@ -209,14 +209,22 @@
     </datalist>
 
     <div class="panel">
-        {# The provider name follows the Settings choice (#20). #}
-        {# The provider's own label, from `parsers.TRANSLATORS` (#353) — the
-           third surface that declaration feeds, after the Settings panel and
-           the dispatch. It used to be a ternary over two hard-coded names,
-           which is how a third provider would have quietly been announced as
-           the second one. #}
-        {%- set chosen = translators | selectattr('slug', 'equalto', settings.translator) | first -%}
-        <h2>Look up a word{% if chosen %} ({{ chosen.label }}){% endif %}</h2>
+        {# Both providers a lookup asks, named (#384). The dictionary writes the
+           half of the card a learner reads first -- the English explanation and
+           the authentic examples -- and the heading used to mention only the
+           translator.
+
+           The names come from `TRANSLATORS` and `DICTIONARIES` (#353, #365),
+           already **resolved** by the same functions the dispatch uses: a
+           choice this deployment cannot serve falls back without touching the
+           setting, so reading the stored slug here would announce a provider
+           that is never contacted. The template only renders the answer.
+
+           Either may be missing, and the parentheses follow rather than
+           standing empty: no translator is a real state (#348/#349), and the
+           heading then names the dictionary alone. #}
+        {%- set named = lookup_providers | select | map(attribute='name') | list -%}
+        <h2>Look up a word{% if named %} ({{ named | join(' + ') }}){% endif %}</h2>
         <form method="POST">
             <input type="hidden" name="action" value="parse_word">
             <div class="form-row">

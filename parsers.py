@@ -795,10 +795,21 @@ class Translator(NamedTuple):
     fetch_name: str
     key_env: str
     groups_by_pos: bool
+    # What the lookup panel's heading calls it (#384). The label is the
+    # Settings panel's business and says the product's whole name; a heading
+    # reading "Look up a word (Google Cloud Translation + Oxford Learner's
+    # Dictionaries)" is a sentence, not a title. Defaults to the label, so a
+    # provider whose name is already short adds nothing.
+    short: str = ""
 
     @property
     def fetch(self):
         return globals()[self.fetch_name]
+
+    @property
+    def name(self):
+        """The short name if there is one, else the label."""
+        return self.short or self.label
 
 
 # **One declaration.** The Settings panel, the availability check and the
@@ -813,11 +824,12 @@ TRANSLATORS = (
     Translator("claude", "Claude", "_claude_dictionary",
                "ANTHROPIC_API_KEY", True),
     Translator("microsoft", "Microsoft Translator", "_microsoft_dictionary",
-               "MS_TRANSLATOR_KEY", True),
+               "MS_TRANSLATOR_KEY", True, "Microsoft"),
     Translator("deepl", "DeepL", "_deepl_dictionary",
                "DEEPL_API_KEY", False),
     Translator("google_cloud", "Google Cloud Translation",
-               "_google_cloud_dictionary", "GOOGLE_TRANSLATE_API_KEY", False),
+               "_google_cloud_dictionary", "GOOGLE_TRANSLATE_API_KEY", False,
+               "Google"),
 )
 
 TRANSLATOR_SLUGS = tuple(t.slug for t in TRANSLATORS)
@@ -842,6 +854,28 @@ def translator(slug):
 
 # Resolved at call time (not captured in a module-level dict) so tests can
 # monkeypatch a single fetcher and the dispatch picks the replacement up.
+def resolved_translator(translator_slug):
+    """The translator that will actually answer, or None (#384).
+
+    The stored choice when this deployment can use it, otherwise the first one
+    it can -- `_translator_backend()`'s rule, returning the **entry** rather
+    than the fetcher so a caller can read its name. None is a real answer: no
+    key, no translator, and #349's dictionary-only card.
+
+    Written once and read twice on purpose. The lookup panel's heading names
+    the providers a lookup asks, and it used to pick the label itself out of
+    the *available* list -- so an account whose choice had lost its key was
+    served by another provider while the heading named none at all. A heading
+    that resolves differently from the dispatch is a heading that lies on
+    exactly the deployments this fallback exists for.
+    """
+    chosen = translator(translator_slug)
+    available = available_translators()
+    if chosen and chosen in available:
+        return chosen
+    return available[0] if available else None
+
+
 def _translator_backend(translator_slug):
     """The fetcher for a chosen provider, falling back to what is configured.
 
@@ -850,11 +884,8 @@ def _translator_backend(translator_slug):
     configured this returns **None**, which `lookup_word()` reads as "no
     translator" and answers with #349's dictionary-only card.
     """
-    chosen = translator(translator_slug)
-    available = available_translators()
-    if chosen and chosen in available:
-        return chosen.fetch
-    return available[0].fetch if available else None
+    chosen = resolved_translator(translator_slug)
+    return chosen.fetch if chosen else None
 
 
 def _merriam_webster_entry(word):
@@ -958,10 +989,16 @@ class Dictionary(NamedTuple):
     label: str
     fetch_name: str
     key_env: str | None
+    short: str = ""          # #384, as on Translator above
 
     @property
     def fetch(self):
         return globals()[self.fetch_name]
+
+    @property
+    def name(self):
+        """The short name if there is one, else the label."""
+        return self.short or self.label
 
 
 # **One declaration**, read by the Settings panel and by the dispatch, the way
@@ -979,7 +1016,7 @@ class Dictionary(NamedTuple):
 # learner pick it and get a card with no explanation.
 DICTIONARIES = (
     Dictionary("oxford", "Oxford Learner's Dictionaries",
-               "_fetch_oxford_entry", None),
+               "_fetch_oxford_entry", None, "Oxford"),
     Dictionary("merriam-webster", "Merriam-Webster",
                "_merriam_webster_entry", "MERRIAM_WEBSTER_API_KEY"),
 )
@@ -1003,6 +1040,22 @@ def _dictionary_by_slug(slug):
     return next((d for d in DICTIONARIES if d.slug == slug), None)
 
 
+def resolved_dictionary(explanatory_dictionary):
+    """The dictionary that will actually answer, or None (#384).
+
+    `_dictionary_backend()`'s rule, returning the entry so the panel can read
+    its name. None only where nothing at all is configured, which cannot
+    happen while Oxford needs no key -- and the backend still falls back to
+    Oxford there rather than to nothing, since an explanation is most of a
+    card's value (#349).
+    """
+    chosen = _dictionary_by_slug(explanatory_dictionary)
+    available = available_dictionaries()
+    if chosen and chosen in available:
+        return chosen
+    return available[0] if available else None
+
+
 def _dictionary_backend(explanatory_dictionary):
     """The chosen dictionary, as a function returning `(definitions, examples)`.
 
@@ -1020,11 +1073,8 @@ def _dictionary_backend(explanatory_dictionary):
     the account still asking for it. #352 did coerce, but that was a provider
     being retired, which is a different thing from one not set up here.
     """
-    chosen = _dictionary_by_slug(explanatory_dictionary)
-    available = available_dictionaries()
-    if chosen and chosen in available:
-        return chosen.fetch
-    return available[0].fetch if available else _fetch_oxford_entry
+    chosen = resolved_dictionary(explanatory_dictionary)
+    return chosen.fetch if chosen else _fetch_oxford_entry
 
 
 def _provider_name(backend):
