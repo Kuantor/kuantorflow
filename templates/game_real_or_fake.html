@@ -56,13 +56,21 @@
 
            So the page stops apologising and offers to settle it: every word the
            game called invented carries a challenge, answered by a real lexicon.
+
+           The caption says what the press *does* rather than what the learner
+           might be thinking. The button serves two readers -- one who was
+           marked wrong and disagrees, one who agreed and is curious -- and a
+           first-person caption ("I think this is a real word") fits only the
+           first. It also promises nothing the checker cannot keep: a
+           dictionary can confirm a word exists, and nothing can confirm one
+           does not.
            Never during a round -- checking mid-round is cheating -- and only on
            these rows, because a real word the learner mistook for a fake needs
            no adjudication: the game was right, and the answer is already here. #}
         <div class="panel panel--tight">
             <p class="hint">The invented words are made up by the app, and it
                sometimes invents a real one by accident. If you think one of
-               them is genuine, press <strong>Is this really a word?</strong>
+               them is genuine, press <strong>Check in a dictionary</strong>
                &mdash; and if you are right, the score is corrected and nobody
                is offered that word as invented again.</p>
         </div>
@@ -75,7 +83,7 @@
                    &mdash; it {{ 'is a real word' if r.real else 'was invented for this round' }}.</p>
                 {% if not r.real %}
                     <p class="rof-check">
-                        <button type="button" class="secondary rof-challenge">Is this really a word?</button>
+                        <button type="button" class="secondary rof-challenge">Check in a dictionary</button>
                     </p>
                     <p class="rof-answer" hidden></p>
                 {% endif %}
