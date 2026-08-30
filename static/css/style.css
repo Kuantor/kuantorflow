@@ -100,6 +100,20 @@ body {
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
     margin: 0.5rem 0 1.2rem;
 }
+/* The padlock on a private topic's tile (#382). Small and quiet: the tile is
+   a picture with a name on it, and this is a footnote to the name rather than
+   a second heading. On a tile with a picture it needs the same shadow the name
+   has, since the background behind it is a photograph.
+
+   For the admin it carries the creator's name, which is why it can be more
+   than a glyph wide and why it wraps rather than truncating: whose a topic is
+   matters more than the tile staying one line. */
+.topic-tile-private {
+    font-size: 0.78rem;
+    opacity: 0.9;
+}
+.topic-tile--image .topic-tile-private { text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
+
 /* The topic heading and its visibility control on one row (#382). The
    heading keeps its own margins, so the row only has to align them and let the
    control sit at the far end; `flex-wrap` is what puts the control under the

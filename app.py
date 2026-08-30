@@ -614,6 +614,23 @@ def _sections_for_visitor(owner=None):
         **viewer())
 
 
+def _private_marks():
+    """The padlocks this visitor's browse page draws (#382), or `{}`.
+
+    A map beside the sections rather than a third element in their pairs --
+    #223's icons set that precedent, and for the same reason: the pair is read
+    by the index page, the move dialog and the Mykola widget's own renderer.
+
+    A dead database costs the padlocks and nothing else, exactly as it costs
+    the sections themselves one line above.
+    """
+    try:
+        return private_topics(**viewer())
+    except Exception:
+        app.logger.exception("Could not list the private topics")
+        return {}
+
+
 def _save_and_log(entry, source, fills=None, allow_duplicate=False):
     """Save one card and record the outcome in logs/cards.log (#30).
 
@@ -2077,7 +2094,11 @@ def topics_json():
     icons = {name: topic_icon(name)
              for _, pairs in sections for name, _ in pairs
              if topic_icon(name)}
-    return jsonify({"topics": topics, "sections": sections, "icons": icons})
+    # The padlocks ride along like the icons (#382/#223): `refreshBrowseTopics()`
+    # rebuilds the very block index.html renders, so a mark drawn on one and not
+    # the other would vanish the moment a card was saved from chat.
+    return jsonify({"topics": topics, "sections": sections, "icons": icons,
+                    "private": _private_marks()})
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -2248,6 +2269,7 @@ def index():
 
     return render_template(
         "index.html", message=message, sections=sections,
+        private_marks=_private_marks(),
         proposed=proposed, proposed_topic=proposed_topic,
         proposed_degraded=proposed_degraded,
         source_content=source_content, duplicate_warning=duplicate_warning,

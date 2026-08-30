@@ -45,13 +45,30 @@
                                the picture would only repeat it to a screen
                                reader. A topic with no icon keeps the plain
                                colour rather than rendering a broken image. #}
-                            <a class="topic-tile{% if icon %} topic-tile--image{% endif %}"
-                               href="{{ url_for('flashcards', topic=topic) }}">
+                            {# A private topic wears a padlock (#382). Only its
+                               creator and the admin can see the tile at all,
+                               so the mark says *why* this one is here when
+                               nobody else's is -- and for the admin, whose it
+                               is, since they are the one visitor who can be
+                               looking at somebody else's.
+
+                               The link carries the id for a private topic and
+                               not otherwise: two topics can share a name now,
+                               and the admin is the only one who can see both.
+                               Everybody else's name resolves to one topic, and
+                               a name is what keeps these URLs readable. #}
+                            {% set private = (private_marks or {}).get(topic) %}
+                            <a class="topic-tile{% if icon %} topic-tile--image{% endif %}{% if private %} topic-tile--private{% endif %}"
+                               href="{{ url_for('flashcards', topic=topic, t=private.id if private else None) }}">
                                 {% if icon %}
                                     <img class="topic-tile-img" src="{{ icon }}"
                                          alt="" loading="lazy" decoding="async">
                                 {% endif %}
                                 <span class="topic-tile-name">{{ topic }}</span>
+                                {% if private %}
+                                    <span class="topic-tile-private"
+                                          title="{% if private.mine %}Only you (and the admin) can see this topic{% else %}Private topic, created by {{ private.creator or 'somebody with no account' }}{% endif %}">&#128274;{% if not private.mine and private.creator %} {{ private.creator }}{% endif %}</span>
+                                {% endif %}
                                 <span class="topic-tile-count">{{ count }} card{{ '' if count == 1 else 's' }}</span>
                             </a>
                         {% endfor %}
