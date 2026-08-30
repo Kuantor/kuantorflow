@@ -284,6 +284,26 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   both take the last slot, and claims the **account row first** — that way a
   learner can spend one of their ten on a day the site is exhausted, rather
   than a site-wide slot being burned for somebody already over their own limit.
+- **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
+  a lexicon confirmed. The game invents with a trigram model trained on the
+  deck, so it sometimes produces real English and marks the learner wrong for
+  being right; #132's filters ask what the **deck** knows, and the deck knows
+  ~2,500 words. The results page lets the learner challenge, and a confirmation
+  corrects the score and is remembered — `confirmed_words()` feeds
+  `games.pseudowords(known=...)`, so a settled word is never offered as
+  invented again, **for everybody**: whether a word is English is not a
+  per-user fact. No foreign key to `users` for that reason, and because
+  deleting an account must not un-confirm English.
+  `parsers.confirm_word()` is the checker and it is **positive-only**:
+  Wiktionary first (documented, free, licensed for reuse, and the only one of
+  the three that had `subrogation`, `replevin`, `laches` and `demurrage`), then
+  Oxford for its learner-facing definition. Only Wiktionary's *existence* is
+  read and the learner gets the link, so no CC BY-SA content is reproduced. A
+  hit is evidence a word is real; **a miss is evidence of nothing** — the two
+  lexicons miss rare words, which is the whole reason the button exists — and a
+  failed request is a third answer, never a miss. Nothing in this path may say
+  "confirmed invented". The ticket's own design chose Google's `dt=bd` lookup;
+  #348/#353 retired that endpoint, which is why this asks Wiktionary instead.
 - **`topics`** (#207) — topics are a table, and `flashcards.topic_id` points at
   it. `flashcards.topic` is still written alongside, holding the **canonical**
   spelling from the topics row: it is what `ai_agent`'s `cards_db` still reads
@@ -462,6 +482,12 @@ behind, since the foreign key is what a later section feature will rely on:
 ```bash
 python -c "from utils import get_db_connection; c=get_db_connection(); u=c.cursor(); u.execute('SELECT COUNT(*) FROM topics WHERE section_id IS NULL'); print('topics with no section (want 0):', u.fetchone()[0])"
 ```
+
+**#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
+a brand-new table, so the `schema.sql` pass creates it on an existing database
+and no migration is needed (the same shape as #237's counter). The dry run
+should show `~ confirmed_words` and `=` against everything else. It starts
+empty and fills only when a learner disputes a word and wins.
 
 For the **#382 deploy**, pull **ai_agent first** — or at least confirm the
 deployed one is #68 or later. Mykola reads the deck through callables the app

@@ -139,6 +139,14 @@ Cards with no translation in the language you chose are left out of the round, a
 
 A game of spotting invented words. Half the words are yours and half were invented by a model trained on your own deck, and you decide which is which. The invented ones are built to look like plausible English rather than nonsense, so it is a real test of what you recognise.
 
+Because the model learns from English, it sometimes invents a word that turns out to be real — usually a rare or technical one. So on the results page, every word the game called invented carries **Check in a dictionary**. Press it and KuantorFlow asks Wiktionary, then Oxford:
+
+- **it is a real word** — you were right, your score is corrected, and nobody is offered that word as invented again;
+- **neither dictionary has it** — said plainly as *not proof*, because dictionaries do miss rare words;
+- **it could not be checked** — the connection failed, which says nothing about the word.
+
+Only during the results, never mid-round.
+
 ### Scrambled
 
 A game of unscrambling: the middle letters of a word are shuffled and you put it back together. The first and last letters stay, so the shape you recognise survives. Words too short to scramble are left out of the round rather than shown unchanged, and the page says how many that was.

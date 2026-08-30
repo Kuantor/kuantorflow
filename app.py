@@ -6,6 +6,7 @@ import random
 import re
 import shutil
 import sys
+import time
 import uuid
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -52,7 +53,9 @@ from utils import (
     get_user_block,
     find_duplicate,
     find_saved_words,
+    confirmed_words,
     private_topics,
+    remember_confirmed_word,
     resolve_topic,
     set_topic_visibility,
     move_flashcard,
@@ -2588,6 +2591,76 @@ def move_card(topic, card_id):
     return redirect(url_for("flashcards", topic=from_topic))
 
 
+# How many words one session may have checked against a lexicon in an hour
+# (#258). Not a money guard -- both lookups are free -- but Wikimedia
+# rate-limits what looks like a scraper, and being throttled would turn every
+# dispute into "could not check" for everybody. A round offers at most five
+# disputes, so this is roughly eight rounds' worth back to back.
+WORD_CHECKS_PER_HOUR = 40
+
+
+def _word_check_allowed():
+    """Whether this session may spend another lexicon lookup (#258).
+
+    Counted in the session rather than the database: it protects our own
+    politeness rather than anything a learner owns, and a counter that resets
+    when a cookie does is the right weight for that. A confirmed word is
+    answered from the table without a lookup at all, so the cap is only ever
+    reached by a genuine run of new disputes -- or by somebody driving the
+    endpoint, which is what it is for.
+    """
+    now = time.time()
+    started, count = session.get("word_checks", (0, 0))
+    if now - started > 3600:
+        started, count = now, 0
+    if count >= WORD_CHECKS_PER_HOUR:
+        return False
+    session["word_checks"] = (started, count + 1)
+    return True
+
+
+@app.route("/games/word-check.json", methods=["POST"])
+def word_check():
+    """Settle a word *Real or fake* called invented (#258).
+
+    The learner disputes; a real lexicon answers; the answer is kept so the
+    word is never offered as invented again. Three outcomes and only one of
+    them is a verdict -- `real: false` means both lexicons answered and
+    neither had it, which is **not** proof the word was invented, and
+    `real: null` means nothing could be reached at all.
+
+    A word already in the table is answered from it, with no request to
+    anybody: a settled question stays settled, and the second learner to
+    dispute it pays nothing.
+    """
+    data = request.get_json(silent=True) or {}
+    word = (data.get("word") or "").strip()
+    if not word:
+        return {"ok": False, "error": "word is required"}, 400
+    if is_blocked():
+        return {"ok": False, "error": blocked_notice()}, 403
+
+    if word.lower() in confirmed_words():
+        return {"ok": True, "real": True, "known": True,
+                "source": "a check somebody already made"}
+    if not _word_check_allowed():
+        return {"ok": True, "real": None,
+                "error": "That is a lot of words to check at once. "
+                         "Try again a little later."}
+
+    verdict = parsers.confirm_word(word)
+    if verdict.get("real"):
+        try:
+            first = remember_confirmed_word(word, verdict.get("source", ""))
+            applog.word_confirmed(word, verdict.get("source", ""),
+                                  user=_current_email(), first=first)
+        except Exception:
+            # The confirmation still stands for this learner and this round;
+            # it simply was not remembered for the next one.
+            app.logger.exception("Could not remember a confirmed word")
+    return dict({"ok": True}, **verdict)
+
+
 @app.route("/saved.json", methods=["POST"])
 def saved_json():
     """Whether one word is already in the deck, as JSON (#380).
@@ -3313,9 +3386,13 @@ def _real_or_fake_round(activity, topics):
         **viewer())
 
     wanted_fake = words // 2
+    # Everything the deck knows is English, plus everything a learner has
+    # already disputed and won (#258). The second set is small and grows from
+    # real disagreements -- and a word that has been settled once must never be
+    # offered as invented again, which is the whole reason it is written down.
+    known = games.vocabulary(everything) | confirmed_words()
     fakes = games.pseudowords(
-        [c["word"] for c in everything], wanted_fake,
-        known=games.vocabulary(everything))
+        [c["word"] for c in everything], wanted_fake, known=known)
     reals = games.sample(selected, words - len(fakes))
 
     if not reals:

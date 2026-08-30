@@ -42,6 +42,38 @@ CREATE TABLE IF NOT EXISTS text_generation_usage (
     PRIMARY KEY (day, user_id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- Words a learner disputed and a dictionary confirmed (#258).
+--
+-- *Real or fake* invents words with a character trigram trained on the deck,
+-- and a model trained on English sometimes produces English: the learner is
+-- then marked wrong for being right, which is the one bug in a teaching app
+-- that costs trust rather than time. #132's filters ask "does the deck know
+-- this word", and the deck knows ~2,500 words where English has hundreds of
+-- thousands, so no amount of cleverness with them closes the gap.
+--
+-- This is the other end of it: the learner challenges a word, a real lexicon
+-- settles it, and the answer is kept so the same word is never offered as
+-- invented again. The set grows from actual disagreements rather than from a
+-- word list somebody has to ship and license.
+--
+-- **Not per user.** Whether a word is English is not a matter of opinion, so a
+-- confirmation belongs to the deck rather than to whoever happened to press
+-- the button. No foreign key to `users` for that reason -- and because
+-- deleting an account must not un-confirm English (#165).
+--
+-- Append-only in practice: nothing removes a row, and `word` is unique so a
+-- second confirmation of the same word is a no-op rather than a duplicate.
+CREATE TABLE IF NOT EXISTS confirmed_words (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    word         VARCHAR(255) NOT NULL,
+    -- Which lexicon said so, so a later reader can tell a Wiktionary
+    -- confirmation from an Oxford one -- they answer different halves of
+    -- English, and knowing which one settled a dispute is worth a column.
+    source       VARCHAR(32) NOT NULL,
+    confirmed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_confirmed_words (word)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- Signed-in identities (issue #148). Keyed on google_sub, Google's OIDC
 -- subject: it is unique per account and never changes, where an email can be
 -- changed by its owner. Email is ordinary updatable data.
