@@ -459,10 +459,14 @@ def resolve_topic(name, viewer_id=None, admin=False, topic_id=None):
         else:
             cursor.execute(
                 columns + "WHERE t.name = %s" + visible +
-                # Yours first, then the public one. The final tiebreak is the
+                # Yours first, then the public one -- and "yours" is the
+                # **namespace**, not the creator: a learner who created the
+                # public 'Work' as well as their own private one would
+                # otherwise tie on the creator and be handed the public row,
+                # which is not the topic they mean. The final tiebreak is the
                 # id, so that the admin -- who can see several -- gets a stable
                 # answer rather than whichever row the engine felt like.
-                " ORDER BY (t.created_by_user_id <=> %s) DESC, t.is_public DESC,"
+                " ORDER BY (t.namespace = %s) DESC, t.is_public DESC,"
                 " t.id LIMIT 1",
                 (name,) + visible_params + (viewer_id,))
         row = cursor.fetchone()
@@ -1443,6 +1447,7 @@ def get_topics_by_section(owner_id=None, alphabetical=False, viewer_id=None,
     and the next `apply_schema.py` adopts it.
     """
     clause, params = _owner_clause(owner_id)
+    visible, visible_params = _visible_clause(viewer_id, admin)
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
