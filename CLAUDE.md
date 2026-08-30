@@ -463,7 +463,15 @@ behind, since the foreign key is what a later section feature will rely on:
 python -c "from utils import get_db_connection; c=get_db_connection(); u=c.cursor(); u.execute('SELECT COUNT(*) FROM topics WHERE section_id IS NULL'); print('topics with no section (want 0):', u.fetchone()[0])"
 ```
 
-For the **#382 deploy**, the dry run should list three pending steps —
+For the **#382 deploy**, pull **ai_agent first** — or at least confirm the
+deployed one is #68 or later. Mykola reads the deck through callables the app
+injects (`topic_reader`, `card_reader`), which is what makes the chat obey the
+same visibility as the page; the injection is feature-detected, so an ai_agent
+that predates #68 silently falls back to `cards_db`'s own
+`SELECT * FROM flashcards` and a private topic is readable in chat. Nothing
+errors, which is why it is worth checking rather than noticing.
+
+The dry run should list three pending steps —
 `topics.is_public`, `topics.namespace` and `topics.uq_topics_namespace` — and
 `=` against everything else. The third one **replaces** `uq_topics_name`, which
 is the only part of this that a rollback cannot undo by reverting code: after it,
