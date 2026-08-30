@@ -412,6 +412,19 @@ Merriam-Webster are blocked from PythonAnywhere's IPs, so those paths fall
 back (Google / Reverso alternatives); `ANTHROPIC_API_KEY` lives in
 `ai_agent/.env`.
 
+**`en.wiktionary.org` is reachable from there** — verified on the deployment
+on 30 August, the day #258 shipped:
+
+```bash
+venv/bin/python -c "import parsers; print(parsers.confirm_word('bailment'))"
+```
+
+answered `{'real': True, 'source': 'Wiktionary', ...}`. That is worth recording
+beside the two blocked hosts, because #258's word check degrades *silently and
+honestly* when a lexicon cannot be reached — every dispute would come back
+"could not check" and nothing would look broken. One line in the repo saves
+the next person re-deriving it from an absence.
+
 **`apply_schema.py` is the only schema step, and it is always the same two
 commands** — from a Bash console, in the `kuantorflow` directory, with the app's
 venv active:
