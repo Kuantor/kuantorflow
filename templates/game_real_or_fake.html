@@ -158,10 +158,15 @@
                                     + "do miss rare words \u2014 but it is the best "
                                     + "evidence available.", "Check again");
                             } else {
+                                // Broken at clause boundaries rather than
+                                // wherever the line ran out: a sentence a
+                                // reader cannot find in the source is one
+                                // nobody can check the wording of.
                                 say(row, button, data.error
-                                    || "Could not check just now. That says nothing "
-                                       + "about the word \u2014 only about the "
-                                       + "connection.", "Try again");
+                                    || "Could not check just now. "
+                                       + "That says nothing about the word "
+                                       + "\u2014 only about the connection.",
+                                    "Try again");
                             }
                         }).catch(function () {
                             say(row, button, "Could not check just now.", "Try again");
