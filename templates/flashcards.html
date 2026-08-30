@@ -43,7 +43,52 @@
             {% endif %}
         {% endif %}
     </p>
-    <h1 class="page-title">Flashcards: {{ topic }}</h1>
+    {# The heading and the visibility control share a row (#382). The control
+       belongs *on* the topic rather than in Settings: it is a property of this
+       topic, and Settings is where a visitor says what they want to see, which
+       is the other thing entirely (#127).
+
+       Only its creator can change it. The admin can see every topic and still
+       does not own this one, so they get the state and whose it is, in words
+       rather than in a control that would refuse them. #}
+    <div class="topic-heading">
+        <h1 class="page-title">Flashcards: {{ topic }}</h1>
+        {% if can_set_visibility %}
+        <form method="POST" class="topic-visibility"
+              action="{{ url_for('topic_visibility', topic_id=topic_row.id) }}">
+            <input type="hidden" name="topic" value="{{ topic }}">
+            <label for="topic-visibility-select">Topic visibility:</label>
+            <select id="topic-visibility-select" name="visibility">
+                <option value="public" {% if topic_row.is_public %}selected{% endif %}>Public</option>
+                <option value="private" {% if not topic_row.is_public %}selected{% endif %}>Private</option>
+            </select>
+            {# The button is for anyone whose browser runs no JavaScript, and
+               for nobody else: the script below submits on change and takes it
+               away, so the ordinary path is one gesture rather than two. #}
+            <button type="submit" class="topic-visibility-go">Save</button>
+        </form>
+        {% elif topic_row and not topic_row.is_public %}
+        <p class="topic-visibility topic-visibility--noted">
+            <span class="topic-visibility-label">Private topic</span>
+            {% if topic_row.creator %}<span class="topic-visibility-owner">{{ topic_row.creator }}</span>{% endif %}
+        </p>
+        {% endif %}
+    </div>
+    {% if can_set_visibility %}
+    <script>
+        (function () {
+            var form = document.querySelector(".topic-visibility");
+            if (!form) return;
+            var select = document.getElementById("topic-visibility-select");
+            var button = form.querySelector(".topic-visibility-go");
+            // Hidden rather than absent, so a browser with no JavaScript keeps
+            // a way to submit -- the same arrangement #301's speaker uses for
+            // the opposite reason.
+            if (button) button.hidden = true;
+            select.addEventListener("change", function () { form.submit(); });
+        })();
+    </script>
+    {% endif %}
 
     {% if not cards %}
         <div class="panel">

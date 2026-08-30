@@ -269,6 +269,51 @@ MIGRATIONS = (
             "ON DELETE RESTRICT",
         ),
     ),
+    # Private topics (#382). Four steps, and the order is the whole of it: the
+    # flag, the generated column that reads it, the old key out, the new key
+    # in. Swapping the last two would leave `uq_topics_name` alive alongside a
+    # key that permits what it forbids -- and the old one wins, silently, which
+    # is the feature not working with everything reporting success.
+    Step(
+        "topics.is_public",
+        Column("topics", "is_public"),
+        ("ALTER TABLE topics ADD COLUMN is_public TINYINT(1) NOT NULL "
+         "DEFAULT 1 AFTER position",),
+    ),
+    Step(
+        "topics.namespace",
+        Column("topics", "namespace"),
+        # A plain column: MySQL will not derive this one. `IF(is_public, 0,
+        # created_by_user_id)` is refused both as a generated column (1215) and
+        # as a CHECK (3823) because fk_topics_user's ON DELETE SET NULL needs
+        # that column for its referential action. schema.sql says the rest.
+        ("ALTER TABLE topics ADD COLUMN namespace INT NOT NULL DEFAULT 0 "
+         "AFTER is_public",),
+    ),
+    # Out with the old key and in with the new, in **one** step targeted on the
+    # new one. A removal usually needs a question rather than a name (an
+    # existence check on the thing being dropped is backwards, which is why
+    # #207 grew `Pending`) -- but here the drop and the add are one change, and
+    # the arriving key is a perfectly good name to check:
+    #
+    #   * an old database has neither -> both statements run, in order;
+    #   * a fresh one has the new key from schema.sql -> skipped, and the DROP
+    #     that would fail on it never runs;
+    #   * a second run -> skipped.
+    #
+    # The two must not be separate steps. Between them the table would hold a
+    # key that permits what the other forbids, and the stricter one wins -- so
+    # a half-applied migration would look finished and quietly refuse every
+    # private topic that shares a name.
+    Step(
+        "topics.uq_topics_namespace",
+        Index("topics", "uq_topics_namespace"),
+        (
+            "ALTER TABLE topics DROP INDEX uq_topics_name",
+            "ALTER TABLE topics ADD UNIQUE KEY uq_topics_namespace "
+            "(name, namespace)",
+        ),
+    ),
 )
 
 

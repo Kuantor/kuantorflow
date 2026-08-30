@@ -52,6 +52,9 @@ from utils import (
     get_user_block,
     find_duplicate,
     find_saved_words,
+    private_topics,
+    resolve_topic,
+    set_topic_visibility,
     move_flashcard,
     set_preferred_name,
     update_flashcard,
@@ -563,6 +566,26 @@ def cards_owner_filter():
     return _current_user_id()
 
 
+def viewer():
+    """Who is asking, for #382's topic visibility: `(user id, is admin)`.
+
+    Deliberately **not** `cards_owner_filter()`, and passed beside it rather
+    than instead of it. That one is #127's setting -- what this visitor asked
+    to look at, None when they asked for everything. This is who they *are*,
+    which no setting changes, and it is what decides whether a private topic
+    exists for them at all.
+
+    Every card read takes both, because the two answer different halves of the
+    same query: "whose cards do you want" and "whose topics may you see".
+
+    A dict, spread with `**viewer()`, so the two arrive as **keywords**. Two
+    bare positionals after `cards_owner_filter()` read as three anonymous
+    filters at twenty-five call sites, and every stub in the test suite would
+    have to know their order to stand in for one of these functions.
+    """
+    return {"viewer_id": _current_user_id(), "admin": is_admin()}
+
+
 def current_settings():
     """Settings for this request (issue #86): the signed-in user's own config
     file, or the shared default config for anonymous visitors. Always returns a
@@ -587,7 +610,8 @@ def _sections_for_visitor(owner=None):
     if owner is None:
         owner = cards_owner_filter()
     return get_topics_by_section(
-        owner, alphabetical=current_settings()["alphabetical_topics"])
+        owner, alphabetical=current_settings()["alphabetical_topics"],
+        **viewer())
 
 
 def _save_and_log(entry, source, fills=None, allow_duplicate=False):
@@ -1424,7 +1448,7 @@ def _cards_for_chat(topic, limit):
     """
     hidden = [_TRANSLATION_COLUMNS[name] for name in _hidden_languages()
               if name in _TRANSLATION_COLUMNS]
-    cards = get_flashcards_by_topic(topic, cards_owner_filter())[:limit]
+    cards = get_flashcards_by_topic(topic, cards_owner_filter(), **viewer())[:limit]
     if not hidden:
         return cards
     return [{k: v for k, v in card.items() if k not in hidden}
@@ -2042,7 +2066,7 @@ def topics_json():
     """
     owner = cards_owner_filter()
     try:
-        topics = get_topics(owner)
+        topics = get_topics(owner, **viewer())
         sections = _sections_for_visitor(owner)
     except Exception:
         topics, sections = [], []
@@ -2299,15 +2323,77 @@ def add_card():
     return {"ok": True, "saved": True}
 
 
+TOPIC_VISIBILITY_MESSAGES = {
+    "changed": None,          # the page redraws; the select says it already
+    "unchanged": None,
+    "denied": "That topic is not yours to hide.",
+    "nobodys": "A topic with no creator cannot be made private — there is "
+               "nobody for it to belong to.",
+    "shared": "This topic holds cards other people added, so it cannot be made "
+              "private. Move those cards to another topic first, and everyone "
+              "keeps what they saved.",
+    "taken": "You already have a topic with that name in the other "
+             "visibility. Rename one of them first.",
+    "missing": "That topic no longer exists.",
+}
+
+
+@app.route("/topics/<int:topic_id>/visibility", methods=["POST"])
+def topic_visibility(topic_id):
+    """Make one topic public or private (#382).
+
+    A write, so it is a POST and it is logged (#30) -- including its refusals,
+    which are the two answers a learner will report as "it did nothing".
+
+    The permission is `set_topic_visibility()`'s, not this route's: the rule is
+    "your own topic", and it belongs beside the UPDATE for the reason #162 and
+    #176 put ownership in the statement rather than in a check before it. The
+    template only decides what to draw.
+    """
+    if is_blocked():
+        flash((blocked_notice(), None))
+        return redirect(url_for("flashcards", topic=request.form.get("topic", "")))
+    public = (request.form.get("visibility") or "public") == "public"
+    outcome = set_topic_visibility(topic_id, public, **viewer())
+    name = request.form.get("topic", "")
+    applog.topic_visibility_set(name, public, topic_id=topic_id,
+                                user=_current_email(), outcome=outcome)
+    message = TOPIC_VISIBILITY_MESSAGES.get(outcome)
+    if message:
+        flash((message, None))
+    return redirect(url_for("flashcards", topic=name))
+
+
 @app.route("/flashcards/<topic>")
 def flashcards(topic):
-    """Display all flashcards saved under the given topic."""
-    cards = get_flashcards_by_topic(topic, cards_owner_filter())
+    """Display all flashcards saved under the given topic.
+
+    Since #382 the topic is **resolved** before it is read, and a name that
+    resolves to nothing this visitor may see is a 404. Leaving it out of every
+    list is not enough: a name reaches this route from a URL somebody kept, a
+    bookmark, or a guess, and the page would otherwise open empty and tell them
+    the topic is there but has no cards.
+
+    `?t=` settles which topic when a name matches two -- the public one and a
+    private one -- which only the admin can ever see. It is checked against the
+    same rule rather than trusted.
+    """
+    wanted = request.args.get("t", type=int)
+    found = resolve_topic(topic, topic_id=wanted, **viewer())
+    if found is None:
+        abort(404)
+    cards = get_flashcards_by_topic(found["name"], cards_owner_filter(),
+                                    **viewer())
     # The move dialog's topic suggestions (#177) are fetched from
     # /topics.json when it first opens, rather than queried here: this page is
     # loaded by everyone and the list is only needed by someone who actually
     # moves a card.
-    return render_template("flashcards.html", topic=topic, cards=cards)
+    return render_template(
+        "flashcards.html", topic=found["name"], cards=cards, topic_row=found,
+        # Who may change it, which is not the same as who may see it: the
+        # admin reads every topic (#382) and still does not own this one.
+        can_set_visibility=(found["created_by_user_id"] is not None
+                            and found["created_by_user_id"] == _current_user_id()))
 
 
 # A tiny sample deck so the card-deck activity (#78) can be opened and its
@@ -2350,7 +2436,7 @@ def card_deck(topic):
     """
     prefs = current_settings()
     try:
-        cards = get_flashcards_by_topic(topic, cards_owner_filter())
+        cards = get_flashcards_by_topic(topic, cards_owner_filter(), **viewer())
         demo = False
     except Exception:
         # DB unreachable — fall back to the sample deck so the activity still
@@ -2460,7 +2546,7 @@ def move_card(topic, card_id):
     # anything to show, for a topic that has vanished from the chips, reads as
     # a bug; the topic list is the honest destination.
     try:
-        remaining = [name for name, _ in get_topics(cards_owner_filter())]
+        remaining = [name for name, _ in get_topics(cards_owner_filter(), **viewer())]
     except Exception:
         remaining = [from_topic]      # DB unreachable: stay put rather than guess
     if from_topic not in remaining:
@@ -3021,7 +3107,7 @@ def _read_a_text_round(activity, topics):
             # answer to "you cannot have another" is to leave the one they have
             # on the screen rather than to clear it as well.
             return page(held=_held_generation(), refusal=refusal)
-        cards = get_flashcards_by_topics(topics, cards_owner_filter())
+        cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
         chosen = textgen.words_for_text(cards, length)
         if not chosen:
             return page(held=None, refusal=None)
@@ -3091,7 +3177,7 @@ def _scrambled_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     cards = games.one_per_word(cards)
 
     if request.method == "POST":
@@ -3175,7 +3261,7 @@ def _real_or_fake_round(activity, topics):
         return (word.isalpha() and len(word) >= games.MIN_INVENTED_LENGTH
                 and " " not in word)
 
-    in_selection = get_flashcards_by_topics(topics, cards_owner_filter())
+    in_selection = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     kept, dropped = games.playable(in_selection, usable)
     # Deduplicated: #101 keeps one card per word *and part of speech*, so a
     # word that is both a noun and a verb is two cards, and the same word twice
@@ -3189,7 +3275,8 @@ def _real_or_fake_round(activity, topics):
     selected = [card["word"]
                 for card in games.one_per_word(card for card, _ in kept)]
     everything = get_flashcards_by_topics(
-        games.visible_topic_names(_visible_sections()), cards_owner_filter())
+        games.visible_topic_names(_visible_sections()), cards_owner_filter(),
+        **viewer())
 
     wanted_fake = words // 2
     fakes = games.pseudowords(
@@ -3258,7 +3345,7 @@ def _fill_the_gap_round(activity, topics):
     # One card per word, before the eligibility rule so a duplicate never
     # reaches `dropped` (#272's rule). Shuffled first, so which of a word's
     # cards survives is not always the lowest id.
-    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     random.shuffle(cards)
     cards = games.one_per_word(cards)
 
@@ -3350,7 +3437,7 @@ def _multiple_choice_round(activity, topics):
     field = f"translation_{lang}"
     page["lang_name"] = QUIZ_LANGS[lang]
 
-    in_selection = get_flashcards_by_topics(topics, cards_owner_filter())
+    in_selection = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     usable, untranslated = games.playable(
         in_selection,
         lambda card: bool(card.get(field)) and bool((card.get("word") or "").strip()))
@@ -3400,7 +3487,7 @@ def _multiple_choice_round(activity, topics):
     if len(pool) < MIN_SELF_SUFFICIENT_POOL:
         wider = get_flashcards_by_topics(
             games.visible_topic_names(_visible_sections()),
-            cards_owner_filter())
+            cards_owner_filter(), **viewer())
         spare = [(c.get("word") or "").strip() for c in wider
                  if (c.get("word") or "").strip()]
 
@@ -3459,7 +3546,7 @@ def _listen_and_type_round(activity, topics):
     words = games.word_count(request.args.get("words"),
                              games.remembered_word_count(session))
     field, label = _gap_translation(prefs)
-    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
 
     if request.method == "POST":
         results = []
@@ -3566,7 +3653,7 @@ def _odd_one_out_round(activity, topics):
             questions=None, results=results, words=words, dropped=0,
             score=sum(1 for r in results if r["correct"]))
 
-    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     by_topic = games.by_topic(cards)
     questions = games.odd_one_out_round(
         by_topic, words, _topic_sections(_visible_sections()))
@@ -3606,7 +3693,7 @@ def _spell_it_round(activity, topics):
 
     if request.method == "POST":
         results = []
-        cards = get_flashcards_by_topics(topics, cards_owner_filter())
+        cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
         for card in games.asked(request.form,
                                 {str(c["id"]): c for c in cards}):
             given = (request.form.get(f"answer_{card['id']}") or "").strip()
@@ -3633,7 +3720,7 @@ def _spell_it_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     cards = games.one_per_word(cards)
     usable, dropped = games.playable(
         cards,
@@ -3696,7 +3783,7 @@ def _rebuild_the_sentence_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = get_flashcards_by_topics(topics, cards_owner_filter())
+    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     cards = games.one_per_word(cards)
 
     if request.method == "POST":
@@ -3974,7 +4061,7 @@ def _run_quiz(topics, heading, self_url, back, words):
     # was asked 20 has no way to tell that from the word limit. 74 of the 569
     # cards in production have no Ukrainian and 38 no Russian, so this is a
     # number people will actually meet.
-    in_selection = get_flashcards_by_topics(topics, cards_owner_filter())
+    in_selection = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     usable, untranslated = games.playable(in_selection,
                                           lambda card: card.get(field))
     cards = [card for card, _ in usable]

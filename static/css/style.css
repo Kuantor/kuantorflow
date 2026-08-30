@@ -100,6 +100,53 @@ body {
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
     margin: 0.5rem 0 1.2rem;
 }
+/* The topic heading and its visibility control on one row (#382). The
+   heading keeps its own margins, so the row only has to align them and let the
+   control sit at the far end; `flex-wrap` is what puts the control under the
+   heading on a phone instead of squeezing a long topic name.
+
+   The caption is bold and white because it sits on the background photograph
+   beside `.page-title`, which is white for the same reason -- and it carries
+   that title's shadow, without which white text on a pale sky is unreadable. */
+.topic-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.6rem 1.2rem;
+}
+.topic-visibility {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0 1.2rem;
+}
+.topic-visibility label,
+.topic-visibility-label {
+    display: inline;
+    margin: 0;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+.topic-visibility select {
+    padding: 0.25rem 0.45rem;
+    border: 1px solid #c5d0da;
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+    font-size: 0.95rem;
+}
+.topic-visibility-go { margin: 0; padding: 0.3rem 0.8rem; font-size: 0.9rem; }
+/* The read-only note the admin gets on somebody else's private topic: the
+   state and whose it is, in the same white as the heading. */
+.topic-visibility--noted .topic-visibility-owner {
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    font-size: 0.95rem;
+}
+
 .site-footer {
     text-align: center;
     color: rgba(255, 255, 255, 0.85);

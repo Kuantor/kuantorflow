@@ -103,6 +103,23 @@ def _card_fields(entry):
     }
 
 
+def topic_visibility_set(name, public, topic_id=None, user=None,
+                         outcome="changed"):
+    """A topic was made public or private (#382).
+
+    Its own action rather than a TOPIC line, because this one changes **who can
+    read the deck** rather than what is in it -- the question somebody will ask
+    the log later is "when did that topic stop being visible, and who did it".
+
+    Refusals are logged too, unlike most reads: `shared` and `taken` are the
+    two answers a learner will report as "it did not work", and a line saying
+    which is the difference between a bug report and a five-second answer.
+    """
+    _write(CARDS, "TOPIC-VISIBILITY", topic=name, id=topic_id,
+           visibility="public" if public else "private",
+           outcome=outcome, user=_user(user))
+
+
 def topic_created(name, topic_id=None, created_by=None):
     """A new topic row appeared (issue #207).
 
