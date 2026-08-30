@@ -103,6 +103,21 @@ def _card_fields(entry):
     }
 
 
+def word_confirmed(word, source, user=None, first=True):
+    """A disputed word was confirmed real by a lexicon (#258).
+
+    Written when the *set* grows, not on every press: a second learner
+    disputing a settled word is answered from the table without asking
+    anybody, and a line for that would say a question was settled twice.
+
+    In cards.log, which is the action log rather than only a card log -- this
+    changes what the deck considers English, and the next round is played with
+    it.
+    """
+    _write(CARDS, "WORD-CONFIRMED", word=word, source=source,
+           first="yes" if first else "no", user=_user(user))
+
+
 def topic_visibility_set(name, public, topic_id=None, user=None,
                          outcome="changed"):
     """A topic was made public or private (#382).

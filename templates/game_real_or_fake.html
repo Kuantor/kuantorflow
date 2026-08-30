@@ -47,25 +47,129 @@
             </form>
 
     {% else %}
-        <p class="score">Score: {{ score }} / {{ results|length }}</p>
+        <p class="score" id="rof-score" data-total="{{ results|length }}">Score: {{ score }} / {{ results|length }}</p>
         {# The invented words come from a model trained on English, so it can
-           produce English by accident (#258). A learner who is told a real word
-           was invented has been taught something false, and until #258 closes
-           that properly the least this page can do is admit it — and point at
-           the dictionary, which is where the learner would settle it anyway. #}
+           produce English by accident (#258) -- and the words it collides with
+           are by construction the rare ones, `bailment` being the case that
+           opened the ticket. #132's filters ask what the *deck* knows, and the
+           deck knows some 2,500 words.
+
+           So the page stops apologising and offers to settle it: every word the
+           game called invented carries a challenge, answered by a real lexicon.
+           Never during a round -- checking mid-round is cheating -- and only on
+           these rows, because a real word the learner mistook for a fake needs
+           no adjudication: the game was right, and the answer is already here. #}
         <div class="panel panel--tight">
             <p class="hint">The invented words are made up by the app, and it
-               sometimes invents a real one by accident. If you think a word
-               here is genuine, look it up in a dictionary &mdash; you may well
-               be right.</p>
+               sometimes invents a real one by accident. If you think one of
+               them is genuine, press <strong>Is this really a word?</strong>
+               &mdash; and if you are right, the score is corrected and nobody
+               is offered that word as invented again.</p>
         </div>
         {% for r in results %}
-            <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
+            <div class="panel question {{ 'correct' if r.correct else 'wrong' }}"
+                 data-word="{{ r.word }}"
+                 data-said-real="{{ 1 if r.said_real else 0 }}">
                 <div class="word">{{ loop.index }}. {{ r.word }}</div>
-                <p>You said it was {{ 'real' if r.said_real else 'invented' }}
+                <p class="rof-verdict">You said it was {{ 'real' if r.said_real else 'invented' }}
                    &mdash; it {{ 'is a real word' if r.real else 'was invented for this round' }}.</p>
+                {% if not r.real %}
+                    <p class="rof-check">
+                        <button type="button" class="secondary rof-challenge">Is this really a word?</button>
+                    </p>
+                    <p class="rof-answer" hidden></p>
+                {% endif %}
             </div>
         {% endfor %}
+        <script>
+            (function () {
+                var score = document.getElementById("rof-score");
+                if (!score) return;
+                var total = parseInt(score.dataset.total, 10);
+                var points = parseInt(score.textContent.replace(/[^0-9]+/, ""), 10);
+
+                function settle(row, data) {
+                    var answer = row.querySelector(".rof-answer");
+                    answer.hidden = false;
+                    answer.className = "rof-answer rof-answer--real";
+                    answer.textContent = "It is a real word \u2014 "
+                        + (data.known ? "confirmed by " : "found in ")
+                        + (data.source || "a dictionary")
+                        + (data.definition ? ": " + data.definition : ".");
+                    if (data.link) {
+                        var see = document.createElement("a");
+                        see.href = data.link;
+                        see.target = "_blank";
+                        see.rel = "noopener";
+                        see.textContent = "See the entry";
+                        answer.appendChild(document.createTextNode(" "));
+                        answer.appendChild(see);
+                    }
+                    // The row said the word was invented, and it was not. Leaving
+                    // that sentence on screen would be the same false statement
+                    // the challenge exists to correct.
+                    row.querySelector(".rof-verdict").textContent =
+                        "You said it was "
+                        + (row.dataset.saidReal === "1" ? "real" : "invented")
+                        + " \u2014 and it is a real word after all. The app "
+                        + "invented it by accident.";
+                    // The score is the point. Offering a check, being proved
+                    // wrong and leaving the mark against the learner would be
+                    // worse than never asking.
+                    if (row.dataset.saidReal === "1" && row.classList.contains("wrong")) {
+                        row.classList.remove("wrong");
+                        row.classList.add("correct");
+                        points += 1;
+                        score.textContent = "Score: " + points + " / " + total;
+                    }
+                }
+
+                function say(row, button, text, again) {
+                    var answer = row.querySelector(".rof-answer");
+                    answer.hidden = false;
+                    answer.className = "rof-answer";
+                    answer.textContent = text;
+                    button.disabled = false;
+                    button.textContent = again;
+                }
+
+                document.querySelectorAll(".rof-challenge").forEach(function (button) {
+                    button.addEventListener("click", function () {
+                        var row = button.closest(".question");
+                        button.disabled = true;
+                        button.textContent = "Checking\u2026";
+                        fetch("{{ url_for('word_check') }}", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ word: row.dataset.word }),
+                        }).then(function (resp) {
+                            return resp.json();
+                        }).then(function (data) {
+                            if (data.real) {
+                                settle(row, data);
+                                button.remove();
+                            } else if (data.real === false) {
+                                // Both lexicons answered and neither had it.
+                                // **Not** proof: they miss rare words, which is
+                                // the whole reason this button exists.
+                                say(row, button,
+                                    "Neither Wiktionary nor Oxford has an entry "
+                                    + "for it. That is not proof \u2014 dictionaries "
+                                    + "do miss rare words \u2014 but it is the best "
+                                    + "evidence available.", "Check again");
+                            } else {
+                                say(row, button, data.error
+                                    || "Could not check just now. That says nothing "
+                                       + "about the word \u2014 only about the "
+                                       + "connection.", "Try again");
+                            }
+                        }).catch(function () {
+                            say(row, button, "Could not check just now.", "Try again");
+                        });
+                    });
+                });
+            })();
+        </script>
         <p class="crumbs">
             <a href="{{ url_for('index') }}">&larr; Home</a>
             <a href="{{ url_for('game_play', game=activity.slug, topic=topics, words=words) }}">Play again</a>

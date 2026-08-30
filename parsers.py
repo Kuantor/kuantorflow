@@ -888,6 +888,122 @@ def _translator_backend(translator_slug):
     return chosen.fetch if chosen else None
 
 
+# --- is this a real word? (#258) -----------------------------------------
+#
+# *Real or fake* invents words with a trigram model trained on the deck, and a
+# model trained on English sometimes produces English. #132's filters ask "does
+# the **deck** know this word", and the deck knows about 2,500 words -- so the
+# gap they cannot close is exactly the rare end of English, where the model
+# collides with words like `bailment`.
+#
+# This is the other end: the learner disputes a word and a real lexicon settles
+# it. **Positive-only.** A hit is strong evidence a word is real; a miss is
+# evidence of nothing, and nothing here may ever report "confirmed invented".
+WIKTIONARY_API = "https://en.wiktionary.org/w/api.php"
+WIKTIONARY_ENTRY = "https://en.wiktionary.org/wiki/{word}#English"
+
+# Wikimedia asks for a User-Agent that identifies the application rather than
+# imitating a browser, and rate-limits what looks like a scraper. `HEADERS`
+# above is a browser string, which is right for the sites that only answer
+# browsers and wrong here.
+WIKTIONARY_HEADERS = {
+    "User-Agent": "KuantorFlow/1.0 (language-learning app; "
+                  "https://github.com/Kuantor/kuantorflow)",
+}
+
+
+def _wiktionary_has_english(word):
+    """Whether Wiktionary holds an **English** entry for `word` (#258).
+
+    True / False / None, and the None is the point: a page that could not be
+    fetched is not a page that does not exist. A checker that collapsed those
+    two would tell a learner their word was invented because Wikimedia was
+    rate-limiting us.
+
+    `==English==` in the wikitext, not merely a page: Wiktionary is
+    multilingual, and `splusive` may one day be a word in some other language
+    without becoming one here.
+
+    Measured against #258's own word lists: every rare real word it names --
+    `bailment`, `estoppel`, `subrogation`, `replevin`, `laches`, `demurrage`
+    and the rest -- comes back yes, including the four that neither Google's
+    retired lookup nor Oxford could confirm; every invented word comes back no.
+    Inflections (`stories`, `qualities`, `discovered`) are entries in their own
+    right, so unlike Oxford this needs no headword rule.
+    """
+    params = {"action": "query", "prop": "revisions", "rvprop": "content",
+              "rvslots": "main", "titles": word, "format": "json",
+              "formatversion": "2"}
+    try:
+        resp = requests.get(WIKTIONARY_API, params=params,
+                            headers=WIKTIONARY_HEADERS, timeout=10)
+        resp.raise_for_status()
+        pages = (resp.json().get("query") or {}).get("pages") or []
+    except Exception:
+        return None
+    if not pages:
+        return None
+    page = pages[0]
+    if page.get("missing"):
+        return False
+    try:
+        text = page["revisions"][0]["slots"]["main"]["content"]
+    except (KeyError, IndexError):
+        return None
+    return "==English==" in text
+
+
+def confirm_word(word):
+    """Ask a real lexicon whether `word` is English (#258).
+
+    Returns a dict the page can render directly:
+
+    - `{"real": True, "source": ..., "link": ..., "definition": ...}`
+    - `{"real": False}`  -- both lexicons answered and neither had it, which is
+      **not** proof it was invented and must never be phrased as such;
+    - `{"real": None}`   -- nothing could be reached. "Could not check", never
+      "confirmed invented".
+
+    Wiktionary first: it is free, needs no key, is licensed for reuse, and on
+    #258's measurements has by far the best recall on the rare words a dispute
+    is actually about. Only its **existence** is used and the learner is handed
+    the link, so no CC BY-SA content is reproduced here.
+
+    Oxford second, and only when Wiktionary has nothing: it is a *learner's*
+    dictionary that omits technical vocabulary by design (#258 measured 71% of
+    rare real words absent), so it is the weaker oracle for this job -- but it
+    is free, already wired up, and when it does answer it answers with a
+    definition written for exactly this reader. Asked about the headword too,
+    since Oxford is keyed on those: a checker that reported `stories` as
+    unknown because it never tried `story` would be worse than no checker.
+    """
+    word = (word or "").strip()
+    if not word:
+        return {"real": None}
+
+    seen = _wiktionary_has_english(word)
+    if seen:
+        return {"real": True, "source": "Wiktionary",
+                "link": WIKTIONARY_ENTRY.format(word=quote(word.lower()))}
+
+    try:
+        definitions = _fetch_oxford_definitions(word)
+    except Exception:
+        definitions = None
+    if definitions:
+        first = next((defs[0] for defs in definitions.values() if defs), None)
+        return {"real": True, "source": "Oxford Learner's Dictionaries",
+                "definition": first,
+                "link": OXFORD_URL.format(
+                    slug=quote(word.lower().replace(" ", "-")))}
+
+    # Neither had it -- but only say so when both actually answered. Wiktionary
+    # returning None is a failed request, and a failed request has no opinion.
+    if seen is None and definitions is None:
+        return {"real": None}
+    return {"real": False}
+
+
 def _merriam_webster_entry(word):
     """Merriam-Webster in the entry shape — definitions, and no examples (#225).
 

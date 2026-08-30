@@ -418,6 +418,65 @@ def _get_or_create_topic(cursor, name, created_by_user_id=None):
     return topic_id, (row[0] if row else name), False
 
 
+def confirmed_words():
+    """Every word a dictionary has confirmed is real English (#258).
+
+    Lower-cased, as a set, because the one caller feeds it straight into
+    `games.pseudowords(known=...)` -- which is the whole point of keeping
+    them. A word that was disputed once and settled is never offered as
+    invented again, for anybody: whether a word is English is not a per-user
+    fact.
+
+    A dead database gives an empty set rather than raising. The cost is that a
+    settled word could be offered again on a day the database is down, which is
+    the same day nothing else works either -- and the alternative is a game
+    that will not start.
+    """
+    try:
+        conn = get_db_connection()
+    except Exception:
+        return set()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT word FROM confirmed_words")
+        rows = cursor.fetchall()
+        cursor.close()
+        return {(row[0] or "").lower() for row in rows}
+    except Exception:
+        return set()
+    finally:
+        conn.close()
+
+
+def remember_confirmed_word(word, source):
+    """Record that `word` is real English, once (#258).
+
+    Returns True when this call is what added it -- the caller logs on that,
+    so a second learner disputing the same word does not write a second line
+    about a settled question.
+
+    `INSERT ... ON DUPLICATE KEY UPDATE id = id` rather than a check and an
+    insert, for the reason `_get_or_create_topic()` gives: two learners can
+    dispute the same word at once, and the loser of that race should get the
+    winner's answer rather than an integrity error.
+    """
+    word = (word or "").strip()
+    if not word:
+        return False
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO confirmed_words (word, source) VALUES (%s, %s) "
+            "ON DUPLICATE KEY UPDATE id = id", (word, source))
+        added = cursor.rowcount == 1
+        conn.commit()
+        cursor.close()
+        return added
+    finally:
+        conn.close()
+
+
 def resolve_topic(name, viewer_id=None, admin=False, topic_id=None):
     """The one topic this visitor means by `name` (#382), or None.
 
