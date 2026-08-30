@@ -1639,8 +1639,9 @@ def inject_settings():
     """Expose the active settings to every template (issue #86) — the seam the
     Settings UI (#13), dictionary choice (#20) and language switches (#46)
     will read from."""
+    active = current_settings()
     return {
-        "settings": current_settings(),
+        "settings": active,
         # The bounds the Settings popup puts on #235's round-length box, read
         # from the store that validates it rather than written into the markup
         # — the box and sanitize() must agree, and one source is how.
@@ -1662,6 +1663,17 @@ def inject_settings():
         # panel has no "none configured" branch on this half.
         "dictionaries": parsers.available_dictionaries(),
         "all_dictionaries": parsers.DICTIONARIES,
+        # Who a lookup will really ask, resolved by the same functions the
+        # dispatch uses (#384). Not the stored slugs: a choice this deployment
+        # cannot serve falls back, deliberately and without touching the
+        # setting (#365), so a heading that read the preference would name a
+        # provider that is never contacted. Either may be None -- no translator
+        # is a real state (#348/#349), and the heading says so by naming only
+        # the dictionary.
+        "lookup_providers": (
+            parsers.resolved_translator(active["translator"]),
+            parsers.resolved_dictionary(active["explanatory_dictionary"]),
+        ),
     }
 
 
