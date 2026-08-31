@@ -642,6 +642,89 @@ def claim_unowned_topics(section, user_id, dry_run=False):
         conn.close()
 
 
+def claim_unowned_cards(section, user_id, dry_run=False):
+    """Give every authorless card in one section's topics an author (#396).
+
+    Returns `(claimed, others, missing_section)`: `[(topic, count), ...]` for
+    what it took, `[(user_id, email, count), ...]` for every other author it
+    found and left, and whether the section exists at all.
+
+    The other half of #394. A topic with a creator still cannot be made
+    private while its cards have no author, because `set_topic_visibility()`
+    refuses a topic holding *other people's* cards and an unowned card counts
+    as somebody else's -- rightly, since the seeded deck is unowned by
+    construction and shared by design.
+
+    **`added_by_user_id` carries three meanings at once**, which is why this
+    writes more than attribution: #127 hides other people's cards, #162 lets
+    only the owner delete one, and #382 reads it to decide whether a topic can
+    be hidden. Claiming a card therefore makes it visible under *Show only my
+    cards*, deletable by its new owner, and part of what #165 asks about when
+    that account is deleted.
+
+    **Only NULL, and here that matters more than it does for a topic.** An
+    author is a permission as well as a label, so taking another learner's card
+    would hand their work to somebody else in three ways at once. Every other
+    author is counted, named and left, which is also what makes a second run
+    find nothing.
+
+    One conditional UPDATE joined to `topics`, so the section filter and the
+    NULL test are the database's single question rather than a list of ids this
+    process assembled and then trusted.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM topic_sections WHERE name = %s",
+                       (section,))
+        row = cursor.fetchone()
+        if row is None:
+            cursor.close()
+            return [], [], True
+        section_id = row[0]
+
+        cursor.execute(
+            "SELECT t.name, COUNT(*) FROM flashcards f "
+            "JOIN topics t ON f.topic_id = t.id "
+            "WHERE t.section_id = %s AND f.added_by_user_id IS NULL "
+            "GROUP BY t.name ORDER BY t.name",
+            (section_id,))
+        claimed = [(name, int(count)) for name, count in cursor.fetchall()]
+
+        # Everybody else's cards, named rather than silently skipped: a run
+        # that left rows behind without saying so reads as a run that had
+        # nothing to do.
+        cursor.execute(
+            "SELECT f.added_by_user_id, u.email, COUNT(*) FROM flashcards f "
+            "JOIN topics t ON f.topic_id = t.id "
+            "LEFT JOIN users u ON u.id = f.added_by_user_id "
+            "WHERE t.section_id = %s AND f.added_by_user_id IS NOT NULL "
+            "AND f.added_by_user_id <> %s "
+            "GROUP BY f.added_by_user_id, u.email ORDER BY f.added_by_user_id",
+            (section_id, user_id))
+        others = [(author, email, int(count))
+                  for author, email, count in cursor.fetchall()]
+
+        if claimed and not dry_run:
+            cursor.execute(
+                "UPDATE flashcards f JOIN topics t ON f.topic_id = t.id "
+                "SET f.added_by_user_id = %s "
+                "WHERE t.section_id = %s AND f.added_by_user_id IS NULL",
+                (user_id, section_id))
+            conn.commit()
+            # One line per topic, not per card: fifty-two card-shaped lines
+            # would drown the day's real card events, and `topic=` keeps this
+            # greppable beside them (CLAUDE.md's rule about logging a write,
+            # answered at the scale the write actually happens).
+            for name, count in claimed:
+                applog.cards_claimed(name, count, section=section,
+                                     user_id=user_id)
+        cursor.close()
+        return claimed, others, False
+    finally:
+        conn.close()
+
+
 def set_topic_visibility(topic_id, public, viewer_id=None, admin=False):
     """Make one topic public or private (#382). Returns a status string.
 
