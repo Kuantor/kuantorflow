@@ -154,10 +154,16 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   own**. A changed explanation takes whatever source the caller vouches for, and
   absent means none — an explanation somebody rewrote is their sentence, and a
   credit left on it would put Wiktionary's contributors' names on their words.
-  Since #390 took the examples too, one column serves two editable fields, and
-  the gap is **accepted rather than unnoticed**: rewriting the explanation
-  drops the credit from the examples with it. A second `examples_source` column
-  is the shape if that ever needs fixing.
+  **`examples_source` is the same rule for the examples, and it is a second
+  column because the two are edited separately**: one column could only ever be
+  right about one of them, dropping the credit from a definition nobody touched
+  or keeping one over a sentence the learner rewrote. Each surface then credits
+  only the text it shows — `fields` on `_source_credit.html` says which, so
+  #271, whose whole question is an example and which renders no definition,
+  reads the examples' credit and ignores the other. The card page shows the
+  consequence: both halves the dictionary's is one line under the English
+  block, one half edited puts the surviving credit against the half it still
+  covers.
   The same reason keeps it out of `EDITABLE_FIELDS` (nobody edits a fact about
   provenance, and a submitted one would let a form claim an attribution) and out
   of `FILLABLE_FIELDS` (filling it beside somebody else's stored explanation
@@ -543,9 +549,10 @@ behind, since the foreign key is what a later section feature will rely on:
 python -c "from utils import get_db_connection; c=get_db_connection(); u=c.cursor(); u.execute('SELECT COUNT(*) FROM topics WHERE section_id IS NULL'); print('topics with no section (want 0):', u.fetchone()[0])"
 ```
 
-**#390 needs `apply_schema.py`, and it is one step too**: the dry run should
-show `~ flashcards.explanation_source` and `=` against everything else. It adds
-a nullable column and touches no existing row — every card already there keeps
+**#390 needs `apply_schema.py`, and it is two steps**: the dry run should
+show `~ flashcards.explanation_source` and `~ flashcards.examples_source`, and
+`=` against everything else. They add two nullable columns and touch no
+existing row — every card already there keeps
 NULL, which is the honest answer, since the dictionary that wrote those
 explanations was never recorded and defaulting them to `oxford` would be
 inventing an attribution rather than restoring one. Nothing on any page changes
