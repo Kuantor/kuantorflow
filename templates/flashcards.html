@@ -170,12 +170,17 @@
 
             {% if card.explanation_en %}
                 <p>{{ card.explanation_en }}</p>
-                {% include "_source_credit.html" %}
             {% endif %}
             {% if card.examples_en %}
                 <div class="lang">English examples</div>
                 <ul>{% for ex in card.examples_en %}<li>{{ ex }}</li>{% endfor %}</ul>
             {% endif %}
+            {# After both, because on this page Wiktionary wrote both: the
+               definition and the usage sentences under it are the same
+               editors' work under the same licence (#390). Everywhere else the
+               credit follows the explanation directly, because nothing else on
+               those surfaces came from the dictionary. #}
+            {% include "_source_credit.html" %}
 
             {# Hidden languages (#46/#79/#111) stay stored on the card — they
                are only not rendered, so re-enabling brings them back. #}
