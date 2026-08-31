@@ -170,6 +170,7 @@
 
             {% if card.explanation_en %}
                 <p>{{ card.explanation_en }}</p>
+                {% include "_source_credit.html" %}
             {% endif %}
             {% if card.examples_en %}
                 <div class="lang">English examples</div>
@@ -225,6 +226,13 @@
                 <input type="text" id="edit-pos" name="pos">
                 <label for="edit-explanation_en">English explanation</label>
                 <textarea id="edit-explanation_en" name="explanation_en" rows="2"></textarea>
+                {# #390. Empty until *Look up & update* fills the box above, at
+                   which point the text is the dictionary's and this says
+                   whose. Typing in the box clears it again. The card's stored
+                   credit is cleared by `update_flashcard()` on any change to
+                   the explanation, so an absent value here is not a way to
+                   keep a credit the text no longer deserves. #}
+                <input type="hidden" id="edit-explanation_source" name="explanation_source" value="">
                 <label for="edit-examples_en">English examples <small>(one per line)</small></label>
                 <textarea id="edit-examples_en" name="examples_en" rows="2"></textarea>
                 {# A hidden language gets no field, and so is never submitted —

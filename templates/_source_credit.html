@@ -1,0 +1,25 @@
+{# The credit Wiktionary's licence asks for (#390).
+
+   Its definitions are CC BY-SA 4.0, which permits exactly what this app does
+   with them -- copy one onto a card, verbatim -- on the condition that the
+   source is named, the entry reachable and the licence linked. So this is not
+   decoration: it is the condition of the text being here at all, and it has to
+   travel with the text to every surface that shows one. That is why it is a
+   partial rather than three copies of a paragraph.
+
+   `card.explanation_source` is the whole test. Oxford and Reverso need no
+   credit, an explanation nobody recorded a source for gets none, and a card
+   whose text a learner has since edited had its source cleared on the way in
+   (`update_flashcard`) -- because the sentence is then theirs, not
+   Wiktionary's, and crediting it to Wiktionary would be the misattribution the
+   licence actually cares about.
+
+   Needs `card.word` as well: the entry link is derived from it rather than
+   stored, so a template including this with a different variable name has to
+   say `{% with card=r %}`. #}
+{% if card.explanation_source == 'wiktionary' %}
+    <p class="source-credit">Definition from <a
+        href="{{ wiktionary_link(card.word) }}" target="_blank"
+        rel="noopener">Wiktionary</a>, <a href="{{ wiktionary_licence_url }}"
+        target="_blank" rel="noopener">{{ wiktionary_licence }}</a></p>
+{% endif %}

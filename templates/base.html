@@ -1926,5 +1926,10 @@
        inside a click handler, which is the ordering #272 got wrong when a
        probe read `window.kfSpeech` while speech.js was still deferred. #}
     <script src="{{ url_for('static', filename='js/lookup_update.js') }}" defer></script>
+    {# #390: clears a card's dictionary credit the moment its explanation is
+       edited, in whichever dialog. Loaded here rather than per page because
+       every dialog that edits a card is one of these two today and the rule is
+       about the field, not about the page. #}
+    <script src="{{ url_for('static', filename='js/explanation_credit.js') }}" defer></script>
 </body>
 </html>

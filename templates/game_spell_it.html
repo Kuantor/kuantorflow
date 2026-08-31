@@ -70,6 +70,7 @@
                    wrong should read the meaning against the actual word. #}
                 {% if r.explanation_en %}
                     <p class="expected">{{ r.explanation_en }}</p>
+                    {% with card = r %}{% include "_source_credit.html" %}{% endwith %}
                 {% endif %}
             </div>
         {% endfor %}

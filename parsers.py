@@ -912,6 +912,28 @@ WIKTIONARY_HEADERS = {
 }
 
 
+WIKTIONARY_DEFINITION_API = (
+    "https://en.wiktionary.org/api/rest_v1/page/definition/{word}")
+
+# The licence the text arrives under, asked of the site itself
+# (`action=query&meta=siteinfo&siprop=rightsinfo`) rather than remembered.
+# Named here because a credit that does not name a licence is not attribution.
+WIKTIONARY_LICENCE = "CC BY-SA 4.0"
+WIKTIONARY_LICENCE_URL = "https://creativecommons.org/licenses/by-sa/4.0/"
+
+
+def wiktionary_link(word):
+    """The English section of a word's entry.
+
+    One builder, two callers: #258 hands the learner this link beside a
+    confirmation, and #390's credit points at it. It is also why a card stores
+    only which dictionary answered and no URL -- the link is derivable, and a
+    stored copy of a derivable thing is a second thing to keep right.
+    """
+    slug = (word or "").strip().lower().replace(" ", "_")
+    return WIKTIONARY_ENTRY.format(word=quote(slug))
+
+
 def _wiktionary_has_english(word):
     """Whether Wiktionary holds an **English** entry for `word` (#258).
 
@@ -984,7 +1006,7 @@ def confirm_word(word):
     seen = _wiktionary_has_english(word)
     if seen:
         return {"real": True, "source": "Wiktionary",
-                "link": WIKTIONARY_ENTRY.format(word=quote(word.lower()))}
+                "link": wiktionary_link(word)}
 
     try:
         definitions = _fetch_oxford_definitions(word)
@@ -1002,6 +1024,86 @@ def confirm_word(word):
     if seen is None and definitions is None:
         return {"real": None}
     return {"real": False}
+
+
+def _wiktionary_definitions(word):
+    """English definitions from Wiktionary, `{pos: [text, ...]}` (#390).
+
+    The REST endpoint returns them already parsed and keyed by language, so
+    unlike Oxford there is no page to scrape, no homograph probing and no
+    "Other results" box to follow: one request, and `en` is the only key that
+    is ours. A word Wiktionary does not have answers 404, which is a `{}` here
+    and not an error -- #349's rule, that a lookup with no explanation is still
+    a lookup.
+
+    **The text is copied verbatim, and that is a licence decision rather than a
+    matter of taste.** It arrives under CC BY-SA 4.0, which asks for a credit
+    and binds *adaptations*: rewording or summarising a definition would make
+    the card a derivative work. The only changes made here are the ones
+    extraction forces -- the definitions come as HTML and are turned into text,
+    and senses past `MAX_DEFINITIONS` are dropped, exactly as every other
+    backend caps. See `_wiktionary_entry` for why the examples are left behind.
+
+    Case is the one wrinkle: Wiktionary distinguishes `polish` from `Polish`,
+    so a capitalised query is retried in lower case rather than reported as a
+    word nobody has. That costs a second request only on a miss, the way
+    Oxford's probing does.
+    """
+    def ask(title):
+        url = WIKTIONARY_DEFINITION_API.format(
+            word=quote(title.replace(" ", "_")))
+        resp = requests.get(url, headers=WIKTIONARY_HEADERS, timeout=10)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json().get("en") or []
+
+    title = (word or "").strip()
+    if not title:
+        return {}
+    sections = ask(title)
+    if sections is None and title != title.lower():
+        sections = ask(title.lower())
+    if not sections:
+        return {}
+
+    definitions = {}
+    for section in sections:
+        # Wiktionary capitalises them (`Noun`); Oxford does not. #228's
+        # POS_SYNONYMS matches on the label, so the two have to agree on case
+        # before they can disagree on wording.
+        pos = (section.get("partOfSpeech") or "").strip().lower()
+        if not pos:
+            continue
+        # A word with two etymologies has two sections for the same part of
+        # speech, and they are the same card's senses -- so the cap is per part
+        # of speech rather than per section.
+        texts = definitions.setdefault(pos, [])
+        for sense in section.get("definitions") or []:
+            if len(texts) >= MAX_DEFINITIONS:
+                break
+            text = _readable(BeautifulSoup(sense.get("definition") or "",
+                                           "html.parser").get_text(" ", strip=True))
+            if text and text not in texts:
+                texts.append(text)
+    return {pos: texts for pos, texts in definitions.items() if texts}
+
+
+def _wiktionary_entry(word):
+    """Wiktionary in the entry shape -- definitions, and no examples (#390).
+
+    The endpoint returns usage examples too, and they are deliberately left
+    there. The definitions are the community's own writing under CC BY-SA; the
+    examples are frequently quotations from published books, carrying whatever
+    licence those carry -- "additional terms may apply" is the site's own
+    wording for it. Taking only the half whose terms we know is cheaper than
+    checking a quotation's provenance per sense, and it costs a Wiktionary card
+    its examples rather than costing it its explanation.
+
+    `_merriam_webster_entry` wraps to `(defs, {})` in the same way, for a duller
+    reason, and the shared shape is what keeps `lookup_word()` at one seam.
+    """
+    return _wiktionary_definitions(word), {}
 
 
 def _merriam_webster_entry(word):
@@ -1044,7 +1146,7 @@ def _pos_key(label):
     return POS_SYNONYMS.get(label, label)
 
 
-def _attach_dictionary_text(cards, definitions, examples):
+def _attach_dictionary_text(cards, definitions, examples, source=None):
     """Put each dictionary entry's explanation and examples on the right card.
 
     Matching used to be `if pos in cards` — exact string equality — which threw
@@ -1056,6 +1158,13 @@ def _attach_dictionary_text(cards, definitions, examples):
     **No card is created or removed here** (#228). A translation is enough to
     keep a card, so a part of speech the dictionary has nothing for keeps its
     translations and simply carries no English text.
+
+    `source` names the dictionary the text came from and is stamped on exactly
+    the cards that receive an explanation (#390). It travels with the text and
+    never on its own: a card that got no explanation gets no source, because
+    the field's whole job is to say who wrote *this* sentence. Wiktionary's
+    licence needs a credit, and a credit needs something that remembers what to
+    credit.
     """
     # canonical label -> the card to put that text on. First wins, so a card
     # whose own label matches exactly is never displaced by a synonym.
@@ -1071,6 +1180,7 @@ def _attach_dictionary_text(cards, definitions, examples):
             continue
         if pos in definitions:
             cards[target]["explanation_en"] = "; ".join(definitions[pos])
+            cards[target]["explanation_source"] = source
         # A list, not a joined string: `examples_en` is one of utils.LIST_FIELDS
         # and is stored as JSON, so the card page shows separate sentences.
         if pos in examples:
@@ -1085,6 +1195,7 @@ def _attach_dictionary_text(cards, definitions, examples):
         pos = unplaced[0]
         if pos in definitions:
             cards["other"]["explanation_en"] = "; ".join(definitions[pos])
+            cards["other"]["explanation_source"] = source
         if pos in examples:
             cards["other"]["examples_en"] = examples[pos]
 
@@ -1135,6 +1246,13 @@ DICTIONARIES = (
                "_fetch_oxford_entry", None, "Oxford"),
     Dictionary("merriam-webster", "Merriam-Webster",
                "_merriam_webster_entry", "MERRIAM_WEBSTER_API_KEY"),
+    # Keyless like Oxford, so it is always offered -- and unlike Oxford it is
+    # here with permission (#390). It is also the only other dictionary
+    # reachable from PythonAnywhere, which is what #365 left worth having: with
+    # Merriam-Webster blocked there, Oxford was the deployment's single
+    # explanatory source, and everything a card explains went with it.
+    Dictionary("wiktionary", "Wiktionary", "_wiktionary_entry", None,
+               "Wiktionary"),
 )
 
 DICTIONARY_SLUGS = tuple(d.slug for d in DICTIONARIES)
@@ -1208,6 +1326,7 @@ def _provider_name(backend):
         _bing_dictionary: "bing",
         _fetch_oxford_entry: "oxford",
         _merriam_webster_entry: "merriam-webster",
+        _wiktionary_entry: "wiktionary",
         # The definitions-only fetchers, still reached directly: Reverso as
         # lookup_word()'s fallback, Oxford by seed_topics.py --check-oxford.
         _fetch_oxford_definitions: "oxford",
@@ -1277,6 +1396,11 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     # answered perfectly). It now happens below, once both halves are in.
     fetch_defs = _dictionary_backend(explanatory_dictionary)
     dictionary = _provider_name(fetch_defs)
+    # Which dictionary the explanation ends up being *from*, which is not
+    # always the one that was asked (#390). Reverso answers below when the
+    # chosen one has nothing, and a card credited to a provider that returned
+    # nothing would be a wrong credit rather than a missing one.
+    source = dictionary
     error = None
     examples = {}
     with applog.Timer() as timer:
@@ -1300,6 +1424,8 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
                 error = e
         applog.definitions_fetched(word, "reverso", len(definitions), timer.ms,
                                    fallback_from=dictionary, error=error)
+        if definitions:
+            source = "reverso"
     # #349. No translator answered, but the dictionary did: build the cards
     # from the dictionary's parts of speech instead, and leave the translation
     # fields empty.
@@ -1331,7 +1457,7 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
             f"Could not look up '{word}': no translation service answered, "
             f"and {dictionary} has no entry for it either.")
 
-    _attach_dictionary_text(cards, definitions, examples)
+    _attach_dictionary_text(cards, definitions, examples, source)
 
     applog.lookup_finished(word, len(cards), overall.ms)
     return list(cards.values())

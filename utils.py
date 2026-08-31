@@ -304,6 +304,11 @@ FLASHCARD_FIELDS = (
     "word",
     "pos",
     "explanation_en",
+    # Which dictionary wrote the explanation (#390), and only ever written
+    # beside one -- `parsers._attach_dictionary_text()` stamps it on the cards
+    # it gives text to and on no others. Wiktionary's licence asks for a
+    # credit, and this is what a card knows to credit.
+    "explanation_source",
     "examples_en",
     "translation_ukr",
     "examples_ukr",
@@ -824,8 +829,13 @@ def _is_empty(value):
 # What a later lookup may repair on a card that already exists. Deliberately
 # not `word`, `pos` or `topic`: the first two identify the card, and moving it
 # between topics has its own rules and its own ticket (#177).
+# `explanation_source` is absent for a third reason: it is not a gap that can
+# be repaired on its own. Filling it beside an explanation somebody else's
+# lookup wrote would credit Wiktionary for Oxford's sentence, so it moves only
+# with `explanation_en`, in the one place below that writes both (#390).
 FILLABLE_FIELDS = tuple(
-    f for f in FLASHCARD_FIELDS if f not in ("word", "pos", "topic"))
+    f for f in FLASHCARD_FIELDS
+    if f not in ("word", "pos", "topic", "explanation_source"))
 
 
 def fill_missing_fields(entry):
@@ -882,10 +892,20 @@ def fill_missing_fields(entry):
             cursor.close()
             return []
 
+        # The credit rides along with the text it belongs to, and never alone
+        # (#390). A card whose explanation is already there keeps whatever
+        # source it has, including none.
+        columns = list(filling)
+        extra = ()
+        if "explanation_en" in filling:
+            columns.append("explanation_source")
+            extra = (entry.get("explanation_source"),)
+
         cursor.execute(
-            f"UPDATE flashcards SET {', '.join(f'{f} = %s' for f in filling)} "
+            f"UPDATE flashcards SET {', '.join(f'{f} = %s' for f in columns)} "
             "WHERE id = %s",
-            tuple(serialize(offered[f]) for f in filling) + (row["id"],),
+            tuple(serialize(offered[f]) for f in filling) + extra
+            + (row["id"],),
         )
         conn.commit()
         cursor.close()
@@ -898,7 +918,12 @@ def fill_missing_fields(entry):
 # a card between topics has different rules and its own ticket (#177), and
 # `added_by_user_id` is never editable at all — it is the answer to "whose card
 # is this?", which is the question the edit permission itself depends on.
-EDITABLE_FIELDS = tuple(f for f in FLASHCARD_FIELDS if f != "topic")
+# Not `explanation_source`: it is a fact about where the text came from, not a
+# field anybody edits, and a submitted one would let a form claim an
+# attribution (#390). `update_flashcard()` clears it instead, because an
+# explanation somebody has rewritten is no longer the dictionary's sentence.
+EDITABLE_FIELDS = tuple(
+    f for f in FLASHCARD_FIELDS if f not in ("topic", "explanation_source"))
 
 
 def duplicate_topic(word, pos):
@@ -1104,6 +1129,15 @@ def update_flashcard(card_id, entry, owner_id=None, admin=False):
 
         assignments = ", ".join(f"{f} = %s" for f in changed)
         values = tuple(new[f] for f in changed)
+        # The credit follows the text, in one rule (#390). A new explanation
+        # carries whatever source the caller vouches for, and **absent means
+        # none**: an explanation somebody rewrote is no longer the
+        # dictionary's sentence, and a credit left on it would attribute their
+        # words to the people who wrote the original. Not part of `changed`,
+        # which records what somebody edited -- nobody edited this.
+        if "explanation_en" in changed:
+            assignments += ", explanation_source = %s"
+            values += (entry.get("explanation_source"),)
         if admin:
             cursor.execute(
                 f"UPDATE flashcards SET {assignments} WHERE id = %s",

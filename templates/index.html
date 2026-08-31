@@ -460,6 +460,17 @@
                                 <input type="hidden" name="topic" value="{{ proposed_topic }}">
                                 <label for="proposal-{{ loop.index }}-explanation_en">English explanation</label>
                                 <textarea name="explanation_en" id="proposal-{{ loop.index }}-explanation_en" rows="2">{{ card.explanation_en or '' }}</textarea>
+                                {# Which dictionary wrote that text, carried
+                                   through the review so the saved card can
+                                   credit it (#390). Hidden because it is not
+                                   the learner's to choose: `add_card()`
+                                   validates it against the registry, and
+                                   `explanation_credit.js` empties it the
+                                   moment anybody types in the box above --
+                                   an edited sentence is theirs and belongs to
+                                   nobody else. #}
+                                <input type="hidden" name="explanation_source" value="{{ card.explanation_source or '' }}">
+                                {% include "_source_credit.html" %}
                                 {# Examples are read here, not merely carried through (#357).
                                    They arrive from the dictionary (#225) or the Reverso
                                    parser (#134), and until now they travelled as hidden

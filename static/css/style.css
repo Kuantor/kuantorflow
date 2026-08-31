@@ -110,6 +110,18 @@ body {
    like "it is not a word". */
 .rof-check { margin: 0.6rem 0 0; }
 .rof-challenge { margin: 0; padding: 0.3rem 0.8rem; font-size: 0.9rem; }
+/* Where a card's explanation came from (#390). Small and quiet on purpose:
+   it is a licence condition rather than something a learner reads while
+   studying, so it has to be legible and present on every surface that shows
+   the text, and it must not compete with the text it credits. */
+.source-credit {
+    margin: 0.35rem 0 0;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: var(--muted);
+}
+.source-credit a { color: inherit; }
+
 .rof-answer {
     margin: 0.5rem 0 0;
     font-size: 0.92rem;

@@ -68,6 +68,7 @@
     </div>
     {% if card.explanation_en %}
         <p class="deck-explanation">{{ card.explanation_en }}</p>
+        {% include "_source_credit.html" %}
     {% elif card.translation %}
         <div class="lang">{{ card.translation_label }}</div>
         <p class="deck-translation">{{ card.translation }}</p>

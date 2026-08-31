@@ -74,6 +74,7 @@
     }
 
     function applyEntry(form, entry, replace) {
+        var filledExplanation = false;
         fillable(form).forEach(function (field) {
             var incoming = incomingValue(entry, field);
             // Nothing found for a field leaves it alone: an empty answer must
@@ -82,12 +83,23 @@
             var current = form.elements[field].value.trim();
             if (!current || replace.indexOf(field) !== -1) {
                 form.elements[field].value = incoming;
+                if (field === "explanation_en") filledExplanation = true;
                 // #357's boxes size themselves to their content, and a value
                 // set from script fires no input event of its own.
                 form.elements[field].dispatchEvent(
                     new Event("input", { bubbles: true }));
             }
         });
+        // The credit follows the explanation (#390). A box this lookup filled
+        // holds the dictionary's own sentence, so the hidden field says which
+        // dictionary -- and a lookup that left the box alone leaves the credit
+        // alone with it, because the text on screen is still whatever it was.
+        // `explanation_credit.js` does not undo this: the event dispatched
+        // above is synthetic and it only listens to real typing.
+        var credit = form.elements.explanation_source;
+        if (credit && filledExplanation) {
+            credit.value = entry.explanation_source || "";
+        }
     }
 
     function askWhichPos(entries) {
