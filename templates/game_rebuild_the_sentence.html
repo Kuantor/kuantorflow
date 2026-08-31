@@ -64,6 +64,11 @@
                             <button type="button" class="chip">{{ chip }}</button>
                         {% endfor %}
                     </div>
+                    {# The chips *are* somebody's sentence (#390). This is the
+                       one game whose whole question is a card's example, so
+                       the credit belongs here rather than beside an
+                       explanation this page never shows. #}
+                    {% with card = question %}{% include "_source_credit.html" %}{% endwith %}
                 </div>
             {% endfor %}
             <button type="submit">Check answers</button>
@@ -131,6 +136,7 @@
                 {% if not r.correct %}
                     <p class="expected">It was written: {{ r.sentence }}</p>
                 {% endif %}
+                {% with card = r %}{% include "_source_credit.html" %}{% endwith %}
             </div>
         {% endfor %}
         <p class="crumbs">

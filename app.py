@@ -3959,6 +3959,7 @@ def _rebuild_the_sentence_round(activity, topics):
             results.append({
                 "word": card["word"],
                 "sentence": sentence,
+                "explanation_source": card.get("explanation_source"),
                 "given": given,
                 # **The assembled string, not chip positions.** That falls out
                 # of the duplicate-token case and gets it right for free: a
@@ -3992,6 +3993,11 @@ def _rebuild_the_sentence_round(activity, topics):
             "word": card["word"],
             "sentence": sentence,
             "chips": chips,
+            # This game *is* a card's example sentence, so it shows dictionary
+            # text with no definition beside it -- and a credit has to travel
+            # with the text rather than with the explanation it arrived next
+            # to (#390).
+            "explanation_source": card.get("explanation_source"),
         })
 
     return render_template(
