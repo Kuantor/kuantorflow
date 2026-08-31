@@ -170,6 +170,21 @@ def topic_placed(name, section, position, topic_id=None):
            section=section, position=position)
 
 
+def topic_claimed(name, section=None, user_id=None):
+    """A topic with no creator was given one (issue #394).
+
+    Beside `TOPIC-PLACED` in every way that matters: it is a console script
+    changing a row somebody else's work is filed under, with no request behind
+    it, so the line goes where the write is. `topic=` and `section=` match the
+    lines around it, so one grep still finds a topic's whole history.
+
+    Only a NULL creator is ever claimed, so this line can never mean that a
+    topic changed hands.
+    """
+    _write(CARDS, "TOPIC-CLAIMED", topic=name, section=section,
+           created_by=user_id)
+
+
 def card_created(entry, source, user=None, card_id=None, alongside=None):
     """A new card reached the database.
 

@@ -146,6 +146,16 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   **moves** an existing topic of the same name rather than duplicating it —
   logged as `TOPIC-PLACED`, because it is the one thing the seed does to data
   someone else made.
+  `claim_unowned_topics()` (#394) is the third and it writes no card at all:
+  it gives the creatorless topics in one section a creator, because
+  `created_by_user_id` is what #382 reads to decide who may hide a topic, so a
+  topic with NULL there can never be made private — an ordinary learner is
+  `denied` (the ownership check comes first) and the admin gets `nobodys`. Only
+  NULL is ever claimed: another learner's creator is the only thing standing
+  between their private topic and everybody else's deck, so theirs is reported
+  and left. `claim_topics.py` is the console front, and it is **not part of a
+  deploy** — a one-off, idempotent, `--dry-run` first, in `seed_topics.py`'s
+  shape.
   `update_flashcard()` is its edit counterpart (#176): ownership is part of the
   `UPDATE`, not a check before it, and only the keys **present** in `entry` are
   touched — a missing key means "leave it", which is what keeps an editor that
@@ -496,6 +506,18 @@ you that nothing after it was applied — fix the cause and re-run, rather than
 running the remaining statements by hand. Do **not** pipe `schema.sql` into
 `mysql`: it cannot alter an existing table and skips every migration, which is
 the failure #180 exists to prevent.
+
+**`claim_topics.py` is a one-off too** (#394). It gives the topics with no
+creator in a section an owner, which is what lets them be made private at all:
+
+```bash
+venv/bin/python claim_topics.py --owner <email> --dry-run
+venv/bin/python claim_topics.py --owner <email>
+```
+
+Read the dry run: `+` is a topic it would claim, `=` is one created by somebody
+else, which it never takes — for a private topic the creator id is the only
+thing deciding who can see it. Re-running says `nothing to do`.
 
 `apply_schema.py` is the only thing a deploy *must* run. **`seed_topics.py` is
 not part of a deploy** (#203) — it is a one-off that fills an empty deck, safe to
