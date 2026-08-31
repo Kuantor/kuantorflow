@@ -616,6 +616,15 @@ inventing an attribution rather than restoring one. Nothing on any page changes
 until somebody looks a word up with Wiktionary selected. No key is needed; it
 is offered wherever the app runs.
 
+**#388 needs `apply_schema.py`, and it is one step**: `word_lookup_usage` is a
+brand-new table, so the `schema.sql` pass creates it on an existing database
+and no migration is needed (#237's shape). The dry run should show
+`~ word_lookup_usage` and `=` against everything else. It starts empty, and the
+first lookup after the reload writes the day's first row. Nothing else changes
+on the day — except that a lookup now has a ceiling, which is the point.
+`LOOKUP_ANON_LIMIT`, `LOOKUP_USER_DAILY` and `LOOKUP_ANON_DAILY` tune it from
+the environment; 0 turns any of them off.
+
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
 a brand-new table, so the `schema.sql` pass creates it on an existing database
 and no migration is needed (the same shape as #237's counter). The dry run
