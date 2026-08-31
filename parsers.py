@@ -1026,23 +1026,11 @@ def confirm_word(word):
     return {"real": False}
 
 
-def _wiktionary_definitions(word):
-    """English definitions from Wiktionary, `{pos: [text, ...]}` (#390).
+def _wiktionary_sections(word):
+    """The English sections of a word's entry, or `[]`.
 
-    The REST endpoint returns them already parsed and keyed by language, so
-    unlike Oxford there is no page to scrape, no homograph probing and no
-    "Other results" box to follow: one request, and `en` is the only key that
-    is ours. A word Wiktionary does not have answers 404, which is a `{}` here
-    and not an error -- #349's rule, that a lookup with no explanation is still
-    a lookup.
-
-    **The text is copied verbatim, and that is a licence decision rather than a
-    matter of taste.** It arrives under CC BY-SA 4.0, which asks for a credit
-    and binds *adaptations*: rewording or summarising a definition would make
-    the card a derivative work. The only changes made here are the ones
-    extraction forces -- the definitions come as HTML and are turned into text,
-    and senses past `MAX_DEFINITIONS` are dropped, exactly as every other
-    backend caps. See `_wiktionary_entry` for why the examples are left behind.
+    A word Wiktionary does not have answers 404, which is `[]` here and not an
+    error -- #349's rule, that a lookup with no explanation is still a lookup.
 
     Case is the one wrinkle: Wiktionary distinguishes `polish` from `Polish`,
     so a capitalised query is retried in lower case rather than reported as a
@@ -1060,15 +1048,79 @@ def _wiktionary_definitions(word):
 
     title = (word or "").strip()
     if not title:
-        return {}
+        return []
     sections = ask(title)
     if sections is None and title != title.lower():
         sections = ask(title.lower())
-    if not sections:
-        return {}
+    return sections or []
 
-    definitions = {}
-    for section in sections:
+
+# A quotation opens with the year it was published. Nothing measured here has
+# ever come back looking like one -- see `_wiktionary_usage_example()` -- and
+# this is the belt to that braces: if the endpoint ever starts including
+# quotations, the failure is fewer examples rather than a licensing problem.
+WIKTIONARY_QUOTED = re.compile(r"^\s*(1[0-9]|20)\d\d\b")
+
+# Below this a "sentence" is a phrase: `spotless shirt`, `sustainable economy`.
+# They are true and useless -- nothing to read, and #235 cannot gap a sentence
+# that is not one. Measured over 91 examples on 30 seeded words: 70 have five
+# words and an initial capital, and the 21 that do not are all fragments.
+WIKTIONARY_MIN_EXAMPLE_WORDS = 5
+
+
+def _wiktionary_usage_example(html):
+    """One example as text, or None if it is not one worth keeping (#390).
+
+    **These are usage examples, not quotations, and the difference is the
+    licence.** Wiktionary writes the two differently -- an editor's usage
+    example is a `#:` line, usually `{{ux|en|...}}`, while a quotation from a
+    published book is a `#*` line with a `quote-book` or `RQ:` template naming
+    an author and a year. The first is the community's own writing under
+    CC BY-SA, and copying it needs the same credit the definitions need; the
+    second belongs to whoever wrote the book.
+
+    **The endpoint returns only the first kind.** Measured against the
+    wikitext: `thrive` has 3 usage examples and 9 quotations and answered with
+    3; `reluctant` 2 and 7 and answered with 2; `sustainable` 1 and 6 and
+    answered with 1. Then 91 examples across 30 seeded deck words, none of
+    which looked like a quotation. So no per-example licence check is needed --
+    but that is observed behaviour rather than a documented promise, which is
+    what `WIKTIONARY_QUOTED` is for.
+    """
+    text = _readable(BeautifulSoup(html or "", "html.parser")
+                     .get_text(" ", strip=True))
+    if not text or WIKTIONARY_QUOTED.match(text):
+        return None
+    if len(text.split()) < WIKTIONARY_MIN_EXAMPLE_WORDS:
+        return None
+    # An initial capital is the cheapest test for "somebody wrote a sentence".
+    # `to thrive upon hard work` is long enough and is still a phrase.
+    return text if text[:1].isupper() else None
+
+
+def _wiktionary_entry(word):
+    """Wiktionary in the entry shape -- `(definitions, examples)` (#225, #390).
+
+    Both halves from **one** pass over the sections, the way Oxford's fetcher
+    takes both from one pass over its pages: the examples live inside the
+    senses, so a second walk would be a second traversal of text already in
+    hand.
+
+    **The text is copied verbatim, and that is a licence decision rather than a
+    matter of taste.** It arrives under CC BY-SA 4.0, which asks for a credit
+    and binds *adaptations*: rewording or summarising a definition would make
+    the card a derivative work. The only changes made here are the ones
+    extraction forces -- the text comes as HTML and is turned into text, and
+    what is past the caps every other backend applies is dropped.
+
+    Examples are only ever collected for a part of speech that also produced a
+    definition. Not tidiness: `lookup_word()` falls back to Reverso for
+    *definitions* alone, so a card can end up carrying Reverso's explanation,
+    and examples surviving that swap would be Wiktionary text on a card whose
+    credit names somebody else.
+    """
+    definitions, examples = {}, {}
+    for section in _wiktionary_sections(word):
         # Wiktionary capitalises them (`Noun`); Oxford does not. #228's
         # POS_SYNONYMS matches on the label, so the two have to agree on case
         # before they can disagree on wording.
@@ -1076,34 +1128,28 @@ def _wiktionary_definitions(word):
         if not pos:
             continue
         # A word with two etymologies has two sections for the same part of
-        # speech, and they are the same card's senses -- so the cap is per part
-        # of speech rather than per section.
+        # speech, and they are the same card's senses -- so the caps are per
+        # part of speech rather than per section.
         texts = definitions.setdefault(pos, [])
+        sentences = examples.setdefault(pos, [])
         for sense in section.get("definitions") or []:
             if len(texts) >= MAX_DEFINITIONS:
                 break
             text = _readable(BeautifulSoup(sense.get("definition") or "",
                                            "html.parser").get_text(" ", strip=True))
-            if text and text not in texts:
-                texts.append(text)
-    return {pos: texts for pos, texts in definitions.items() if texts}
+            if not text or text in texts:
+                continue
+            texts.append(text)
+            for raw in sense.get("examples") or []:
+                if len(sentences) >= MAX_EXAMPLES:
+                    break
+                sentence = _wiktionary_usage_example(raw)
+                if sentence and sentence not in sentences:
+                    sentences.append(sentence)
 
-
-def _wiktionary_entry(word):
-    """Wiktionary in the entry shape -- definitions, and no examples (#390).
-
-    The endpoint returns usage examples too, and they are deliberately left
-    there. The definitions are the community's own writing under CC BY-SA; the
-    examples are frequently quotations from published books, carrying whatever
-    licence those carry -- "additional terms may apply" is the site's own
-    wording for it. Taking only the half whose terms we know is cheaper than
-    checking a quotation's provenance per sense, and it costs a Wiktionary card
-    its examples rather than costing it its explanation.
-
-    `_merriam_webster_entry` wraps to `(defs, {})` in the same way, for a duller
-    reason, and the shared shape is what keeps `lookup_word()` at one seam.
-    """
-    return _wiktionary_definitions(word), {}
+    definitions = {pos: t for pos, t in definitions.items() if t}
+    examples = {pos: s for pos, s in examples.items() if s and pos in definitions}
+    return definitions, examples
 
 
 def _merriam_webster_entry(word):

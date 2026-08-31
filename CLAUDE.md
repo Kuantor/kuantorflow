@@ -58,7 +58,8 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   and dropping them from `settings_store.CHOICES` is what coerces an account
   still holding one onto the default instead of stranding it (#352). A dictionary backend returns
   **`(definitions, examples)`** (#225): Oxford supplies both from one pass over
-  its pages, Merriam-Webster and Wiktionary wrap to `(defs, {})`. That tuple is the **only
+  its pages, Wiktionary the same from one pass over its sections,
+  Merriam-Webster wraps to `(defs, {})`. That tuple is the **only
   seam** — whatever `_dictionary_backend()` returns is all `lookup_word()` calls,
   and it is what the tests stub. Stubbing the definitions-only fetchers
   underneath it instead leaves the real ones in the call path and the offline
@@ -71,10 +72,24 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   It answers from a REST endpoint that returns parsed JSON, so there is no page
   to scrape and no homograph probing — and its `partOfSpeech` is capitalised,
   which is lowercased in the fetcher because `POS_SYNONYMS` matches on the
-  label. Its **examples are deliberately left behind**: the definitions are the
-  community's own writing under CC BY-SA, while the examples are frequently
-  quotations from published books under whatever licence those carry.
-  That licence is why the text is copied **verbatim** — rewording or
+  label. Its **examples are usage examples and never quotations**, which is a
+  licence distinction rather than a quality one: Wiktionary writes an editor's
+  usage example as a `#:` line (`{{ux|en|...}}`) and a quotation from a
+  published book as a `#*` line with a `quote-book` or `RQ:` template, and the
+  first is the community's own writing under CC BY-SA while the second belongs
+  to whoever wrote the book. **The REST endpoint returns only the first kind**
+  — measured against the wikitext (`thrive`: 3 usage examples, 9 quotations,
+  3 returned; `reluctant`: 2 and 7, 2 returned) and then across 91 examples on
+  30 seeded words with nothing quotation-shaped among them. That is observed
+  behaviour rather than a documented promise, so `WIKTIONARY_QUOTED` drops
+  anything opening with a year: if that ever changes, the app loses examples
+  instead of gaining a licensing problem. Fragments go too — `spotless shirt`
+  is true and useless, and #235 cannot gap a sentence that is not one.
+  Examples are collected **only for a part of speech that also produced a
+  definition**, because `lookup_word()`'s Reverso fallback replaces the
+  definitions alone and Wiktionary examples must not outlive the credit that
+  covers them.
+  The licence is also why the text is copied **verbatim** — rewording or
   summarising a definition would make the card an *adaptation*, which
   share-alike binds, where copying with a credit is what the licence plainly
   permits. It is also why a card records **which dictionary wrote its
