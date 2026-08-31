@@ -155,7 +155,16 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   between their private topic and everybody else's deck, so theirs is reported
   and left. `claim_topics.py` is the console front, and it is **not part of a
   deploy** — a one-off, idempotent, `--dry-run` first, in `seed_topics.py`'s
-  shape.
+  shape. `claim_unowned_cards()` (#396) is its other half, and it is needed
+  because a claimed topic *still* cannot be hidden while its cards have no
+  author: `set_topic_visibility()` refuses a topic holding other people's
+  cards and an unowned card counts as somebody else's. `added_by_user_id`
+  carries three meanings — #127 hides other people's cards, #162 lets only the
+  owner delete one, #382 reads it for the `shared` refusal — so claiming a card
+  hands over a permission rather than a label, which is why only NULL is taken
+  and why the run **reports every other author** instead of skipping them
+  quietly. Logged one line per topic (`CARDS-CLAIMED`), because fifty-two
+  card-shaped lines from one console command would drown the day's real events.
   `update_flashcard()` is its edit counterpart (#176): ownership is part of the
   `UPDATE`, not a check before it, and only the keys **present** in `entry` are
   touched — a missing key means "leave it", which is what keeps an editor that
@@ -518,6 +527,17 @@ venv/bin/python claim_topics.py --owner <email>
 Read the dry run: `+` is a topic it would claim, `=` is one created by somebody
 else, which it never takes — for a private topic the creator id is the only
 thing deciding who can see it. Re-running says `nothing to do`.
+
+**`claim_flashcards.py` finishes that job** (#396) — the topics' cards:
+
+```bash
+venv/bin/python claim_flashcards.py --owner <email> --dry-run
+venv/bin/python claim_flashcards.py --owner <email>
+```
+
+`+` is a topic and how many of its cards have no author; `=` names another
+author and their count, which it never touches. Run it after `claim_topics.py`:
+a topic needs both before it can be made private.
 
 `apply_schema.py` is the only thing a deploy *must* run. **`seed_topics.py` is
 not part of a deploy** (#203) — it is a one-off that fills an empty deck, safe to
