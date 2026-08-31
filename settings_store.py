@@ -110,7 +110,9 @@ CHOICES = {
     # `sanitize()` coerces any account still holding one to the default
     # rather than leaving it on a provider that cannot work (#352).
     "translator": ("claude", "microsoft", "deepl", "google_cloud"),
-    "explanatory_dictionary": ("oxford", "merriam-webster"),
+    # Wiktionary needs no key, so unlike Merriam-Webster picking it actually
+    # buys something everywhere, including on PythonAnywhere (#390).
+    "explanatory_dictionary": ("oxford", "merriam-webster", "wiktionary"),
     "quiz_lang": ("ukrainian", "russian"),
 }
 

@@ -912,6 +912,28 @@ WIKTIONARY_HEADERS = {
 }
 
 
+WIKTIONARY_DEFINITION_API = (
+    "https://en.wiktionary.org/api/rest_v1/page/definition/{word}")
+
+# The licence the text arrives under, asked of the site itself
+# (`action=query&meta=siteinfo&siprop=rightsinfo`) rather than remembered.
+# Named here because a credit that does not name a licence is not attribution.
+WIKTIONARY_LICENCE = "CC BY-SA 4.0"
+WIKTIONARY_LICENCE_URL = "https://creativecommons.org/licenses/by-sa/4.0/"
+
+
+def wiktionary_link(word):
+    """The English section of a word's entry.
+
+    One builder, two callers: #258 hands the learner this link beside a
+    confirmation, and #390's credit points at it. It is also why a card stores
+    only which dictionary answered and no URL -- the link is derivable, and a
+    stored copy of a derivable thing is a second thing to keep right.
+    """
+    slug = (word or "").strip().lower().replace(" ", "_")
+    return WIKTIONARY_ENTRY.format(word=quote(slug))
+
+
 def _wiktionary_has_english(word):
     """Whether Wiktionary holds an **English** entry for `word` (#258).
 
@@ -984,7 +1006,7 @@ def confirm_word(word):
     seen = _wiktionary_has_english(word)
     if seen:
         return {"real": True, "source": "Wiktionary",
-                "link": WIKTIONARY_ENTRY.format(word=quote(word.lower()))}
+                "link": wiktionary_link(word)}
 
     try:
         definitions = _fetch_oxford_definitions(word)
@@ -1002,6 +1024,132 @@ def confirm_word(word):
     if seen is None and definitions is None:
         return {"real": None}
     return {"real": False}
+
+
+def _wiktionary_sections(word):
+    """The English sections of a word's entry, or `[]`.
+
+    A word Wiktionary does not have answers 404, which is `[]` here and not an
+    error -- #349's rule, that a lookup with no explanation is still a lookup.
+
+    Case is the one wrinkle: Wiktionary distinguishes `polish` from `Polish`,
+    so a capitalised query is retried in lower case rather than reported as a
+    word nobody has. That costs a second request only on a miss, the way
+    Oxford's probing does.
+    """
+    def ask(title):
+        url = WIKTIONARY_DEFINITION_API.format(
+            word=quote(title.replace(" ", "_")))
+        resp = requests.get(url, headers=WIKTIONARY_HEADERS, timeout=10)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json().get("en") or []
+
+    title = (word or "").strip()
+    if not title:
+        return []
+    sections = ask(title)
+    if sections is None and title != title.lower():
+        sections = ask(title.lower())
+    return sections or []
+
+
+# A quotation opens with the year it was published. Nothing measured here has
+# ever come back looking like one -- see `_wiktionary_usage_example()` -- and
+# this is the belt to that braces: if the endpoint ever starts including
+# quotations, the failure is fewer examples rather than a licensing problem.
+WIKTIONARY_QUOTED = re.compile(r"^\s*(1[0-9]|20)\d\d\b")
+
+# Below this a "sentence" is a phrase: `spotless shirt`, `sustainable economy`.
+# They are true and useless -- nothing to read, and #235 cannot gap a sentence
+# that is not one. Measured over 91 examples on 30 seeded words: 70 have five
+# words and an initial capital, and the 21 that do not are all fragments.
+WIKTIONARY_MIN_EXAMPLE_WORDS = 5
+
+
+def _wiktionary_usage_example(html):
+    """One example as text, or None if it is not one worth keeping (#390).
+
+    **These are usage examples, not quotations, and the difference is the
+    licence.** Wiktionary writes the two differently -- an editor's usage
+    example is a `#:` line, usually `{{ux|en|...}}`, while a quotation from a
+    published book is a `#*` line with a `quote-book` or `RQ:` template naming
+    an author and a year. The first is the community's own writing under
+    CC BY-SA, and copying it needs the same credit the definitions need; the
+    second belongs to whoever wrote the book.
+
+    **The endpoint returns only the first kind.** Measured against the
+    wikitext: `thrive` has 3 usage examples and 9 quotations and answered with
+    3; `reluctant` 2 and 7 and answered with 2; `sustainable` 1 and 6 and
+    answered with 1. Then 91 examples across 30 seeded deck words, none of
+    which looked like a quotation. So no per-example licence check is needed --
+    but that is observed behaviour rather than a documented promise, which is
+    what `WIKTIONARY_QUOTED` is for.
+    """
+    text = _readable(BeautifulSoup(html or "", "html.parser")
+                     .get_text(" ", strip=True))
+    if not text or WIKTIONARY_QUOTED.match(text):
+        return None
+    if len(text.split()) < WIKTIONARY_MIN_EXAMPLE_WORDS:
+        return None
+    # An initial capital is the cheapest test for "somebody wrote a sentence".
+    # `to thrive upon hard work` is long enough and is still a phrase.
+    return text if text[:1].isupper() else None
+
+
+def _wiktionary_entry(word):
+    """Wiktionary in the entry shape -- `(definitions, examples)` (#225, #390).
+
+    Both halves from **one** pass over the sections, the way Oxford's fetcher
+    takes both from one pass over its pages: the examples live inside the
+    senses, so a second walk would be a second traversal of text already in
+    hand.
+
+    **The text is copied verbatim, and that is a licence decision rather than a
+    matter of taste.** It arrives under CC BY-SA 4.0, which asks for a credit
+    and binds *adaptations*: rewording or summarising a definition would make
+    the card a derivative work. The only changes made here are the ones
+    extraction forces -- the text comes as HTML and is turned into text, and
+    what is past the caps every other backend applies is dropped.
+
+    Examples are only ever collected for a part of speech that also produced a
+    definition. Not tidiness: `lookup_word()` falls back to Reverso for
+    *definitions* alone, so a card can end up carrying Reverso's explanation,
+    and examples surviving that swap would be Wiktionary text on a card whose
+    credit names somebody else.
+    """
+    definitions, examples = {}, {}
+    for section in _wiktionary_sections(word):
+        # Wiktionary capitalises them (`Noun`); Oxford does not. #228's
+        # POS_SYNONYMS matches on the label, so the two have to agree on case
+        # before they can disagree on wording.
+        pos = (section.get("partOfSpeech") or "").strip().lower()
+        if not pos:
+            continue
+        # A word with two etymologies has two sections for the same part of
+        # speech, and they are the same card's senses -- so the caps are per
+        # part of speech rather than per section.
+        texts = definitions.setdefault(pos, [])
+        sentences = examples.setdefault(pos, [])
+        for sense in section.get("definitions") or []:
+            if len(texts) >= MAX_DEFINITIONS:
+                break
+            text = _readable(BeautifulSoup(sense.get("definition") or "",
+                                           "html.parser").get_text(" ", strip=True))
+            if not text or text in texts:
+                continue
+            texts.append(text)
+            for raw in sense.get("examples") or []:
+                if len(sentences) >= MAX_EXAMPLES:
+                    break
+                sentence = _wiktionary_usage_example(raw)
+                if sentence and sentence not in sentences:
+                    sentences.append(sentence)
+
+    definitions = {pos: t for pos, t in definitions.items() if t}
+    examples = {pos: s for pos, s in examples.items() if s and pos in definitions}
+    return definitions, examples
 
 
 def _merriam_webster_entry(word):
@@ -1044,7 +1192,7 @@ def _pos_key(label):
     return POS_SYNONYMS.get(label, label)
 
 
-def _attach_dictionary_text(cards, definitions, examples):
+def _attach_dictionary_text(cards, definitions, examples, source=None):
     """Put each dictionary entry's explanation and examples on the right card.
 
     Matching used to be `if pos in cards` — exact string equality — which threw
@@ -1056,6 +1204,15 @@ def _attach_dictionary_text(cards, definitions, examples):
     **No card is created or removed here** (#228). A translation is enough to
     keep a card, so a part of speech the dictionary has nothing for keeps its
     translations and simply carries no English text.
+
+    `source` names the dictionary the text came from and is stamped on exactly
+    the cards that receive text, per field: `explanation_source` beside an
+    explanation, `examples_source` beside examples (#390). It travels with the
+    text and never on its own, and the two are separate because a learner edits
+    them separately -- rewriting a definition leaves the dictionary's sentences
+    untouched, and a single column could only be wrong about one of them.
+    Wiktionary's licence needs a credit, and a credit needs something that
+    remembers what to credit.
     """
     # canonical label -> the card to put that text on. First wins, so a card
     # whose own label matches exactly is never displaced by a synonym.
@@ -1071,10 +1228,12 @@ def _attach_dictionary_text(cards, definitions, examples):
             continue
         if pos in definitions:
             cards[target]["explanation_en"] = "; ".join(definitions[pos])
+            cards[target]["explanation_source"] = source
         # A list, not a joined string: `examples_en` is one of utils.LIST_FIELDS
         # and is stored as JSON, so the card page shows separate sentences.
         if pos in examples:
             cards[target]["examples_en"] = examples[pos]
+            cards[target]["examples_source"] = source
 
     # The `other` card can never match anything, by construction: it is what
     # _google_dictionary() falls back to when Google has no dictionary entry, so
@@ -1085,8 +1244,10 @@ def _attach_dictionary_text(cards, definitions, examples):
         pos = unplaced[0]
         if pos in definitions:
             cards["other"]["explanation_en"] = "; ".join(definitions[pos])
+            cards["other"]["explanation_source"] = source
         if pos in examples:
             cards["other"]["examples_en"] = examples[pos]
+            cards["other"]["examples_source"] = source
 
 
 class Dictionary(NamedTuple):
@@ -1135,6 +1296,13 @@ DICTIONARIES = (
                "_fetch_oxford_entry", None, "Oxford"),
     Dictionary("merriam-webster", "Merriam-Webster",
                "_merriam_webster_entry", "MERRIAM_WEBSTER_API_KEY"),
+    # Keyless like Oxford, so it is always offered -- and unlike Oxford it is
+    # here with permission (#390). It is also the only other dictionary
+    # reachable from PythonAnywhere, which is what #365 left worth having: with
+    # Merriam-Webster blocked there, Oxford was the deployment's single
+    # explanatory source, and everything a card explains went with it.
+    Dictionary("wiktionary", "Wiktionary", "_wiktionary_entry", None,
+               "Wiktionary"),
 )
 
 DICTIONARY_SLUGS = tuple(d.slug for d in DICTIONARIES)
@@ -1208,6 +1376,7 @@ def _provider_name(backend):
         _bing_dictionary: "bing",
         _fetch_oxford_entry: "oxford",
         _merriam_webster_entry: "merriam-webster",
+        _wiktionary_entry: "wiktionary",
         # The definitions-only fetchers, still reached directly: Reverso as
         # lookup_word()'s fallback, Oxford by seed_topics.py --check-oxford.
         _fetch_oxford_definitions: "oxford",
@@ -1277,6 +1446,11 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     # answered perfectly). It now happens below, once both halves are in.
     fetch_defs = _dictionary_backend(explanatory_dictionary)
     dictionary = _provider_name(fetch_defs)
+    # Which dictionary the explanation ends up being *from*, which is not
+    # always the one that was asked (#390). Reverso answers below when the
+    # chosen one has nothing, and a card credited to a provider that returned
+    # nothing would be a wrong credit rather than a missing one.
+    source = dictionary
     error = None
     examples = {}
     with applog.Timer() as timer:
@@ -1300,6 +1474,8 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
                 error = e
         applog.definitions_fetched(word, "reverso", len(definitions), timer.ms,
                                    fallback_from=dictionary, error=error)
+        if definitions:
+            source = "reverso"
     # #349. No translator answered, but the dictionary did: build the cards
     # from the dictionary's parts of speech instead, and leave the translation
     # fields empty.
@@ -1331,7 +1507,7 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
             f"Could not look up '{word}': no translation service answered, "
             f"and {dictionary} has no entry for it either.")
 
-    _attach_dictionary_text(cards, definitions, examples)
+    _attach_dictionary_text(cards, definitions, examples, source)
 
     applog.lookup_finished(word, len(cards), overall.ms)
     return list(cards.values())

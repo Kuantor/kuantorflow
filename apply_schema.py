@@ -269,6 +269,22 @@ MIGRATIONS = (
             "ON DELETE RESTRICT",
         ),
     ),
+    # Where a card's explanation came from (#390). One column, no data step:
+    # NULL is the right answer for every row that predates it, since the
+    # dictionary that wrote those explanations was not recorded and guessing
+    # "oxford" would be inventing an attribution rather than restoring one.
+    Step(
+        "flashcards.explanation_source",
+        Column("flashcards", "explanation_source"),
+        ("ALTER TABLE flashcards ADD COLUMN explanation_source VARCHAR(40) "
+         "AFTER explanation_en",),
+    ),
+    Step(
+        "flashcards.examples_source",
+        Column("flashcards", "examples_source"),
+        ("ALTER TABLE flashcards ADD COLUMN examples_source VARCHAR(40) "
+         "AFTER examples_en",),
+    ),
     # Private topics (#382). Four steps, and the order is the whole of it: the
     # flag, the generated column that reads it, the old key out, the new key
     # in. Swapping the last two would leave `uq_topics_name` alive alongside a

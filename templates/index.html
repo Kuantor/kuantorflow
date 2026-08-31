@@ -460,6 +460,16 @@
                                 <input type="hidden" name="topic" value="{{ proposed_topic }}">
                                 <label for="proposal-{{ loop.index }}-explanation_en">English explanation</label>
                                 <textarea name="explanation_en" id="proposal-{{ loop.index }}-explanation_en" rows="2">{{ card.explanation_en or '' }}</textarea>
+                                {# Which dictionary wrote that text, carried
+                                   through the review so the saved card can
+                                   credit it (#390). Hidden because it is not
+                                   the learner's to choose: `add_card()`
+                                   validates it against the registry, and
+                                   `explanation_credit.js` empties it the
+                                   moment anybody types in the box above --
+                                   an edited sentence is theirs and belongs to
+                                   nobody else. #}
+                                <input type="hidden" name="explanation_source" value="{{ card.explanation_source or '' }}">
                                 {# Examples are read here, not merely carried through (#357).
                                    They arrive from the dictionary (#225) or the Reverso
                                    parser (#134), and until now they travelled as hidden
@@ -488,7 +498,13 @@
                                 {% if card.examples_en %}
                                 <label for="proposal-{{ loop.index }}-examples_en">English examples <small>(one per line)</small></label>
                                 <textarea name="examples_en" id="proposal-{{ loop.index }}-examples_en" rows="{{ [card.examples_en | length * 2, 6] | min }}">{{ card.examples_en | join('\n') }}</textarea>
+                                <input type="hidden" name="examples_source" value="{{ card.examples_source or '' }}">
                                 {% endif %}
+                                {# Under both boxes, as on the card page: where Wiktionary
+                                   answered it wrote the definition above *and* these
+                                   sentences, and a credit sitting between the two would
+                                   look like it covered only the first (#390). #}
+                                {% include "_source_credit.html" %}
                                 {# A hidden language's translation still travels as a hidden
                                    input (#46/#79/#111): the card is saved complete, the
                                    field is just not shown for editing. Its examples follow

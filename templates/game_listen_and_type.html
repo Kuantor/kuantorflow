@@ -140,6 +140,7 @@
                    translation in the identity's quiz_lang where it does not. #}
                 {% if r.explanation_en %}
                     <p class="expected">{{ r.explanation_en }}</p>
+                    {% with card = r, fields = ['explanation'] %}{% include "_source_credit.html" %}{% endwith %}
                 {% elif r.translation %}
                     <p class="expected">{{ r.translation_label }}: {{ r.translation }}</p>
                 {% endif %}

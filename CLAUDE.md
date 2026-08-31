@@ -58,12 +58,47 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   and dropping them from `settings_store.CHOICES` is what coerces an account
   still holding one onto the default instead of stranding it (#352). A dictionary backend returns
   **`(definitions, examples)`** (#225): Oxford supplies both from one pass over
-  its pages, Merriam-Webster wraps to `(defs, {})`. That tuple is the **only
+  its pages, Wiktionary the same from one pass over its sections,
+  Merriam-Webster wraps to `(defs, {})`. That tuple is the **only
   seam** — whatever `_dictionary_backend()` returns is all `lookup_word()` calls,
   and it is what the tests stub. Stubbing the definitions-only fetchers
   underneath it instead leaves the real ones in the call path and the offline
   tests silently hit Oxford. `_fetch_oxford_definitions()` is kept for the
   definitions-only contract and for `seed_topics.py --check-oxford`.
+  **Wiktionary is the third dictionary (#390), and the only one here with
+  permission.** Keyless like Oxford, so it is always offered; reachable from
+  PythonAnywhere, which is what #365 left worth having, since Merriam-Webster
+  is blocked there and Oxford was the deployment's single explanatory source.
+  It answers from a REST endpoint that returns parsed JSON, so there is no page
+  to scrape and no homograph probing — and its `partOfSpeech` is capitalised,
+  which is lowercased in the fetcher because `POS_SYNONYMS` matches on the
+  label. Its **examples are usage examples and never quotations**, which is a
+  licence distinction rather than a quality one: Wiktionary writes an editor's
+  usage example as a `#:` line (`{{ux|en|...}}`) and a quotation from a
+  published book as a `#*` line with a `quote-book` or `RQ:` template, and the
+  first is the community's own writing under CC BY-SA while the second belongs
+  to whoever wrote the book. **The REST endpoint returns only the first kind**
+  — measured against the wikitext (`thrive`: 3 usage examples, 9 quotations,
+  3 returned; `reluctant`: 2 and 7, 2 returned) and then across 91 examples on
+  30 seeded words with nothing quotation-shaped among them. That is observed
+  behaviour rather than a documented promise, so `WIKTIONARY_QUOTED` drops
+  anything opening with a year: if that ever changes, the app loses examples
+  instead of gaining a licensing problem. Fragments go too — `spotless shirt`
+  is true and useless, and #235 cannot gap a sentence that is not one.
+  Examples are collected **only for a part of speech that also produced a
+  definition**, because `lookup_word()`'s Reverso fallback replaces the
+  definitions alone and Wiktionary examples must not outlive the credit that
+  covers them.
+  The licence is also why the text is copied **verbatim** — rewording or
+  summarising a definition would make the card an *adaptation*, which
+  share-alike binds, where copying with a credit is what the licence plainly
+  permits. It is also why a card records **which dictionary wrote its
+  explanation**: a credit needs something that remembers what to credit, and
+  once two sources are mixed in one column the rows already there are
+  indistinguishable forever. `_attach_dictionary_text()` stamps
+  `explanation_source` on exactly the cards it gives text to, from the provider
+  that actually answered — which is not always the one that was asked, since
+  Reverso still answers when the chosen dictionary has nothing.
   Examples are **English only**: `examples_ukr`/`examples_rus` come from Reverso
   Context, which is IP-blocked from PythonAnywhere. A card is created per part of
   speech the **translator** found and gets its text from the part of speech the
@@ -114,7 +149,25 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   `update_flashcard()` is its edit counterpart (#176): ownership is part of the
   `UPDATE`, not a check before it, and only the keys **present** in `entry` are
   touched — a missing key means "leave it", which is what keeps an editor that
-  hides a language from wiping it.
+  hides a language from wiping it. It also holds #390's one rule about the
+  credit: **`explanation_source` follows `explanation_en` and never moves on its
+  own**. A changed explanation takes whatever source the caller vouches for, and
+  absent means none — an explanation somebody rewrote is their sentence, and a
+  credit left on it would put Wiktionary's contributors' names on their words.
+  **`examples_source` is the same rule for the examples, and it is a second
+  column because the two are edited separately**: one column could only ever be
+  right about one of them, dropping the credit from a definition nobody touched
+  or keeping one over a sentence the learner rewrote. Each surface then credits
+  only the text it shows — `fields` on `_source_credit.html` says which, so
+  #271, whose whole question is an example and which renders no definition,
+  reads the examples' credit and ignores the other. The card page shows the
+  consequence: both halves the dictionary's is one line under the English
+  block, one half edited puts the surviving credit against the half it still
+  covers.
+  The same reason keeps it out of `EDITABLE_FIELDS` (nobody edits a fact about
+  provenance, and a submitted one would let a form claim an attribution) and out
+  of `FILLABLE_FIELDS` (filling it beside somebody else's stored explanation
+  would credit Wiktionary for Oxford's sentence).
   `fill_missing_fields()` (#349) is the third writer, and it exists because
   #101 has a sharp edge: a card saved during a translator outage could never be
   improved, since looking the word up again is exactly what the duplicate rule
@@ -495,6 +548,16 @@ behind, since the foreign key is what a later section feature will rely on:
 ```bash
 python -c "from utils import get_db_connection; c=get_db_connection(); u=c.cursor(); u.execute('SELECT COUNT(*) FROM topics WHERE section_id IS NULL'); print('topics with no section (want 0):', u.fetchone()[0])"
 ```
+
+**#390 needs `apply_schema.py`, and it is two steps**: the dry run should
+show `~ flashcards.explanation_source` and `~ flashcards.examples_source`, and
+`=` against everything else. They add two nullable columns and touch no
+existing row — every card already there keeps
+NULL, which is the honest answer, since the dictionary that wrote those
+explanations was never recorded and defaulting them to `oxford` would be
+inventing an attribution rather than restoring one. Nothing on any page changes
+until somebody looks a word up with Wiktionary selected. No key is needed; it
+is offered wherever the app runs.
 
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
 a brand-new table, so the `schema.sql` pass creates it on an existing database

@@ -1,0 +1,44 @@
+{# The credit Wiktionary's licence asks for (#390).
+
+   Its definitions and usage examples are CC BY-SA 4.0, which permits exactly
+   what this app does with them -- copy one onto a card, verbatim -- on the
+   condition that the source is named, the entry reachable and the licence
+   linked. So this is not decoration: it is the condition of the text being
+   here at all, and it has to travel with the text to every surface that shows
+   any, which is why it is a partial rather than seven copies of a paragraph.
+
+   **Two credits, because the two texts are edited separately.** A learner who
+   rewrites a definition and keeps the dictionary's sentences has changed one
+   and not the other, and `update_flashcard()` clears only the one they
+   touched. Oxford and Reverso need no credit; text nobody recorded a source
+   for gets none.
+
+   `fields` says which of them this surface actually shows, because a credit
+   under text it does not cover is as wrong as a missing one:
+
+     {% with fields = ['examples'] %}   -- #271, whose whole question is a
+                                          sentence and which renders no
+                                          definition at all
+     {% with fields = ['explanation'] %} -- a deck face, a results row
+     (omitted)                           -- the card page and the review popup,
+                                          which show both
+
+   Needs `card.word` as well: the entry link is derived from it rather than
+   stored, so a template including this with a different variable name has to
+   say `{% with card = r %}`.
+
+   **Short because the deck face is 183px wide on a phone**, measured. The
+   sentence this started as ("Definition from Wiktionary, ...") needed 224px
+   and wrapped to two lines, which pushed the text out of a flip card whose
+   height is fixed. This wording is 167px and stays on one line. It still does
+   the three things the licence asks -- names the source, links the entry,
+   names and links the licence -- and it sits under the block it credits,
+   which is what supplies the words the wording dropped. #}
+{% set shown = fields | default(['explanation', 'examples']) %}
+{% if ('explanation' in shown and card.explanation_source == 'wiktionary')
+      or ('examples' in shown and card.examples_source == 'wiktionary') %}
+    <p class="source-credit">from <a
+        href="{{ wiktionary_link(card.word) }}" target="_blank"
+        rel="noopener">Wiktionary</a>, <a href="{{ wiktionary_licence_url }}"
+        target="_blank" rel="noopener">{{ wiktionary_licence }}</a></p>
+{% endif %}

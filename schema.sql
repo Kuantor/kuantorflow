@@ -241,7 +241,24 @@ CREATE TABLE IF NOT EXISTS flashcards (
     word VARCHAR(255) NOT NULL,
     pos VARCHAR(20),
     explanation_en TEXT,
+    -- Which dictionary wrote explanation_en (#390). NULL for every card saved
+    -- before this column existed, for one built by a notes import or by
+    -- Mykola, and for one whose explanation a learner has since edited -- all
+    -- of which mean the same thing: nobody can say whose sentence this is.
+    --
+    -- It exists because Wiktionary's text is CC BY-SA and a credit is the
+    -- condition of using it, and a card that cannot name its source cannot be
+    -- credited. That is also why it could not wait: once two sources are mixed
+    -- in one column, the rows already there are indistinguishable forever.
+    explanation_source VARCHAR(40),
     examples_en TEXT,
+    -- The same for the example sentences, and a separate column because the
+    -- two are edited separately (#390). A learner who rewrites the definition
+    -- and keeps the dictionary's sentences has changed one of them and not the
+    -- other, and one column could only be wrong in one direction or the other:
+    -- dropping a credit the examples still need, or keeping one over prose the
+    -- learner wrote.
+    examples_source VARCHAR(40),
     translation_ukr VARCHAR(255),
     examples_ukr TEXT,
     translation_rus VARCHAR(255),

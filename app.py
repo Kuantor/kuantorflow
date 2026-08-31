@@ -832,6 +832,32 @@ def _saved_mark(word, pos, state, hidden_matters, owner):
     return {}
 
 
+# Every value `explanation_source` may hold (#390): the dictionaries the
+# registry knows about, plus Reverso, which `lookup_word()` still falls back to
+# for definitions without being a choice anybody can make.
+EXPLANATION_SOURCES = frozenset(parsers.DICTIONARY_SLUGS) | {"reverso"}
+
+
+def _text_source(field):
+    """Which dictionary the dialog says wrote one of the fields it submits.
+
+    `field` is `explanation_source` or `examples_source` -- two credits, because
+    the two texts are edited separately (#390).
+
+    Validated against the registry rather than trusted, because it arrives in a
+    form field like everything else and a credit is a claim about somebody
+    else's writing. An unrecognised value becomes **no credit**, which is the
+    safe direction: a missing one shows nothing, where a wrong one puts a
+    dictionary's name on a sentence it never wrote.
+
+    Both dialogs clear the matching hidden field as soon as anybody types in
+    the box beside it, so edited text arrives here with nothing to claim --
+    which is the same answer `update_flashcard()` reaches on its own.
+    """
+    value = (request.form.get(field) or "").strip().lower()
+    return value if value in EXPLANATION_SOURCES else None
+
+
 def _example_list(field):
     """One submitted examples field as a list of sentences, or None.
 
@@ -1473,6 +1499,22 @@ def _cards_for_chat(topic, limit):
         return cards
     return [{k: v for k, v in card.items() if k not in hidden}
             for card in cards]
+
+
+@app.context_processor
+def inject_attribution():
+    """What a card needs to credit its explanation (#390).
+
+    Three values rather than a rendered string, because the credit is a
+    sentence with two links in it and building HTML in Python is how a template
+    stops being the place the page is written. `_source_credit.html` is the
+    single copy; this is what it reads.
+    """
+    return {
+        "wiktionary_link": parsers.wiktionary_link,
+        "wiktionary_licence": parsers.WIKTIONARY_LICENCE,
+        "wiktionary_licence_url": parsers.WIKTIONARY_LICENCE_URL,
+    }
 
 
 @app.context_processor
@@ -2309,7 +2351,9 @@ def add_card():
         "pos": cleaned("pos"),
         "topic": cleaned("topic") or "general",
         "explanation_en": cleaned("explanation_en"),
+        "explanation_source": _text_source("explanation_source"),
         "examples_en": _example_list("examples_en"),
+        "examples_source": _text_source("examples_source"),
         "translation_ukr": cleaned("translation_ukr"),
         "examples_ukr": _example_list("examples_ukr"),
         "translation_rus": cleaned("translation_rus"),
@@ -2800,6 +2844,15 @@ def edit_card(topic, card_id):
     }
     entry = {field: (read() if field == "word" else read(field))
              for field, read in readers.items() if field in request.form}
+    # A credit travels with the text it belongs to or not at all (#390).
+    # #191's dialog fills these boxes from a fresh lookup, so either really can
+    # hold a dictionary's words -- and it clears the matching hidden field the
+    # moment somebody edits a box, which leaves this None and
+    # `update_flashcard()` clearing the stored credit for that field alone.
+    for text, credit in (("explanation_en", "explanation_source"),
+                         ("examples_en", "examples_source")):
+        if text in entry:
+            entry[credit] = _text_source(credit)
 
     outcome, detail = update_flashcard(card_id, entry, owner_id=user_id,
                                        admin=admin)
@@ -3491,6 +3544,10 @@ def _fill_the_gap_round(activity, topics):
             "pos": card.get("pos"),
             "sentence": sentence,
             "explanation_en": card.get("explanation_en"),
+            "explanation_source": card.get("explanation_source"),
+            # The gapped sentence is one of the card's own examples, so this
+            # page shows both kinds of dictionary text and needs both credits.
+            "examples_source": card.get("examples_source"),
             "translation": card.get(field) if field else None,
             "translation_label": label,
         })
@@ -3668,6 +3725,7 @@ def _listen_and_type_round(activity, topics):
                 "word": card["word"],
                 "pos": card.get("pos"),
                 "explanation_en": card.get("explanation_en"),
+                "explanation_source": card.get("explanation_source"),
                 "translation": card.get(field) if field else None,
                 "translation_label": label,
                 "user_answer": given,
@@ -3814,6 +3872,7 @@ def _spell_it_round(activity, topics):
                 # Shown in full now — the round is over, and a learner who got
                 # it wrong should read the meaning against the actual word.
                 "explanation_en": card.get("explanation_en"),
+                "explanation_source": card.get("explanation_source"),
                 "user_answer": given,
                 # #267's rule: capitals, a doubled space, a trailing full stop
                 # and a hyphen typed as a space are forgiven. `resigned` for
@@ -3909,6 +3968,7 @@ def _rebuild_the_sentence_round(activity, topics):
             results.append({
                 "word": card["word"],
                 "sentence": sentence,
+                "examples_source": card.get("examples_source"),
                 "given": given,
                 # **The assembled string, not chip positions.** That falls out
                 # of the duplicate-token case and gets it right for free: a
@@ -3942,6 +4002,10 @@ def _rebuild_the_sentence_round(activity, topics):
             "word": card["word"],
             "sentence": sentence,
             "chips": chips,
+            # This game *is* a card's example sentence, so it shows dictionary
+            # text with no definition beside it -- and it is the examples'
+            # credit that belongs here, not the explanation's (#390).
+            "examples_source": card.get("examples_source"),
         })
 
     return render_template(
