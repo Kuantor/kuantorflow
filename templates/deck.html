@@ -171,9 +171,11 @@
             function flip(card) { card.classList.toggle("flipped"); }
 
             // A control on a face -- the speaker button (#283), #235's "I
-            // remember it" checkbox -- is something the learner pressed *on*
-            // the card, never a request to turn it over.
-            function isControl(e) { return e.target.closest("input, label, button"); }
+            // remember it" checkbox, #390's link to a definition's source --
+            // is something the learner pressed *on* the card, never a request
+            // to turn it over. The link was measured doing both: the entry
+            // opened in its tab and the card turned over behind it.
+            function isControl(e) { return e.target.closest("input, label, button, a"); }
 
             cards.forEach(function (card) {
                 card.addEventListener("click", function (e) {

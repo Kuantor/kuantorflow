@@ -16,9 +16,17 @@
 
    Needs `card.word` as well: the entry link is derived from it rather than
    stored, so a template including this with a different variable name has to
-   say `{% with card=r %}`. #}
+   say `{% with card=r %}`.
+
+   **Short because the deck face is 183px wide on a phone**, measured. The
+   sentence this started as ("Definition from Wiktionary, ...") needed 224px
+   and wrapped to two lines, which pushed the text out of a flip card whose
+   height is fixed. This wording is 167px and stays on one line. It still does
+   the three things the licence asks -- names the source, links the entry,
+   names and links the licence -- and it sits directly under the definition it
+   credits, which is what supplies the word the wording dropped. #}
 {% if card.explanation_source == 'wiktionary' %}
-    <p class="source-credit">Definition from <a
+    <p class="source-credit">from <a
         href="{{ wiktionary_link(card.word) }}" target="_blank"
         rel="noopener">Wiktionary</a>, <a href="{{ wiktionary_licence_url }}"
         target="_blank" rel="noopener">{{ wiktionary_licence }}</a></p>
