@@ -1179,6 +1179,20 @@
         </script>
     {% endif %}
 
+    {% if sign_in_refusal %}
+        <script>
+            {# #388: the lookup was refused and signing in is the way past it
+               -- the free words are spent, or the site's anonymous ceiling is.
+               The same dialog #125's write refusal uses, because it is the
+               same answer and a second one would be a second thing to keep
+               right. A refusal signing in cannot fix is a plain message
+               instead. #}
+            document.addEventListener("DOMContentLoaded", function () {
+                window.kfSignInRequired({{ sign_in_refusal | tojson }});
+            });
+        </script>
+    {% endif %}
+
     {% if write_refusal %}
         <script>
             // #125/#126: 'Add cards automatically' is on, but this visitor may

@@ -42,6 +42,36 @@ CREATE TABLE IF NOT EXISTS text_generation_usage (
     PRIMARY KEY (day, user_id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- Word lookups per day (#388). The lookup panel is the one paid path anybody
+-- could reach: `parse_word` asks the translator once per language and then the
+-- dictionary, and since #353 the translator is a licensed API on our own key.
+-- Uncapped that is a metered spend with no ceiling, which is the failure #200
+-- fixed for uploads and #237 never had.
+--
+-- Shaped like text_generation_usage above, with one difference that is the
+-- whole design: **the row whose user_id is 0 counts anonymous lookups only**,
+-- not everybody. A signed-in learner meets their own daily ceiling; a visitor
+-- meets the shared one. So an anonymous run cannot exhaust what the people who
+-- signed up are allowed to spend -- the failure #199 names for #164's shared
+-- ceiling, where one person in a loop spends the day's budget for everyone.
+--
+-- Zero rather than the NULL that would read more naturally, for the reason
+-- #237 found: MySQL treats NULLs in a unique key as distinct, so an upsert
+-- against a NULL user_id inserts a fresh row every time instead of
+-- incrementing the first, and a PRIMARY KEY cannot hold NULL at all.
+--
+-- No foreign key to `users`, also as in #237: these are day-scoped counters
+-- rather than attribution, and a stale row that expires the same day beats
+-- another RESTRICT/CASCADE decision on the account-deletion path (#165).
+CREATE TABLE IF NOT EXISTS word_lookup_usage (
+    day        DATE NOT NULL,
+    user_id    INT NOT NULL DEFAULT 0,
+    lookups    INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                   ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (day, user_id)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- Words a learner disputed and a dictionary confirmed (#258).
 --
 -- *Real or fake* invents words with a character trigram trained on the deck,

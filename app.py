@@ -39,6 +39,7 @@ from parsers import lookup_word, parse_notes_preview
 from utils import (
     claim_anonymous_message,
     claim_text_generation,
+    claim_word_lookup,
     delete_flashcard,
     delete_user,
     duplicate_topic,
@@ -2172,6 +2173,7 @@ def index():
     source_content = None  # readable text of an upload, shown beside its cards
     duplicate_warning = None  # the word to warn about before looking it up (#145)
     write_refusal = None  # why a write was refused, if one was (#125/#126)
+    sign_in_refusal = None  # a lookup refused where signing in helps (#388)
     if request.method == "POST":
         action = request.form.get("action")
         topic = (request.form.get("topic") or "general").strip() or "general"
@@ -2186,90 +2188,107 @@ def index():
                     duplicate_warning = word
                     proposed_topic = topic
                 else:
-                    prefs = current_settings()
-                    # The provider-by-provider detail is logged by the parser;
-                    # this line carries the identity it cannot see (#30).
-                    applog.lookup_started(
-                        word, prefs["translator"],
-                        prefs["explanatory_dictionary"], user=_current_email())
-                    entries = lookup_word(
-                        word, topic=topic,
-                        translator=prefs["translator"],
-                        explanatory_dictionary=prefs["explanatory_dictionary"],
-                    )
-                    # #349: the dictionary answered and no translator did, so
-                    # these cards carry an explanation and no translations.
-                    #
-                    # **Where this is said depends on where the learner is
-                    # looking.** A page-level banner is unreadable behind the
-                    # review popup -- `.modal-overlay` is fixed, inset 0, 75%
-                    # opaque and blurred -- and that popup is the default, so
-                    # the first version of this notice was invisible to most
-                    # people while passing a test that only checked the HTML.
-                    # The banner is kept for the automatic save, which has no
-                    # popup at all; the popup carries its own, next to the
-                    # empty fields and phrased around what to do about them.
-                    degraded = bool(entries) and not any(
-                        entry.get("translation_ukr")
-                        or entry.get("translation_rus")
-                        for entry in entries)
-                    if prefs["cards_automatically"] and not can_add_cards():
-                        # #125/#126: nothing may be written, so the automatic
-                        # save cannot happen. The lookup already succeeded, so
-                        # show its cards in the review popup rather than
-                        # throwing the work away — signing in from the prompt
-                        # leaves them there to be added.
-                        applog.card_add_denied(
-                            {"word": word}, source="automatic add",
-                            user=_current_email(),
-                            reason="blocked" if is_blocked() else "anonymous")
+                    # #388. Asked here: after #145's duplicate warning, so
+                    # a word the learner has not decided about costs
+                    # nothing, and before any provider, so a refusal
+                    # spends nothing at all. Asked **once** and kept --
+                    # `_lookup_refusal()` claims the slot as it answers,
+                    # so a second call would take a second slot.
+                    lookup_refusal = _lookup_refusal()
+                    if lookup_refusal:
+                        # A ceiling an account has already reached is not
+                        # something signing in fixes; the anonymous ones
+                        # are, and they say so through the dialog #125's
+                        # write refusal already uses.
+                        if lookup_refusal["sign_in"]:
+                            sign_in_refusal = lookup_refusal["message"]
+                        else:
+                            message = lookup_refusal["message"]
+                    else:
+                        prefs = current_settings()
+                        # The provider-by-provider detail is logged by the parser;
+                        # this line carries the identity it cannot see (#30).
+                        applog.lookup_started(
+                            word, prefs["translator"],
+                            prefs["explanatory_dictionary"], user=_current_email())
+                        entries = lookup_word(
+                            word, topic=topic,
+                            translator=prefs["translator"],
+                            explanatory_dictionary=prefs["explanatory_dictionary"],
+                        )
+                        # #349: the dictionary answered and no translator did, so
+                        # these cards carry an explanation and no translations.
+                        #
+                        # **Where this is said depends on where the learner is
+                        # looking.** A page-level banner is unreadable behind the
+                        # review popup -- `.modal-overlay` is fixed, inset 0, 75%
+                        # opaque and blurred -- and that popup is the default, so
+                        # the first version of this notice was invisible to most
+                        # people while passing a test that only checked the HTML.
+                        # The banner is kept for the automatic save, which has no
+                        # popup at all; the popup carries its own, next to the
+                        # empty fields and phrased around what to do about them.
+                        degraded = bool(entries) and not any(
+                            entry.get("translation_ukr")
+                            or entry.get("translation_rus")
+                            for entry in entries)
+                        if prefs["cards_automatically"] and not can_add_cards():
+                            # #125/#126: nothing may be written, so the automatic
+                            # save cannot happen. The lookup already succeeded, so
+                            # show its cards in the review popup rather than
+                            # throwing the work away — signing in from the prompt
+                            # leaves them there to be added.
+                            applog.card_add_denied(
+                                {"word": word}, source="automatic add",
+                                user=_current_email(),
+                                reason="blocked" if is_blocked() else "anonymous")
+                            proposed = entries
+                            proposed_topic = topic
+                            proposed_degraded = degraded
+                            write_refusal = add_refusal()
+                        elif prefs["cards_automatically"]:
+                            # 'Add cards automatically' is on (#13): skip the
+                            # review popup, write the cards straight to the DB.
+                            # Duplicates are skipped and reported (issue #101).
+                            if degraded:
+                                # Said as *the service is unavailable* rather than
+                                # *this word has no translations*, which is the
+                                # wrong sentence that sent #348's investigation at
+                                # the wrong provider.
+                                flash(("No translation service is answering just "
+                                       f"now, so '{word}' was saved with its "
+                                       "English explanation and examples only. "
+                                       "Look it up again later and the "
+                                       "translations will be filled in.", None))
+                            fills = []
+                            added = sum(
+                                1 for entry in entries
+                                if _save_and_log(entry, source="automatic add",
+                                                 fills=fills)
+                            )
+                            skipped = len(entries) - added
+                            # A duplicate that gained something is not "nothing
+                            # added" (#349), and a learner repeating a lookup to
+                            # repair a card needs to hear that it worked.
+                            completed = (f" Completed {len(fills)} of them with "
+                                         "this lookup." if fills else "")
+                            if not added:
+                                note = duplicate_notice(entries)   # #186
+                                flash((f"All {skipped} card(s) for '{word}' are "
+                                       "already in the database — nothing added."
+                                       + completed
+                                       + (f" {note}" if note else ""), None))
+                            elif skipped:
+                                flash((f"Added {added} card(s) for '{word}' "
+                                       f"automatically, skipped {skipped} already "
+                                       "in the database." + completed, topic))
+                            else:
+                                flash((f"Added {added} card(s) for '{word}' automatically.", topic))
+                            return redirect(url_for("index"))
+                        # Don't save yet: show the cards for review/editing first.
                         proposed = entries
                         proposed_topic = topic
                         proposed_degraded = degraded
-                        write_refusal = add_refusal()
-                    elif prefs["cards_automatically"]:
-                        # 'Add cards automatically' is on (#13): skip the
-                        # review popup, write the cards straight to the DB.
-                        # Duplicates are skipped and reported (issue #101).
-                        if degraded:
-                            # Said as *the service is unavailable* rather than
-                            # *this word has no translations*, which is the
-                            # wrong sentence that sent #348's investigation at
-                            # the wrong provider.
-                            flash(("No translation service is answering just "
-                                   f"now, so '{word}' was saved with its "
-                                   "English explanation and examples only. "
-                                   "Look it up again later and the "
-                                   "translations will be filled in.", None))
-                        fills = []
-                        added = sum(
-                            1 for entry in entries
-                            if _save_and_log(entry, source="automatic add",
-                                             fills=fills)
-                        )
-                        skipped = len(entries) - added
-                        # A duplicate that gained something is not "nothing
-                        # added" (#349), and a learner repeating a lookup to
-                        # repair a card needs to hear that it worked.
-                        completed = (f" Completed {len(fills)} of them with "
-                                     "this lookup." if fills else "")
-                        if not added:
-                            note = duplicate_notice(entries)   # #186
-                            flash((f"All {skipped} card(s) for '{word}' are "
-                                   "already in the database — nothing added."
-                                   + completed
-                                   + (f" {note}" if note else ""), None))
-                        elif skipped:
-                            flash((f"Added {added} card(s) for '{word}' "
-                                   f"automatically, skipped {skipped} already "
-                                   "in the database." + completed, topic))
-                        else:
-                            flash((f"Added {added} card(s) for '{word}' automatically.", topic))
-                        return redirect(url_for("index"))
-                    # Don't save yet: show the cards for review/editing first.
-                    proposed = entries
-                    proposed_topic = topic
-                    proposed_degraded = degraded
 
             elif action == "upload_notes":
                 # Parsing costs money before it costs anything else (#200):
@@ -2330,7 +2349,7 @@ def index():
         proposed=proposed, proposed_topic=proposed_topic,
         proposed_degraded=proposed_degraded,
         source_content=source_content, duplicate_warning=duplicate_warning,
-        write_refusal=write_refusal,
+        write_refusal=write_refusal, sign_in_refusal=sign_in_refusal,
     )
 
 
@@ -2777,6 +2796,15 @@ def lookup_json():
         return {"ok": False, "error": "word is required"}, 400
     pos = (payload.get("pos") or "").strip()
 
+    # #388's account ceiling applies here too, and leaving it out would be a
+    # hole in it rather than a smaller cap: this spends the same providers on
+    # the same key, and a learner past their day's lookups could carry on
+    # through the edit dialog. Anonymous visitors never reach it -- refused
+    # above by #191 -- so only the per-account row is ever claimed.
+    refusal = _lookup_refusal()
+    if refusal:
+        return {"ok": False, "error": refusal["message"]}, 429
+
     prefs = current_settings()
     applog.lookup_started(word, prefs["translator"],
                           prefs["explanatory_dictionary"],
@@ -3097,6 +3125,104 @@ def _reachable_activity(slug):
     if found is None or (found.kind == "reader" and not _generation_available()):
         return None
     return found
+
+
+# --- #388: what a word lookup may spend -----------------------------------
+#
+# `parse_word` is the one paid path anybody can reach. One press asks the
+# translator **once per language** and then walks the dictionary, and since
+# #353 that translator is a licensed API on our own key -- so this is a
+# metered spend, not the free scraping #199 was written about. The same
+# failure #200 fixed for uploads, and the gate is no answer to it: a shared
+# password is not an authorisation, and it does nothing about a signed-in
+# learner in a loop.
+#
+#   LOOKUP_ANON_LIMIT  - per browser session, held in the Flask session with no
+#     database behind it. A **nudge, not a spend cap**: clearing cookies resets
+#     it, exactly as #164 documents for its own counter. Its job is the sign-in
+#     prompt; the daily rows below are what bound the bill.
+#   LOOKUP_USER_DAILY  - per account, per day, counted in a row.
+#   LOOKUP_ANON_DAILY  - **anonymous lookups only**, per day, counted in the
+#     row whose user_id is 0. Deliberately not "everybody": an anonymous run
+#     must not be able to exhaust what the people who signed up may spend,
+#     which is the failure #199 names for #164's shared ceiling.
+#
+# Three rather than one because they answer different questions -- "sign in to
+# carry on", "you have had a lot today", "the site has had a lot today" -- and
+# only the first is something signing in fixes. 0 (or unset) disables any of
+# them, which is also how `seed_topics.py` stays unaffected: it never reaches
+# this code, since a console script has no session and no request.
+LOOKUP_ANON_LIMIT = _int_env("LOOKUP_ANON_LIMIT", 3)
+LOOKUP_USER_DAILY = _int_env("LOOKUP_USER_DAILY", 50)
+LOOKUP_ANON_DAILY = _int_env("LOOKUP_ANON_DAILY", 300)
+
+# How many words this browser session has looked up, for the anonymous nudge.
+LOOKED_UP_COUNT_KEY = "looked_up_words"
+
+LOOKUP_SIGN_IN_PROMPT = (
+    "You've looked up your free words. Sign in with Google to look up more "
+    "— and to save the cards you make.")
+LOOKUP_USER_LIMIT_PROMPT = (
+    "You've looked up a lot of words today. Come back tomorrow for more.")
+LOOKUP_BUSY_PROMPT = (
+    "KuantorFlow has looked up a lot of words today. Please sign in or try "
+    "again tomorrow.")
+
+
+def _lookup_refusal():
+    """Why this visitor may not look a word up, or None if they may.
+
+    **Called before the providers, never after**, which is the whole point:
+    #200's precedent, where notes upload called Claude before the write guard
+    and an anonymous visitor could spend the budget on cards that would then be
+    refused.
+
+    Returns `{"message": ..., "sign_in": bool}` so the page can offer the
+    button that would actually help. Signing in is the way past the anonymous
+    nudge and past the anonymous daily ceiling; it is not the way past an
+    account's own ceiling, and saying otherwise would send somebody to a
+    sign-in that changes nothing.
+
+    **Claiming happens here**, which is why this is not a predicate like
+    `can_add_cards()`: asking and taking cannot be two steps, or two workers
+    both take the last slot.
+    """
+    if is_blocked():
+        return {"message": blocked_notice(), "sign_in": False}
+
+    user_id = _current_user_id()
+    if user_id is None:
+        used = session.get(LOOKED_UP_COUNT_KEY, 0)
+        if LOOKUP_ANON_LIMIT and used >= LOOKUP_ANON_LIMIT:
+            applog.anonymous_limit_hit("lookup", used, LOOKUP_ANON_LIMIT)
+            return {"message": LOOKUP_SIGN_IN_PROMPT, "sign_in": True}
+
+    try:
+        allowed, scope, used = claim_word_lookup(
+            user_id, LOOKUP_USER_DAILY, LOOKUP_ANON_DAILY)
+    except Exception:
+        # Best-effort in the same direction as #164's and #237's counters: an
+        # unreachable database cannot enforce a ceiling, and a lookup is still
+        # useful when the deck cannot be read -- the review popup is where its
+        # cards would go, and it needs no database to draw them.
+        app.logger.exception("Could not count the word lookup")
+        allowed, scope = True, None
+
+    if not allowed:
+        applog.anonymous_limit_hit(
+            scope, used,
+            LOOKUP_USER_DAILY if scope == "user" else LOOKUP_ANON_DAILY)
+        return {
+            "message": (LOOKUP_USER_LIMIT_PROMPT if scope == "user"
+                        else LOOKUP_BUSY_PROMPT),
+            # An account's own ceiling is not something signing in fixes; the
+            # anonymous one is, because an account has a ceiling of its own.
+            "sign_in": scope != "user",
+        }
+
+    if user_id is None:
+        session[LOOKED_UP_COUNT_KEY] = session.get(LOOKED_UP_COUNT_KEY, 0) + 1
+    return None
 
 
 # --- #237: writing a text out of the learner's own words ------------------

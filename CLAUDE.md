@@ -356,6 +356,21 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   both take the last slot, and claims the **account row first** — that way a
   learner can spend one of their ten on a day the site is exhausted, rather
   than a site-wide slot being burned for somebody already over their own limit.
+- **`word_lookup_usage`** (#388) — lookups per day, and the one paid path
+  anybody can reach: `parse_word` asks the translator once per language, and
+  since #353 that is a licensed API on our own key. `_lookup_refusal()` copies
+  `_generation_refusal()`'s shape — a session nudge, then the ceilings, claimed
+  in a single statement — with **one deliberate difference**: the `user_id = 0`
+  row counts **anonymous lookups only**, where #237's counts everybody. So one
+  visitor in a loop cannot spend what the people who signed up are allowed to,
+  which is the failure #199 names for #164's shared ceiling. Each call claims
+  exactly one row, which is why this needs none of #237's argument about which
+  ceiling to take first. Guarded **before** the providers, in the index page's
+  lookup *and* in `/lookup.json` — the edit dialog spends the same money, and
+  leaving it out would be a hole in the account ceiling rather than a smaller
+  cap. **A blocked account is refused outright** (#126 drew its line at
+  writing when a lookup was free scraping; since #353 it is a spend, and #237
+  already refuses them the other paid activity).
 - **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
   a lexicon confirmed. The game invents with a trigram model trained on the
   deck, so it sometimes produces real English and marks the learner wrong for
@@ -600,6 +615,15 @@ explanations was never recorded and defaulting them to `oxford` would be
 inventing an attribution rather than restoring one. Nothing on any page changes
 until somebody looks a word up with Wiktionary selected. No key is needed; it
 is offered wherever the app runs.
+
+**#388 needs `apply_schema.py`, and it is one step**: `word_lookup_usage` is a
+brand-new table, so the `schema.sql` pass creates it on an existing database
+and no migration is needed (#237's shape). The dry run should show
+`~ word_lookup_usage` and `=` against everything else. It starts empty, and the
+first lookup after the reload writes the day's first row. Nothing else changes
+on the day — except that a lookup now has a ceiling, which is the point.
+`LOOKUP_ANON_LIMIT`, `LOOKUP_USER_DAILY` and `LOOKUP_ANON_DAILY` tune it from
+the environment; 0 turns any of them off.
 
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
 a brand-new table, so the `schema.sql` pass creates it on an existing database

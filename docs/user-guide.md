@@ -34,6 +34,8 @@ KuantorFlow asks a translator and an English dictionary at once, and builds **on
 
 If a word is already in your deck you are warned before it is looked up again. The same word and part of speech is only ever kept once, anywhere in the deck.
 
+A lookup asks paid services, so it is not unlimited: signed out you get three words per visit, and then an invitation to sign in. Signed in you have fifty a day, which is more than a study session needs and is there to stop a runaway loop rather than to ration you.
+
 ### The review popup
 
 Unless you have asked for cards to be saved automatically, the results arrive in a **review popup** first. It names the topic they are going to, and every field is editable — fix a translation, cut an example — then *Add* the cards you want, or *Add All*. Each word carries a speaker button here too, so you can hear it before deciding to keep it.

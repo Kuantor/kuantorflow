@@ -81,6 +81,70 @@ def claim_anonymous_message(daily_limit):
 ALL_ACCOUNTS = 0
 
 
+def _claim_one_lookup(cursor, user_id, limit):
+    """Take a slot on one word_lookup_usage row. True if this call got it.
+
+    The statement `claim_anonymous_message()` and `_claim_one_text()` both use,
+    for the same reason: the row only advances while it is under the limit, and
+    `ROW_COUNT()` says whether *this* request was the one that advanced it, so
+    two workers cannot both slip past the last slot.
+    """
+    cursor.execute(
+        """
+        INSERT INTO word_lookup_usage (day, user_id, lookups)
+        VALUES (CURDATE(), %s, 1)
+        ON DUPLICATE KEY UPDATE lookups = IF(lookups < %s, lookups + 1, lookups)
+        """,
+        (user_id, limit),
+    )
+    return cursor.rowcount != 0
+
+
+def claim_word_lookup(user_id, user_limit, anon_limit):
+    """Count one word lookup against the ceiling that applies (issue #388).
+
+    Returns `(allowed, scope, used)` — `scope` is None when the lookup may go
+    ahead, or "user" / "anonymous" naming the ceiling that refused it. `used`
+    is the count on the row that decided.
+
+    **One row per call, not two, and that is the difference from #237.** A
+    generated text is claimed against the account *and* a site-wide row that
+    counts everybody, so its two claims have an order and the order had to be
+    argued about. Here the site-wide row counts **anonymous lookups only**:
+    a signed-in learner meets their own daily ceiling and nothing else, an
+    anonymous visitor meets the shared one and nothing else. Nobody's lookups
+    are counted twice, and the one failure #199 names for #164's shared
+    ceiling — one person in a loop spending the day's budget and every genuine
+    visitor being told to come back tomorrow — cannot reach the people who
+    signed up.
+
+    A limit of 0 or less means "no ceiling", which is how a deployment turns
+    either half off.
+    """
+    row, scope, limit = ((user_id, "user", user_limit) if user_id is not None
+                         else (ALL_ACCOUNTS, "anonymous", anon_limit))
+    if not limit or limit <= 0:
+        return True, None, 0
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        # Read rowcount straight after the write, before anything else touches
+        # the cursor: 0 means the IF() held the row back because the ceiling
+        # was already reached.
+        claimed = _claim_one_lookup(cursor, row, limit)
+        conn.commit()
+        cursor.execute(
+            "SELECT lookups FROM word_lookup_usage "
+            "WHERE day = CURDATE() AND user_id = %s", (row,))
+        found = cursor.fetchone()
+        cursor.close()
+        used = found[0] if found else 0
+        return (True, None, used) if claimed else (False, scope, used)
+    finally:
+        conn.close()
+
+
 def _claim_one_text(cursor, user_id, limit):
     """Take a slot on one text_generation_usage row. True if this call got it.
 
