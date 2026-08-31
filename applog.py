@@ -185,6 +185,22 @@ def topic_claimed(name, section=None, user_id=None):
            created_by=user_id)
 
 
+def cards_claimed(topic, count, section=None, user_id=None):
+    """Cards with no author were given one (issue #396).
+
+    **One line per topic, not per card**, unlike every other card line here.
+    Fifty-two CREATE-shaped lines for a single console command would drown the
+    day's real card events, and the fact worth keeping is "these cards in this
+    topic changed hands from nobody", which one line says. `topic=` keeps it
+    greppable beside the card lines it summarises.
+
+    Only a NULL author is ever claimed, so this can never mean that a card was
+    taken from somebody.
+    """
+    _write(CARDS, "CARDS-CLAIMED", topic=topic, count=count, section=section,
+           created_by=user_id)
+
+
 def card_created(entry, source, user=None, card_id=None, alongside=None):
     """A new card reached the database.
 
