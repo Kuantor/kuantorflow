@@ -310,6 +310,10 @@ FLASHCARD_FIELDS = (
     # credit, and this is what a card knows to credit.
     "explanation_source",
     "examples_en",
+    # And which dictionary wrote the examples, separately (#390): the two are
+    # edited separately, so one column could only ever be right about one of
+    # them.
+    "examples_source",
     "translation_ukr",
     "examples_ukr",
     "translation_rus",
@@ -835,7 +839,8 @@ def _is_empty(value):
 # with `explanation_en`, in the one place below that writes both (#390).
 FILLABLE_FIELDS = tuple(
     f for f in FLASHCARD_FIELDS
-    if f not in ("word", "pos", "topic", "explanation_source"))
+    if f not in ("word", "pos", "topic",
+                 "explanation_source", "examples_source"))
 
 
 def fill_missing_fields(entry):
@@ -894,12 +899,15 @@ def fill_missing_fields(entry):
 
         # The credit rides along with the text it belongs to, and never alone
         # (#390). A card whose explanation is already there keeps whatever
-        # source it has, including none.
+        # source it has, including none -- and the examples are their own
+        # question, filled and credited independently.
         columns = list(filling)
         extra = ()
-        if "explanation_en" in filling:
-            columns.append("explanation_source")
-            extra = (entry.get("explanation_source"),)
+        for text, credit in (("explanation_en", "explanation_source"),
+                             ("examples_en", "examples_source")):
+            if text in filling:
+                columns.append(credit)
+                extra += (entry.get(credit),)
 
         cursor.execute(
             f"UPDATE flashcards SET {', '.join(f'{f} = %s' for f in columns)} "
@@ -923,7 +931,8 @@ def fill_missing_fields(entry):
 # attribution (#390). `update_flashcard()` clears it instead, because an
 # explanation somebody has rewritten is no longer the dictionary's sentence.
 EDITABLE_FIELDS = tuple(
-    f for f in FLASHCARD_FIELDS if f not in ("topic", "explanation_source"))
+    f for f in FLASHCARD_FIELDS
+    if f not in ("topic", "explanation_source", "examples_source"))
 
 
 def duplicate_topic(word, pos):
@@ -1136,17 +1145,16 @@ def update_flashcard(card_id, entry, owner_id=None, admin=False):
         # words to the people who wrote the original. Not part of `changed`,
         # which records what somebody edited -- nobody edited this.
         #
-        # One column serves two fields since the examples came too, and the
-        # gap that leaves was looked at and **accepted**: a learner who
-        # rewrites the explanation and keeps the dictionary's example
-        # sentences drops the credit from those as well. The alternatives were
-        # a second `examples_source` column, or keeping a credit that would
-        # then name Wiktionary above the learner's own prose. If this needs
-        # revisiting, the second column is the shape -- written beside the
-        # examples, cleared when they change, exactly as this one is.
-        if "explanation_en" in changed:
-            assignments += ", explanation_source = %s"
-            values += (entry.get("explanation_source"),)
+        # Two pairs rather than one, because the explanation and the examples
+        # are edited separately and a single credit could only ever be right
+        # about one of them: dropping it on an examples edit would strip the
+        # credit from a definition nobody touched, and keeping it would leave
+        # Wiktionary's name over a sentence the learner rewrote.
+        for text, credit in (("explanation_en", "explanation_source"),
+                             ("examples_en", "examples_source")):
+            if text in changed:
+                assignments += f", {credit} = %s"
+                values += (entry.get(credit),)
         if admin:
             cursor.execute(
                 f"UPDATE flashcards SET {assignments} WHERE id = %s",

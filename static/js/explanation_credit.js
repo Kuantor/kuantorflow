@@ -21,10 +21,18 @@
  * always is.
  */
 (function () {
+    /* Which hidden field belongs to which box. Two, because the two texts are
+     * edited separately: adding a sentence of your own to the dictionary's
+     * examples says nothing about the definition above them. */
+    var CREDITS = {
+        explanation_en: "explanation_source",
+        examples_en: "examples_source"
+    };
+
     document.addEventListener("input", function (event) {
         var box = event.target;
-        if (!event.isTrusted || !box || box.name !== "explanation_en") return;
-        var credit = box.form && box.form.elements.explanation_source;
+        if (!event.isTrusted || !box || !CREDITS[box.name]) return;
+        var credit = box.form && box.form.elements[CREDITS[box.name]];
         if (credit) credit.value = "";
     });
 })();

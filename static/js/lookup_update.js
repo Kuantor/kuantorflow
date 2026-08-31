@@ -73,8 +73,17 @@
         });
     }
 
+    /* A filled box holds the dictionary's own words, so the hidden field
+     * beside it says which dictionary. Two pairs since kuantorflow#390: the
+     * explanation and the examples are credited separately because they are
+     * edited separately. */
+    var CREDITS = {
+        explanation_en: "explanation_source",
+        examples_en: "examples_source"
+    };
+
     function applyEntry(form, entry, replace) {
-        var filledExplanation = false;
+        var filled = [];
         fillable(form).forEach(function (field) {
             var incoming = incomingValue(entry, field);
             // Nothing found for a field leaves it alone: an empty answer must
@@ -83,23 +92,23 @@
             var current = form.elements[field].value.trim();
             if (!current || replace.indexOf(field) !== -1) {
                 form.elements[field].value = incoming;
-                if (field === "explanation_en") filledExplanation = true;
+                if (CREDITS[field]) filled.push(field);
                 // #357's boxes size themselves to their content, and a value
                 // set from script fires no input event of its own.
                 form.elements[field].dispatchEvent(
                     new Event("input", { bubbles: true }));
             }
         });
-        // The credit follows the explanation (#390). A box this lookup filled
-        // holds the dictionary's own sentence, so the hidden field says which
-        // dictionary -- and a lookup that left the box alone leaves the credit
-        // alone with it, because the text on screen is still whatever it was.
+        // The credit follows the text (#390). A box this lookup filled holds
+        // the dictionary's own words, so the hidden field says which
+        // dictionary -- and a box the lookup left alone keeps its credit,
+        // because what is on screen is still whatever it was.
         // `explanation_credit.js` does not undo this: the event dispatched
         // above is synthetic and it only listens to real typing.
-        var credit = form.elements.explanation_source;
-        if (credit && filledExplanation) {
-            credit.value = entry.explanation_source || "";
-        }
+        filled.forEach(function (field) {
+            var credit = form.elements[CREDITS[field]];
+            if (credit) credit.value = entry[CREDITS[field]] || "";
+        });
     }
 
     function askWhichPos(entries) {

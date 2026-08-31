@@ -252,6 +252,13 @@ CREATE TABLE IF NOT EXISTS flashcards (
     -- in one column, the rows already there are indistinguishable forever.
     explanation_source VARCHAR(40),
     examples_en TEXT,
+    -- The same for the example sentences, and a separate column because the
+    -- two are edited separately (#390). A learner who rewrites the definition
+    -- and keeps the dictionary's sentences has changed one of them and not the
+    -- other, and one column could only be wrong in one direction or the other:
+    -- dropping a credit the examples still need, or keeping one over prose the
+    -- learner wrote.
+    examples_source VARCHAR(40),
     translation_ukr VARCHAR(255),
     examples_ukr TEXT,
     translation_rus VARCHAR(255),

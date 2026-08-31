@@ -498,6 +498,7 @@
                                 {% if card.examples_en %}
                                 <label for="proposal-{{ loop.index }}-examples_en">English examples <small>(one per line)</small></label>
                                 <textarea name="examples_en" id="proposal-{{ loop.index }}-examples_en" rows="{{ [card.examples_en | length * 2, 6] | min }}">{{ card.examples_en | join('\n') }}</textarea>
+                                <input type="hidden" name="examples_source" value="{{ card.examples_source or '' }}">
                                 {% endif %}
                                 {# Under both boxes, as on the card page: where Wiktionary
                                    answered it wrote the definition above *and* these

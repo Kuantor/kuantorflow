@@ -60,7 +60,7 @@
 {% block deck_back %}
     {% if card.explanation_en %}
         <p class="deck-explanation">{{ card.explanation_en }}</p>
-        {% include "_source_credit.html" %}
+        {% with fields = ['explanation'] %}{% include "_source_credit.html" %}{% endwith %}
     {% endif %}
     {% if trans_field and card[trans_field] %}
         <div class="lang">{{ trans_label }}</div>

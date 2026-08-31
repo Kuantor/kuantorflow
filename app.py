@@ -838,8 +838,11 @@ def _saved_mark(word, pos, state, hidden_matters, owner):
 EXPLANATION_SOURCES = frozenset(parsers.DICTIONARY_SLUGS) | {"reverso"}
 
 
-def _explanation_source():
-    """Which dictionary the dialog says wrote the explanation it is submitting.
+def _text_source(field):
+    """Which dictionary the dialog says wrote one of the fields it submits.
+
+    `field` is `explanation_source` or `examples_source` -- two credits, because
+    the two texts are edited separately (#390).
 
     Validated against the registry rather than trusted, because it arrives in a
     form field like everything else and a credit is a claim about somebody
@@ -847,11 +850,11 @@ def _explanation_source():
     safe direction: a missing one shows nothing, where a wrong one puts a
     dictionary's name on a sentence it never wrote.
 
-    Both dialogs clear their hidden field as soon as anybody types in the
-    explanation box, so an edited text arrives here with nothing to claim --
+    Both dialogs clear the matching hidden field as soon as anybody types in
+    the box beside it, so edited text arrives here with nothing to claim --
     which is the same answer `update_flashcard()` reaches on its own.
     """
-    value = (request.form.get("explanation_source") or "").strip().lower()
+    value = (request.form.get(field) or "").strip().lower()
     return value if value in EXPLANATION_SOURCES else None
 
 
@@ -2348,8 +2351,9 @@ def add_card():
         "pos": cleaned("pos"),
         "topic": cleaned("topic") or "general",
         "explanation_en": cleaned("explanation_en"),
-        "explanation_source": _explanation_source(),
+        "explanation_source": _text_source("explanation_source"),
         "examples_en": _example_list("examples_en"),
+        "examples_source": _text_source("examples_source"),
         "translation_ukr": cleaned("translation_ukr"),
         "examples_ukr": _example_list("examples_ukr"),
         "translation_rus": cleaned("translation_rus"),
@@ -2840,13 +2844,15 @@ def edit_card(topic, card_id):
     }
     entry = {field: (read() if field == "word" else read(field))
              for field, read in readers.items() if field in request.form}
-    # The credit travels with the explanation or not at all (#390). #191's
-    # dialog fills this box from a fresh lookup, so the text really can be a
-    # dictionary's -- and it clears the hidden field the moment somebody edits
-    # the box, which leaves this None and `update_flashcard()` clearing the
-    # stored credit.
-    if "explanation_en" in entry:
-        entry["explanation_source"] = _explanation_source()
+    # A credit travels with the text it belongs to or not at all (#390).
+    # #191's dialog fills these boxes from a fresh lookup, so either really can
+    # hold a dictionary's words -- and it clears the matching hidden field the
+    # moment somebody edits a box, which leaves this None and
+    # `update_flashcard()` clearing the stored credit for that field alone.
+    for text, credit in (("explanation_en", "explanation_source"),
+                         ("examples_en", "examples_source")):
+        if text in entry:
+            entry[credit] = _text_source(credit)
 
     outcome, detail = update_flashcard(card_id, entry, owner_id=user_id,
                                        admin=admin)
@@ -3539,6 +3545,9 @@ def _fill_the_gap_round(activity, topics):
             "sentence": sentence,
             "explanation_en": card.get("explanation_en"),
             "explanation_source": card.get("explanation_source"),
+            # The gapped sentence is one of the card's own examples, so this
+            # page shows both kinds of dictionary text and needs both credits.
+            "examples_source": card.get("examples_source"),
             "translation": card.get(field) if field else None,
             "translation_label": label,
         })
@@ -3959,7 +3968,7 @@ def _rebuild_the_sentence_round(activity, topics):
             results.append({
                 "word": card["word"],
                 "sentence": sentence,
-                "explanation_source": card.get("explanation_source"),
+                "examples_source": card.get("examples_source"),
                 "given": given,
                 # **The assembled string, not chip positions.** That falls out
                 # of the duplicate-token case and gets it right for free: a
@@ -3994,10 +4003,9 @@ def _rebuild_the_sentence_round(activity, topics):
             "sentence": sentence,
             "chips": chips,
             # This game *is* a card's example sentence, so it shows dictionary
-            # text with no definition beside it -- and a credit has to travel
-            # with the text rather than with the explanation it arrived next
-            # to (#390).
-            "explanation_source": card.get("explanation_source"),
+            # text with no definition beside it -- and it is the examples'
+            # credit that belongs here, not the explanation's (#390).
+            "examples_source": card.get("examples_source"),
         })
 
     return render_template(

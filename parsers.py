@@ -1206,11 +1206,13 @@ def _attach_dictionary_text(cards, definitions, examples, source=None):
     translations and simply carries no English text.
 
     `source` names the dictionary the text came from and is stamped on exactly
-    the cards that receive an explanation (#390). It travels with the text and
-    never on its own: a card that got no explanation gets no source, because
-    the field's whole job is to say who wrote *this* sentence. Wiktionary's
-    licence needs a credit, and a credit needs something that remembers what to
-    credit.
+    the cards that receive text, per field: `explanation_source` beside an
+    explanation, `examples_source` beside examples (#390). It travels with the
+    text and never on its own, and the two are separate because a learner edits
+    them separately -- rewriting a definition leaves the dictionary's sentences
+    untouched, and a single column could only be wrong about one of them.
+    Wiktionary's licence needs a credit, and a credit needs something that
+    remembers what to credit.
     """
     # canonical label -> the card to put that text on. First wins, so a card
     # whose own label matches exactly is never displaced by a synonym.
@@ -1231,6 +1233,7 @@ def _attach_dictionary_text(cards, definitions, examples, source=None):
         # and is stored as JSON, so the card page shows separate sentences.
         if pos in examples:
             cards[target]["examples_en"] = examples[pos]
+            cards[target]["examples_source"] = source
 
     # The `other` card can never match anything, by construction: it is what
     # _google_dictionary() falls back to when Google has no dictionary entry, so
@@ -1244,6 +1247,7 @@ def _attach_dictionary_text(cards, definitions, examples, source=None):
             cards["other"]["explanation_source"] = source
         if pos in examples:
             cards["other"]["examples_en"] = examples[pos]
+            cards["other"]["examples_source"] = source
 
 
 class Dictionary(NamedTuple):

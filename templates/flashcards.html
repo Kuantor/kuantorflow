@@ -168,19 +168,31 @@
                         aria-label="Pronounce {{ card.word }}">&#128266;</button>
             </div>
 
+            {# The credit goes under whatever it covers, which on this page is
+               not always both (#390). A learner who rewrote the definition and
+               kept the dictionary's sentences leaves one of the two credited,
+               and a line under the whole block would then be claiming their
+               prose as well.
+
+               So: one line at the bottom when the dictionary wrote both -- the
+               ordinary case, and it reads as a footnote to the English block --
+               and a line against the surviving half when only one is left. #}
+            {% set both = card.explanation_source == 'wiktionary'
+                          and card.examples_source == 'wiktionary' %}
             {% if card.explanation_en %}
                 <p>{{ card.explanation_en }}</p>
+                {% if not both %}
+                    {% with fields = ['explanation'] %}{% include "_source_credit.html" %}{% endwith %}
+                {% endif %}
             {% endif %}
             {% if card.examples_en %}
                 <div class="lang">English examples</div>
                 <ul>{% for ex in card.examples_en %}<li>{{ ex }}</li>{% endfor %}</ul>
+                {% if not both %}
+                    {% with fields = ['examples'] %}{% include "_source_credit.html" %}{% endwith %}
+                {% endif %}
             {% endif %}
-            {# After both, because on this page Wiktionary wrote both: the
-               definition and the usage sentences under it are the same
-               editors' work under the same licence (#390). Everywhere else the
-               credit follows the explanation directly, because nothing else on
-               those surfaces came from the dictionary. #}
-            {% include "_source_credit.html" %}
+            {% if both %}{% include "_source_credit.html" %}{% endif %}
 
             {# Hidden languages (#46/#79/#111) stay stored on the card — they
                are only not rendered, so re-enabling brings them back. #}
@@ -240,6 +252,11 @@
                 <input type="hidden" id="edit-explanation_source" name="explanation_source" value="">
                 <label for="edit-examples_en">English examples <small>(one per line)</small></label>
                 <textarea id="edit-examples_en" name="examples_en" rows="2"></textarea>
+                {# The examples' own credit, cleared and filled separately from
+                   the explanation's above (#390): a learner who adds a
+                   sentence here has not touched the definition, and only one
+                   of the two stops being the dictionary's. #}
+                <input type="hidden" id="edit-examples_source" name="examples_source" value="">
                 {# A hidden language gets no field, and so is never submitted —
                    the card keeps it untouched (#46/#79/#111). #}
                 {% if settings.show_ukrainian %}
