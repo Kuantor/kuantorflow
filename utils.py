@@ -581,6 +581,67 @@ def private_topics(viewer_id=None, admin=False):
             for topic_id, name, creator, owner in rows}
 
 
+def claim_unowned_topics(section, user_id, dry_run=False):
+    """Give every creatorless topic in one section a creator (#394).
+
+    Returns `(claimed, left, missing_section)`: the names it took, the
+    `(name, creator_id)` pairs it refused to take, and whether the section
+    exists at all.
+
+    **`created_by_user_id` is not only a label.** Since #382 it is what decides
+    who may see a private topic, so `set_topic_visibility()` refuses a topic
+    with no creator -- the `nobodys` outcome -- and a topic in that state can
+    never be made private by anybody. Most of them got there honestly: every
+    topic that predates #207, everything `seed_topics.py` filed without
+    `--owner`, and anything an anonymous visitor created before #125.
+
+    **Only NULL creators, and that is the whole safety of it.** Rewriting
+    somebody else's creator would rewrite who can see their private topic --
+    taking it out of their deck and putting it in the caller's. So another
+    learner's topic is returned in `left` and not touched, which is also what
+    makes this safe to re-run: a second run finds nothing to do.
+
+    One conditional UPDATE rather than a read and a write, the shape every
+    other ownership-sensitive statement here uses: `IS NULL` in the WHERE means
+    two consoles running this at once cannot both claim the same row, and the
+    names are read first only so the log and the console can say what happened.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM topic_sections WHERE name = %s",
+                       (section,))
+        row = cursor.fetchone()
+        if row is None:
+            cursor.close()
+            return [], [], True
+        section_id = row[0]
+
+        cursor.execute(
+            "SELECT name, created_by_user_id FROM topics "
+            "WHERE section_id = %s ORDER BY name", (section_id,))
+        rows = cursor.fetchall()
+        claimed = [name for name, creator in rows if creator is None]
+        left = [(name, creator) for name, creator in rows
+                if creator is not None and creator != user_id]
+
+        if claimed and not dry_run:
+            cursor.execute(
+                "UPDATE topics SET created_by_user_id = %s "
+                "WHERE section_id = %s AND created_by_user_id IS NULL",
+                (user_id, section_id))
+            conn.commit()
+            # Logged beside the write, not by a caller: there is no request
+            # behind this one, so `_save_and_log()` cannot see it (CLAUDE.md's
+            # rule, and `place_topic()`'s reason for logging here too).
+            for name in claimed:
+                applog.topic_claimed(name, section=section, user_id=user_id)
+        cursor.close()
+        return claimed, left, False
+    finally:
+        conn.close()
+
+
 def set_topic_visibility(topic_id, public, viewer_id=None, admin=False):
     """Make one topic public or private (#382). Returns a status string.
 
