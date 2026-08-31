@@ -154,6 +154,10 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   own**. A changed explanation takes whatever source the caller vouches for, and
   absent means none — an explanation somebody rewrote is their sentence, and a
   credit left on it would put Wiktionary's contributors' names on their words.
+  Since #390 took the examples too, one column serves two editable fields, and
+  the gap is **accepted rather than unnoticed**: rewriting the explanation
+  drops the credit from the examples with it. A second `examples_source` column
+  is the shape if that ever needs fixing.
   The same reason keeps it out of `EDITABLE_FIELDS` (nobody edits a fact about
   provenance, and a submitted one would let a form claim an attribution) and out
   of `FILLABLE_FIELDS` (filling it beside somebody else's stored explanation

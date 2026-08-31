@@ -1135,6 +1135,15 @@ def update_flashcard(card_id, entry, owner_id=None, admin=False):
         # dictionary's sentence, and a credit left on it would attribute their
         # words to the people who wrote the original. Not part of `changed`,
         # which records what somebody edited -- nobody edited this.
+        #
+        # One column serves two fields since the examples came too, and the
+        # gap that leaves was looked at and **accepted**: a learner who
+        # rewrites the explanation and keeps the dictionary's example
+        # sentences drops the credit from those as well. The alternatives were
+        # a second `examples_source` column, or keeping a credit that would
+        # then name Wiktionary above the learner's own prose. If this needs
+        # revisiting, the second column is the shape -- written beside the
+        # examples, cleared when they change, exactly as this one is.
         if "explanation_en" in changed:
             assignments += ", explanation_source = %s"
             values += (entry.get("explanation_source"),)
