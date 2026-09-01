@@ -221,6 +221,8 @@ The passage comes with a title of its own, and the words you are studying appear
 
 A text is kept for the session, so re-reading it, going back to it or refreshing the page costs nothing; writing a new one is a button you press deliberately. Signed out you get one text, and then an invitation to sign in; signed in, ten a day.
 
+You can take the text with you. The **copy button** in the bottom-right corner of the passage copies it with the bold words intact, so pasting it into a document or an email keeps them; pasting into a plain box gives you the words. **Print the text** puts the title and the passage on a sheet of their own — no menus, no lists, no forms — and Ctrl+P does the same. Printing to PDF is your browser's usual "Save as PDF" destination in that dialog.
+
 ## Mykola, your study companion
 
 ### What he can answer
