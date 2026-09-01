@@ -98,9 +98,17 @@
            them. Each run is printed as text and escaped by Jinja: the model's
            output never becomes markup. #}
         <div class="panel reader-text">
-            {# The text's own title (#315), when the reply had one. Marked for
+            {#- The text's own title (#315), when the reply had one. Marked for
                the learner's words exactly as the body is, because a word that
-               appears only up here is still a word they read. #}
+               appears only up here is still a word they read.
+
+               **The leading `-` is load-bearing** (#399): this panel is
+               `pre-wrap`, so the newline and indentation between the tag above
+               and this comment were rendered -- a blank line, then a line of
+               spaces, above every text the feature has ever written. The
+               stripping below was applied to the tags that render and to the
+               comment after this one; the one that does not render was the one
+               that mattered. #}
             {#- Whitespace is stripped on every tag here, not for tidiness: the
                 panel is `pre-wrap`, so any newline or indentation this block
                 left behind would render as a visible gap above the text. -#}
