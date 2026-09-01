@@ -97,6 +97,13 @@
            paragraphs survive without the segments having to be split around
            them. Each run is printed as text and escaped by Jinja: the model's
            output never becomes markup. #}
+        {# The wrapper exists so the copy button has something to sit in the
+           corner of **without being inside the panel** (#403). `.reader-text`
+           is `pre-wrap`: anything in it renders, including the whitespace
+           around a tag, which is the whole of #399. It is also what the print
+           rules keep -- the title and the text, and nothing else on the
+           page. #}
+        <div class="reader-sheet">
         <div class="panel reader-text">
             {#- The text's own title (#315), when the reply had one. Marked for
                the learner's words exactly as the body is, because a word that
@@ -120,6 +127,21 @@
             {%- for run, marked in held.segments -%}
                 {%- if marked %}<strong class="reader-word">{{ run }}</strong>{% else %}{{ run }}{% endif -%}
             {%- endfor -%}
+        </div>
+        {# Icon-only, so the accessible name is on the button. Outside the
+           panel above and positioned into its corner: inside it, the button
+           and the newlines around it would be part of the text. #}
+        <button type="button" id="reader-copy" class="reader-copy"
+                aria-label="Copy the text" title="Copy the text">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+        </button>
+        <span id="reader-copy-said" class="reader-copy-said" role="status"
+              aria-live="polite"></span>
         </div>
 
         <div class="panel panel--tight reader-words">
@@ -163,6 +185,16 @@
                         with an answer key on its own page.</span>
                 </p>
             {% endif %}
+            {# Beside the worksheet link because it belongs to the same
+               question -- what to do with the text you have -- and outside the
+               `held.used` test above, because a text with no marked words is
+               still a text worth printing (#403). #}
+            <p class="reader-worksheet">
+                <button type="button" onclick="window.print()">Print the text</button>
+                <span class="hint">The title and the text on their own sheet,
+                    with your words still picked out. Ctrl&#8288;+&#8288;P does
+                    the same.</span>
+            </p>
         </div>
 
         {% if not refusal %}{{ write_form("Write another") }}{% endif %}
@@ -178,4 +210,218 @@
     {% endif %}
 
     {% endif %}
+
+    {# Page-scoped, the way deck.html scopes its own (#403). The print rules
+       below **must not** live in the site stylesheet: `body *` there would
+       hide every other page's contents too. #}
+    {# Copying the text, with the highlighting (#403).
+
+       **The payload is the difference from Mykola's button** (#245), which
+       copies plain text on purpose -- its rule is "copy what is on screen",
+       and markdown's bold is not part of that. Here the bold *is* the feature:
+       these are the learner's own words picked out of the passage, and a copy
+       that loses them is a copy of something else. So both flavours go on the
+       clipboard, and the HTML carries inline styles rather than our class
+       names, because nothing on the other end has our stylesheet.
+
+       Three attempts, in order of how much they keep: the async clipboard with
+       both flavours; a selection copy, which carries the rendered formatting
+       and is what older browsers can do; and plain text, which is better than
+       failing. #}
+    <script>
+        (function () {
+            var button = document.getElementById("reader-copy");
+            var panel = document.querySelector(".reader-text");
+            var said = document.getElementById("reader-copy-said");
+            if (!button || !panel) return;
+
+            var NEWLINE = String.fromCharCode(10);
+            var HIGHLIGHT = "font-weight:700;background:#f7e3a1";
+
+            function escaped(text) {
+                return text.replace(/&/g, "&amp;")
+                           .replace(/</g, "&lt;")
+                           .replace(/>/g, "&gt;");
+            }
+
+            // One run at a time, the way the page itself renders them: a text
+            // node keeps its newlines (as <br>, since a paste has no
+            // `pre-wrap`), and a marked word keeps its highlight inline.
+            function richRuns(node) {
+                var out = "";
+                Array.prototype.forEach.call(node.childNodes, function (child) {
+                    if (child.nodeType === 3) {
+                        out += escaped(child.nodeValue)
+                               .split(NEWLINE).join("<br>");
+                    } else if (child.classList
+                               && child.classList.contains("reader-word")) {
+                        out += '<strong style="' + HIGHLIGHT + '">'
+                               + escaped(child.textContent) + "</strong>";
+                    } else {
+                        out += escaped(child.textContent);
+                    }
+                });
+                return out;
+            }
+
+            function parts() {
+                var title = panel.querySelector(".reader-title");
+                var body = panel.cloneNode(true);
+                var titleInClone = body.querySelector(".reader-title");
+                if (titleInClone) titleInClone.remove();
+                return { title: title, body: body };
+            }
+
+            function asHtml() {
+                var p = parts();
+                var html = "";
+                if (p.title) {
+                    html += '<p style="font-weight:700;font-size:1.15em;'
+                            + 'margin:0 0 0.6em">' + richRuns(p.title) + "</p>";
+                }
+                return html + '<p style="margin:0">' + richRuns(p.body) + "</p>";
+            }
+
+            function asPlain() {
+                var p = parts();
+                var text = p.body.textContent;
+                return p.title
+                    ? p.title.textContent.trim() + NEWLINE + NEWLINE + text
+                    : text;
+            }
+
+            // Carries the rendered formatting, and restores whatever the
+            // learner had selected: copying a text must not take their
+            // selection away from them.
+            function selectionCopy() {
+                var selection = window.getSelection();
+                var before = selection.rangeCount
+                    ? selection.getRangeAt(0) : null;
+                var range = document.createRange();
+                range.selectNodeContents(panel);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                var done = false;
+                try { done = document.execCommand("copy"); } catch (e) {}
+                selection.removeAllRanges();
+                if (before) selection.addRange(before);
+                return done;
+            }
+
+            function say(message) {
+                if (!said) return;
+                said.textContent = message;
+                window.setTimeout(function () { said.textContent = ""; }, 2500);
+            }
+
+            function copy() {
+                var html = asHtml(), plain = asPlain();
+                if (window.ClipboardItem && navigator.clipboard
+                        && navigator.clipboard.write) {
+                    var item = new ClipboardItem({
+                        "text/html": new Blob([html], { type: "text/html" }),
+                        "text/plain": new Blob([plain], { type: "text/plain" })
+                    });
+                    return navigator.clipboard.write([item])
+                        .then(function () { say("Copied"); })
+                        .catch(function () { fallback(plain); });
+                }
+                fallback(plain);
+                return null;
+            }
+
+            function fallback(plain) {
+                if (selectionCopy()) { say("Copied"); return; }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(plain)
+                        .then(function () { say("Copied"); })
+                        .catch(function () { say("Could not copy"); });
+                    return;
+                }
+                say("Could not copy");
+            }
+
+            button.addEventListener("click", copy);
+        })();
+    </script>
+
+    <style>
+        /* The corner the copy button sits in. The width has to match
+           `.reader-text`'s own `max-width` in the stylesheet: the panel is
+           capped at 38rem while this wrapper would otherwise fill the column,
+           and the button -- positioned against the wrapper -- would float
+           178px to the right of the panel it belongs to. Measured, before it
+           was. */
+        .reader-sheet { position: relative; max-width: 38rem; }
+
+        /* A strip at the foot of the panel for the button to sit in. Measured
+           at 375px without it: the last line of the passage ran underneath the
+           button. Padding rather than a margin on the text, because the panel
+           is `pre-wrap` and padding is not content (#399). Mykola's answer to
+           the same collision is `padding-right` on the line that shares the
+           button's edge; a passage has no single such line, so the room is
+           made below all of it. */
+        .reader-text { padding-bottom: 3rem; }
+
+        /* Mykola's copy button, the same shape and glyph (#245) -- a learner
+           who has used one has used the other. Bottom-right of the panel, and
+           a hair inside it so the shadow does not cut the corner off. */
+        .reader-copy {
+            position: absolute;
+            right: 0.7rem;
+            bottom: 0.6rem;
+            display: flex; align-items: center; justify-content: center;
+            width: 1.9rem; height: 1.9rem; padding: 0;
+            border: 1px solid #dce3ea; border-radius: 6px;
+            background: #fff; color: var(--muted);
+            cursor: pointer;
+        }
+        .reader-copy:hover { color: var(--blue); border-color: var(--blue); }
+        .reader-copy[disabled] { opacity: 0.6; cursor: default; }
+        /* What the button said, for a screen reader and for everybody else.
+           Beside the button rather than over the text: this panel is the one
+           place a floating toast would cover the thing just copied. */
+        .reader-copy-said {
+            position: absolute; right: 3.1rem; bottom: 0.85rem;
+            font-size: 0.8rem; color: var(--muted);
+        }
+
+        /* ---- print (#403) ----
+           Ctrl+P on this page prints the title and the text, and nothing else.
+
+           **Nothing here names anything in base.html**, which is the whole
+           trick: worksheet.html is a standalone page precisely because a print
+           stylesheet that hides the header, the footer and the widget one at a
+           time rots the next time the layout changes. So this hides
+           everything and brings back one subtree -- `visibility`, not
+           `display`, because an ancestor cannot be `display: none` and still
+           show a descendant. */
+        @page { margin: 18mm 16mm; }
+        @media print {
+            html, body { background: #fff !important; }
+            body * { visibility: hidden; }
+            .reader-sheet, .reader-sheet * { visibility: visible; }
+            .reader-sheet {
+                position: absolute; left: 0; top: 0; width: 100%;
+            }
+            /* The panel becomes the page: no card, no shadow, no padding of
+               its own, and black on white for an office printer. */
+            .reader-text {
+                background: #fff !important; color: #000 !important;
+                box-shadow: none !important; border: 0 !important;
+                border-radius: 0 !important; padding: 0 !important;
+                max-width: none; font-size: 12pt; line-height: 1.6;
+            }
+            .reader-title { color: #000 !important; max-width: none; }
+            /* Both, deliberately. The bold is what a monochrome printer still
+               shows -- #340's stylesheet worries about exactly this -- and
+               `print-color-adjust` is what stops a colour one dropping the
+               highlight it can render. */
+            .reader-word {
+                font-weight: 700;
+                -webkit-print-color-adjust: exact; print-color-adjust: exact;
+            }
+            .reader-copy, .reader-copy-said { display: none !important; }
+        }
+    </style>
 {% endblock %}
