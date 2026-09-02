@@ -401,9 +401,14 @@
             });
 
             document.getElementById("move-cancel").addEventListener("click", closeMove);
-            moveOverlay.addEventListener("click", function (e) {
-                if (e.target === moveOverlay) closeMove();
-            });
+            // **No click-outside-to-close** (#369). This dialog was the one
+            // #369 left undecided: it holds a single typed topic name, which
+            // is less than the edit dialog's worth of work and more than the
+            // nothing a notice holds. Decided on the side of the rule, because
+            // what is lost is not only the typing -- the field is free text,
+            // so a name typed here may be a topic that does not exist yet, and
+            // the click that discards it looks exactly like the click that
+            // opened the dialog. Cancel is the way out, and it says so.
 
             // --- editing a card (#176) ---------------------------------
             var editOverlay = document.getElementById("edit-modal");
