@@ -195,6 +195,17 @@ def do_rename(cursor, step, dry_run, out):
     source = find_topic(cursor, step.old)
     dest = find_topic(cursor, step.new)
 
+    # Exactly, not case-insensitively. `find_topic()` matches the way the
+    # unique key collates, so after `character and personality` becomes
+    # `Character and personality` the old name still resolves to that same row
+    # -- and every later run would rename it onto itself, reporting a change
+    # and writing a log line for a step that finished the first time. A
+    # case-only rename is the only shape that shows this, and this plan has one.
+    if source is not None and source["name"] == step.new:
+        out("= %-34s already named %s" % (ascii_safe(step.old),
+                                          ascii_safe(step.new)))
+        return 0
+
     if source is None:
         if dest is not None:
             out("= %-34s already named %s" % (ascii_safe(step.old),
