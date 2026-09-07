@@ -201,6 +201,41 @@ def cards_claimed(topic, count, section=None, user_id=None):
            created_by=user_id)
 
 
+def topic_renamed(old, new, topic_id=None, cards=0):
+    """A topic was renamed in bulk by the console script (issue #407).
+
+    Beside `TOPIC-PLACED` and `TOPIC-CLAIMED`: a one-off script changing a row
+    that other work is filed under, with no request behind it, so the line goes
+    where the write is. `topic=` and `id=` match the lines around it, so one
+    grep still finds a topic's whole history -- and the *old* name is here
+    because it is the half that stops existing, and the only record that the
+    two names were ever one topic.
+
+    `cards=` is how many rows had their `flashcards.topic` string rewritten
+    alongside, which is the part of a rename that is easy to leave out (#207).
+    """
+    _write(CARDS, "TOPIC-RENAMED", topic=new, was=old, id=topic_id,
+           cards=cards)
+
+
+def topics_merged(source, dest, count, source_id=None, dest_id=None,
+                  removed=False):
+    """Every card in one topic was moved into another (issue #407).
+
+    **One line per topic, not per card**, for `CARDS-CLAIMED`'s reason: a
+    hundred MOVE-shaped lines from a single console command would drown the
+    day's real card events, and the fact worth keeping is "this topic's cards
+    are now in that one", which one line says. `MOVE` stays what it is -- a
+    learner moving one card from the topic page (#161).
+
+    `removed=` says whether the emptied source row was deleted, because that is
+    the half a re-run depends on: a source still standing is a step that did
+    not finish.
+    """
+    _write(CARDS, "TOPICS-MERGED", topic=dest, was=source, count=count,
+           id=dest_id, from_id=source_id, removed=removed)
+
+
 def card_created(entry, source, user=None, card_id=None, alongside=None):
     """A new card reached the database.
 
