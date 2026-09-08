@@ -3506,6 +3506,55 @@ def _scrambled_round(activity, topics):
         dropped=dropped)
 
 
+# How many generate-and-check passes a round may make (#389). One is the design
+# and the measured normal case; the extra two are for the round where the first
+# pass loses a word or two and has to be topped up. Bounded for the reason
+# `pseudowords()` is bounded -- a deck has only so many words in it, and the
+# alternative to a limit is a page that never renders.
+VET_ATTEMPTS = 3
+
+
+def _vetted_pseudowords(pool, wanted, known):
+    """`wanted` invented words, minus the ones a lexicon has heard of (#389).
+
+    The vet lives **here rather than in `games.pseudowords()`**, which has no
+    database and no network in it -- that is why it is testable at all, and why
+    every filter it holds is a property of the deck. This one is a property of
+    English, so it is the route's job.
+
+    Each rejected word is added to `known`, which costs nothing and buys the
+    next pass: `pseudowords()` treats `known` as both exact words and stems, so
+    a run that offered `defence` will not come back with `defencive`.
+
+    **An unreachable lexicon is not a failed round.** The words generated so far
+    are played unvetted -- exactly what this game did before #389 -- because a
+    game that will not start is worse than a game that is occasionally wrong,
+    and #258's dispute path is still underneath it.
+    """
+    kept, blocked, rejected = [], set(known), set()
+    attempts = 0
+    while len(kept) < wanted and attempts < VET_ATTEMPTS:
+        attempts += 1
+        batch = games.pseudowords(
+            pool, wanted - len(kept),
+            known=blocked | {w.lower() for w in kept})
+        if not batch:
+            break                      # the generator has nothing left to give
+        found = parsers.wiktionary_pages(batch)
+        if found is None:
+            kept.extend(batch)         # unreachable: today's behaviour
+            break
+        kept.extend(w for w in batch if w.lower() not in found)
+        rejected |= found
+        blocked |= found
+        if not found:
+            break                      # a clean pass needs no second one
+    if rejected:
+        applog.invented_vetted(len(kept) + len(rejected), len(rejected),
+                               words=rejected, attempts=attempts)
+    return kept[:wanted]
+
+
 def _real_or_fake_round(activity, topics):
     """A round of #132: real words from the deck, mixed with invented ones.
 
@@ -3570,8 +3619,12 @@ def _real_or_fake_round(activity, topics):
     # real disagreements -- and a word that has been settled once must never be
     # offered as invented again, which is the whole reason it is written down.
     known = games.vocabulary(everything) | confirmed_words()
-    fakes = games.pseudowords(
-        [c["word"] for c in everything], wanted_fake, known=known)
+    # Vetted against a lexicon before the round rather than after a dispute
+    # (#389). Measured over 60 rounds of this deck, one round in three offered
+    # a real English word as invented -- `defence`, `provision`, `edition` and
+    # `version` among them, and `bailment`, which is the word that opened #258.
+    fakes = _vetted_pseudowords(
+        [c["word"] for c in everything], wanted_fake, known)
     reals = games.sample(selected, words - len(fakes))
 
     if not reals:
