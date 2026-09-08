@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Build a topic | KuantorFlow{% endblock %}
+
+{# #406. Two states in one template rather than two pages: the form, and the
+   form with a proposal under it. The idea stays in the box after a proposal so
+   "not quite" is one word edited and one press, not a retyped sentence. #}
+{% block content %}
+<p class="crumbs"><a href="{{ url_for('index') }}">&larr; Back</a></p>
+
+<h1>Build a topic</h1>
+
+{% if refusal %}
+  <div class="panel notice">{{ refusal }}</div>
+{% else %}
+
+<form method="POST" class="panel" id="idea-form">
+  <label for="idea">What should the topic be about?</label>
+  <input type="text" id="idea" name="idea" required autocomplete="off"
+         maxlength="{{ idea_max }}" value="{{ idea }}"
+         placeholder="renting a flat in London, especially the paperwork">
+  <p class="settings-hint">A sentence is plenty. The words come back at
+     B2&ndash;C1 level, like the rest of the deck.</p>
+
+  <label for="count">How many words?</label>
+  <input type="number" id="count" name="count" value="{{ count }}"
+         min="{{ min_words }}" max="{{ max_words }}">
+  <p class="settings-hint">Each word costs one dictionary lookup when you
+     approve the list &mdash; nothing is spent until then.</p>
+
+  <div class="modal-actions">
+    <button type="submit" id="propose">Suggest words</button>
+  </div>
+</form>
+
+{% if message %}
+  <div class="panel notice">{{ message }}</div>
+{% endif %}
+
+{% if proposal %}
+  {# The approve step. Everything here is editable, because the model is
+     proposing rather than deciding — and nothing has been written or paid for
+     at this point. #}
+  <form method="POST" action="{{ url_for('start_topic_fill') }}"
+        class="panel" id="approve">
+    <h2>Check the list</h2>
+
+    <label for="title">Topic name</label>
+    <input type="text" id="title" name="title" required autocomplete="off"
+           maxlength="{{ title_max }}" value="{{ proposal.title }}">
+
+    <ul class="proposed">
+      {% for entry in proposal.entries %}
+        <li>
+          <label>
+            <input type="checkbox" name="word" value="{{ entry.word }}"
+                   {% if entry.use %}checked{% endif %}
+                   data-word="1">
+            <span class="proposed-word">{{ entry.word }}</span>
+          </label>
+          {% if entry.unknown %}
+            <span class="proposed-flag" title="No dictionary entry found, so a
+                  lookup would probably come back empty">no dictionary entry</span>
+          {% elif entry.already %}
+            <span class="proposed-note">already in your deck</span>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+
+    {% if not proposal.checked %}
+      <p class="settings-hint">The dictionary check could not run just now, so
+         the words below are unchecked rather than approved.</p>
+    {% endif %}
+
+    {# The number #406 exists to state out loud: a refusal read before the
+       button is pressed rather than met halfway through a half-built topic. #}
+    <p class="proposed-cost" id="cost"
+       data-limit="{{ proposal.budget.limit }}"
+       data-left="{{ proposal.budget.left if proposal.budget.left is not none else '' }}">
+    </p>
+
+    <div class="modal-actions">
+      <button type="submit" id="build">Build the topic</button>
+      <a class="secondary" href="{{ url_for('generate_topic') }}">Start again</a>
+    </div>
+  </form>
+
+  <script>
+    (function () {
+      var form = document.getElementById("approve");
+      var cost = document.getElementById("cost");
+      var build = document.getElementById("build");
+      var left = parseInt(cost.dataset.left, 10);
+      var limit = parseInt(cost.dataset.limit, 10);
+
+      // Recounted as the learner ticks, because the whole point of showing the
+      // number is that it is the number they are about to spend — a figure
+      // rendered once and left stale would be worse than none.
+      function update() {
+        var ticked = form.querySelectorAll("input[data-word]:checked").length;
+        var text = ticked + (ticked === 1 ? " word, " : " words, ")
+                 + ticked + (ticked === 1 ? " lookup" : " lookups");
+        if (!isNaN(left)) {
+          text += " — you have " + left + " left today";
+        }
+        cost.textContent = text;
+        var over = !isNaN(left) && ticked > left;
+        build.disabled = ticked === 0 || over;
+        cost.classList.toggle("over", over);
+      }
+
+      form.addEventListener("change", update);
+      update();
+    })();
+  </script>
+{% endif %}
+
+{% endif %}
+
+<style>
+  .proposed { list-style: none; margin: 0.6rem 0; padding: 0; }
+  .proposed li { padding: 0.15rem 0; display: flex; align-items: baseline;
+                 gap: 0.5rem; flex-wrap: wrap; }
+  .proposed label { display: inline-flex; align-items: baseline; gap: 0.4rem;
+                    margin: 0; font-weight: 400; }
+  .proposed-word { font-weight: 600; }
+  .proposed-flag, .proposed-note { font-size: 0.85em; opacity: 0.75; }
+  .proposed-flag { color: #a4462f; }
+  .proposed-cost { margin: 0.8rem 0 0; font-size: 0.95em; }
+  .proposed-cost.over { color: #a4462f; font-weight: 600; }
+</style>
+{% endblock %}

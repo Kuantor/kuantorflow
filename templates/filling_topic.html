@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Building {{ plan.title }} | KuantorFlow{% endblock %}
+
+{# #406's progress page. The lookups were claimed before this page was reached,
+   so a refresh re-reads the held plan and does not pay twice (#237's shape) —
+   and because every card is committed as it arrives, a refresh mid-run simply
+   re-runs the words that are left, which #101 makes cheap. #}
+{% block content %}
+<p class="crumbs"><a href="{{ url_for('index') }}">&larr; Back</a></p>
+
+<h1>Building &ldquo;{{ plan.title }}&rdquo;</h1>
+
+<div class="panel">
+  <p id="fill-status">Looking up {{ plan.words | length }} words. This takes
+     about a second each &mdash; you can watch, or come back to the topic
+     later.</p>
+
+  <div class="fill-bar"><div class="fill-bar-done" id="fill-bar"></div></div>
+
+  <ol class="fill-list" id="fill-list">
+    {% for word in plan.words %}
+      <li id="w-{{ loop.index }}" class="waiting">{{ word }}</li>
+    {% endfor %}
+  </ol>
+
+  <p id="fill-done" hidden>
+    <a class="button" id="fill-link" href="{{ url_for('index') }}">Open the topic</a>
+  </p>
+</div>
+
+<script>
+  (function () {
+    var total = {{ plan.words | length }};
+    var bar = document.getElementById("fill-bar");
+    var status = document.getElementById("fill-status");
+    var done = document.getElementById("fill-done");
+    var link = document.getElementById("fill-link");
+    var source = new EventSource("{{ url_for('stream_topic_fill') }}");
+
+    source.onmessage = function (event) {
+      var data = JSON.parse(event.data);
+
+      if (data.type === "word") {
+        var item = document.getElementById("w-" + data.index);
+        if (item) {
+          item.className = data.outcome;
+          if (data.outcome === "saved") {
+            item.textContent += " — " + data.cards
+                             + (data.cards === 1 ? " card" : " cards");
+          } else if (data.outcome === "skipped") {
+            item.textContent += " — already saved";
+          } else {
+            item.textContent += " — no dictionary answered";
+          }
+        }
+        bar.style.width = Math.round(data.index / total * 100) + "%";
+      }
+
+      if (data.type === "done") {
+        // Closed from this end: without it the browser reconnects when the
+        // response ends, and the whole fill would run a second time.
+        source.close();
+        status.textContent = data.saved + (data.saved === 1 ? " card" : " cards")
+          + " saved"
+          + (data.skipped ? ", " + data.skipped + " already in your deck" : "")
+          + (data.failed ? ", " + data.failed + " no dictionary could answer" : "")
+          + ".";
+        link.href = data.url;
+        done.hidden = false;
+      }
+
+      if (data.type === "error") {
+        source.close();
+        status.textContent = data.message;
+      }
+    };
+
+    source.onerror = function () {
+      source.close();
+      status.textContent = "The connection dropped. The words saved so far are "
+        + "in your deck — start again and only the rest will be looked up.";
+    };
+  })();
+</script>
+
+<style>
+  .fill-bar { height: 6px; background: rgba(0,0,0,0.12); border-radius: 3px;
+              overflow: hidden; margin: 0.8rem 0; }
+  .fill-bar-done { height: 100%; width: 0; background: #2E6BA0;
+                   transition: width 0.3s ease; }
+  .fill-list { margin: 0.6rem 0 0; padding-left: 1.4rem; }
+  .fill-list li { padding: 0.1rem 0; }
+  .fill-list li.waiting { opacity: 0.45; }
+  .fill-list li.saved { opacity: 1; }
+  .fill-list li.skipped { opacity: 0.7; }
+  .fill-list li.failed { opacity: 0.7; color: #a4462f; }
+</style>
+{% endblock %}

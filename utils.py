@@ -100,6 +100,117 @@ def _claim_one_lookup(cursor, user_id, limit):
     return cursor.rowcount != 0
 
 
+def _claim_many_lookups(cursor, user_id, count, limit):
+    """Take `count` slots at once, or none. True if this call got them all.
+
+    `_claim_one_lookup()`'s statement with the count in it, and the difference
+    that matters is `lookups + %s <= %s` rather than `lookups < %s`: a batch is
+    **all or nothing**. A partial claim would be the exact failure #406 exists
+    to avoid -- a learner approves twenty words, twelve are looked up, and the
+    thirteenth is refused halfway through a topic that is now half built.
+    """
+    cursor.execute(
+        """
+        INSERT INTO word_lookup_usage (day, user_id, lookups)
+        VALUES (CURDATE(), %s, %s)
+        ON DUPLICATE KEY UPDATE
+            lookups = IF(lookups + %s <= %s, lookups + %s, lookups)
+        """,
+        (user_id, count, count, limit, count),
+    )
+    return cursor.rowcount != 0
+
+
+def lookups_used_today(user_id):
+    """How many lookups this identity has already spent today (#406).
+
+    Read-only, and the counterpart to `claim_word_lookup()`'s write: #406's
+    approve screen states the cost *before* the claim, so it needs the number
+    without taking a slot to find it out.
+
+    Anonymous visitors read the shared row, which counts anonymous lookups only
+    -- the same row their claim would advance (#388).
+    """
+    row = user_id if user_id is not None else ALL_ACCOUNTS
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT lookups FROM word_lookup_usage "
+            "WHERE day = CURDATE() AND user_id = %s", (row,))
+        found = cursor.fetchone()
+        cursor.close()
+        return found[0] if found else 0
+    finally:
+        conn.close()
+
+
+def existing_words(owner_id=None):
+    """Every headword the visible deck already holds, lower-cased (#406).
+
+    One column, one query, no cards built -- this answers "would a lookup here
+    produce anything new?" and nothing else.
+
+    **A word here is not a guarantee of a skip.** #101 keeps one card per word
+    *and part of speech*, so a deck holding `tip` the noun still gains `tip` the
+    verb. That is why #406 shows this as a note beside a word rather than
+    removing it: the honest claim is "you already have this word", not "this
+    will do nothing".
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        if owner_id is None:
+            cursor.execute("SELECT DISTINCT word FROM flashcards")
+        else:
+            cursor.execute("SELECT DISTINCT word FROM flashcards "
+                           "WHERE added_by_user_id = %s", (owner_id,))
+        rows = cursor.fetchall()
+        cursor.close()
+        return {(row[0] or "").strip().lower() for row in rows if row[0]}
+    finally:
+        conn.close()
+
+
+def claim_word_lookups(user_id, count, user_limit, anon_limit):
+    """Count `count` lookups against the ceiling that applies (#406).
+
+    `claim_word_lookup()`'s answer shape -- `(allowed, scope, used)` -- so a
+    caller that already knows how to render one refusal can render this one.
+
+    **All or nothing**, which is the whole reason this exists beside the
+    single-slot version rather than being a loop over it. #406 states the cost
+    on the approve screen and claims it before the first fetch, so that a
+    refusal is a decision made in advance instead of a topic abandoned in the
+    middle. A loop would give exactly the half-built topic that design is
+    avoiding.
+
+    A count of zero claims nothing and is allowed: an approve screen where
+    every proposed word was already in the deck has nothing to spend.
+    """
+    if count <= 0:
+        return True, None, 0
+    row, scope, limit = ((user_id, "user", user_limit) if user_id is not None
+                         else (ALL_ACCOUNTS, "anonymous", anon_limit))
+    if not limit or limit <= 0:
+        return True, None, 0
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        claimed = _claim_many_lookups(cursor, row, count, limit)
+        conn.commit()
+        cursor.execute(
+            "SELECT lookups FROM word_lookup_usage "
+            "WHERE day = CURDATE() AND user_id = %s", (row,))
+        found = cursor.fetchone()
+        cursor.close()
+        used = found[0] if found else 0
+        return (True, None, used) if claimed else (False, scope, used)
+    finally:
+        conn.close()
+
+
 def claim_word_lookup(user_id, user_limit, anon_limit):
     """Count one word lookup against the ceiling that applies (issue #388).
 
