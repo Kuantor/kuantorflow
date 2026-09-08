@@ -554,6 +554,37 @@ venv/bin/python claim_flashcards.py --owner <email>
 author and their count, which it never touches. Run it after `claim_topics.py`:
 a topic needs both before it can be made private.
 
+**`retopic.py` tidies the `Other` section** (#407) — it merges the strays into the
+eighteen seeded topics where one fits and renames the survivors, from a plan
+declared in the script and nowhere else:
+
+```bash
+venv/bin/python retopic.py --plan pa --dry-run
+venv/bin/python retopic.py --plan pa
+```
+
+`--plan local` is the other one; the two databases drifted apart and neither
+plan is a subset of the other. **The dry run is a rehearsal, not a prediction**
+— it applies every step and rolls back, because the steps are not independent
+(the first one creates the topic the next two merge into) and a dry run that
+guessed each step against the untouched database called two of them impossible.
+`~` is a step that would change something, `+` one that did, `=` one already
+done, `!` one skipped and why. A merge that would put the same word and part of
+speech in a topic twice is **skipped**, since a bulk UPDATE does not go through
+`save_flashcard()` and so does not get #101 for free.
+
+Two things it does that nothing else here does. It writes **both**
+`flashcards.topic_id` and `flashcards.topic` for every card that moves — the
+string is what ai_agent's `cards_db` reads (#207), so a merge that updated only
+the id would leave Mykola naming topics that no longer exist. And it **deletes
+the emptied source row**, departing from the rule that an empty topic row is
+kept for its name, creator and age: that is right for a topic whose last card
+was deleted and wrong for one being consolidated away, where leaving the name in
+`uq_topics_namespace` lets the next card saved under it resurrect the row. It
+changes no `is_public` and no `namespace`, so a card takes its destination's
+visibility and nothing changes hands. Not part of a deploy; re-running says
+`nothing to do`.
+
 `apply_schema.py` is the only thing a deploy *must* run. **`seed_topics.py` is
 not part of a deploy** (#203) — it is a one-off that fills an empty deck, safe to
 re-run and safe to skip forever on a database that already has cards. When you do
