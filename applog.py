@@ -118,6 +118,34 @@ def word_confirmed(word, source, user=None, first=True):
            first="yes" if first else "no", user=_user(user))
 
 
+def invented_vetted(offered, rejected, words=(), attempts=1):
+    """A round's invented words were checked against a lexicon (#389).
+
+    **One line per round, and only when something was rejected** -- a clean
+    vet is the normal case and a line for each would bury the interesting one.
+    The rejected words are named because they are the evidence: each is a word
+    the generator would have marked a learner wrong for knowing.
+
+    `attempts` is how many generate-and-check passes the round needed, which is
+    the number to watch. One is the design; a number that creeps up means the
+    vet is rejecting so much that the generator is struggling to fill a round.
+    """
+    _write(CARDS, "INVENTED-VETTED", offered=offered, rejected=rejected,
+           words=",".join(sorted(words)) or None, attempts=attempts)
+
+
+def word_vet_failed(count, error):
+    """The lexicon could not be reached while vetting a round (#389).
+
+    Not an error the learner ever sees: the round is played with the words
+    unvetted, which is exactly what it did before #389. Worth a line anyway,
+    because the failure is otherwise perfectly silent -- and a run of these is
+    the difference between "the vet is working" and "the vet has been off for
+    a week".
+    """
+    _write(CARDS, "WORD-VET-FAILED", words=count, error=str(error)[:200])
+
+
 def topic_visibility_set(name, public, topic_id=None, user=None,
                          outcome="changed"):
     """A topic was made public or private (#382).

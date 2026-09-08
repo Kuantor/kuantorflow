@@ -975,6 +975,62 @@ def _wiktionary_has_english(word):
     return "==English==" in text
 
 
+# How many titles go in one `action=query` request. Wikimedia's own limit for an
+# anonymous client is 50, and a round asks for far fewer than that -- the cap is
+# here so a caller with a long list cannot turn one request into a rejected one.
+WIKTIONARY_TITLES_PER_REQUEST = 50
+
+
+def wiktionary_pages(words):
+    """Which of `words` Wiktionary has **any** page for (#389).
+
+    A lower-cased set, or **None** when the lexicon could not be reached --
+    the same three-state answer `_wiktionary_has_english()` gives, and for the
+    same reason: a request that failed is not a word that does not exist, and a
+    caller that collapsed the two would vet a round against silence.
+
+    **Existence, not English**, which is what makes this cheap enough to run
+    before every round: `titles=a|b|c` answers 50 words in one request of about
+    3 KB, where the `==English==` test needs each page's wikitext and pulls
+    ~89 KB for the same list. The two callers want different things. #258's
+    `confirm_word()` renders a *verdict* to a learner, so it must be sure the
+    entry is English. This one only decides whether to keep a generated string,
+    and rejecting `mariable` because it is French costs nothing -- the
+    generator is asked for another one, and `pseudowords()` already discards
+    far more than it returns.
+
+    That difference is also why nothing here writes to `confirmed_words`.
+    Measured over 269 candidates from the production deck: 26 had a page and
+    only 17 of those were English. That table is read back as "somebody already
+    checked, it is real" (#258), so filling it from an existence test would have
+    the app vouching for `concile` on the strength of a Dutch entry.
+    """
+    words = [w for w in {(w or "").strip().lower() for w in words} if w]
+    if not words:
+        return set()
+
+    found = set()
+    for start in range(0, len(words), WIKTIONARY_TITLES_PER_REQUEST):
+        chunk = words[start:start + WIKTIONARY_TITLES_PER_REQUEST]
+        params = {"action": "query", "titles": "|".join(chunk),
+                  "format": "json", "formatversion": "2"}
+        try:
+            resp = requests.get(WIKTIONARY_API, params=params,
+                                headers=WIKTIONARY_HEADERS, timeout=10)
+            resp.raise_for_status()
+            pages = (resp.json().get("query") or {}).get("pages") or []
+        except Exception as error:
+            # One failed chunk poisons the whole answer rather than returning a
+            # partial one: a caller told "these three exist" from half a list
+            # would offer the unchecked half as vetted.
+            applog.word_vet_failed(len(words), error)
+            return None
+        for page in pages:
+            if not page.get("missing"):
+                found.add((page.get("title") or "").strip().lower())
+    return found
+
+
 def confirm_word(word):
     """Ask a real lexicon whether `word` is English (#258).
 

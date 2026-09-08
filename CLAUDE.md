@@ -391,6 +391,28 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   failed request is a third answer, never a miss. Nothing in this path may say
   "confirmed invented". The ticket's own design chose Google's `dt=bd` lookup;
   #348/#353 retired that endpoint, which is why this asks Wiktionary instead.
+  **#389 asks the same question one step earlier**: before a round is shown,
+  `parsers.wiktionary_pages()` checks the invented words in **one batched
+  request** (`titles=a|b|c`, 50 at a time, ~3 KB, ~0.3 s) and the route drops
+  the hits and tops up from the generator. Measured over 60 rounds of the
+  production deck, **one round in three offered a real English word as
+  invented** — `defence`, `provision`, `edition`, `version` and `bailment`
+  among them — so #258's dispute path was the only thing standing between a
+  learner and being marked wrong for being right, and it only works if they
+  notice and press the button. The vet lives in `app._vetted_pseudowords()`,
+  **not** in `games.pseudowords()`, which has no network or database in it —
+  every filter that function holds is a property of the *deck*, and this one is
+  a property of English. Rejected words are fed back as `known`, which blocks
+  their stems too, so a run that offered `defence` does not come back with
+  `defencive`. An **unreachable lexicon leaves the round playable** with the
+  words unvetted, which is exactly what the game did before: a game that will
+  not start is worse than one that is occasionally wrong.
+  **The vet deliberately writes nothing to `confirmed_words`.** It tests
+  *existence*, not English, because over-rejecting a French word costs nothing
+  here — but that table is read back as "somebody already checked, it is real"
+  and shown to a learner, and of 26 candidates with a Wiktionary page only 17
+  were English. Filling it from an existence test would have the app vouching
+  for `concile` on the strength of a Dutch entry.
 - **`topics`** (#207) — topics are a table, and `flashcards.topic_id` points at
   it. `flashcards.topic` is still written alongside, holding the **canonical**
   spelling from the topics row: it is what `ai_agent`'s `cards_db` still reads
