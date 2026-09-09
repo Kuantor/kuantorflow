@@ -289,6 +289,32 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   `ANTHROPIC_API_KEY` the activity is not reachable at all — `_reachable_activity()`
   404s it and the tile does not render, the same way `MYKOLA_AVAILABLE=False`
   removes the chat widget.
+- **`topicgen.py`** (#406) — the second paid call this repo makes, and it
+  follows `textgen.py` rather than inventing a third pattern: a module model
+  constant, a client at call time, bounded `max_tokens`, and a caller that logs
+  its own failure through `applog`. **It proposes and nothing else** — no card,
+  no topic, no lookup, no database — because the expensive half of #406 comes
+  *after* the model call, when the learner approves the list. The prompt asks
+  for **headwords**, singular and uninflected, because #221 is what an
+  inflection costs: a word with no dictionary entry becomes a card carrying
+  translations and no explanation, invisible locally because Reverso covers the
+  gap. `_parse()` is where a model's output stops being trusted — anything that
+  is not a single alphabetic headword is dropped rather than sent to a
+  dictionary, and duplicates go with it.
+  The route does the rest. `_vet_proposal()` spends the **free** checks first
+  (#389's batched `parsers.wiktionary_pages()`, which is #391's idea arriving
+  early): a word no lexicon has is flagged **and unticked**, while a word the
+  deck already holds is flagged and **left ticked** — #101 is per word *and*
+  part of speech, so a deck holding `tip` the noun still gains the verb, and
+  unticking it would be the screen claiming something it does not know.
+  `claim_word_lookups()` then takes the whole batch **all or nothing** before
+  the fill opens; a partial claim is exactly the half-built topic the ceiling
+  decision exists to avoid, and a session write after the first byte of a
+  stream never reaches the browser. The fill is **SSE**, reusing
+  `/mykola/chat/stream`'s headers — `seed_topics.py` already says twenty words
+  is not a ten-second script — and every card is committed as it arrives, so a
+  dropped connection leaves what worked and #101 makes running it again the
+  whole of the recovery. Every card still goes through `_save_and_log()`.
 - **The games chassis** — `/games/<slug>` is the picker and `/games/<slug>/play`
   a round, dispatched through `GAME_ROUNDS` in `app.py`; a game is one entry
   there plus one in `ACTIVITIES`. **`/quiz` is a separate endpoint from

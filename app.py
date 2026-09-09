@@ -32,6 +32,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 import applog
 import games
+import topicgen
 import settings_store
 import textgen
 import parsers
@@ -40,6 +41,9 @@ from utils import (
     claim_anonymous_message,
     claim_text_generation,
     claim_word_lookup,
+    claim_word_lookups,
+    existing_words,
+    lookups_used_today,
     delete_flashcard,
     delete_user,
     duplicate_topic,
@@ -4210,6 +4214,288 @@ def _answer_index(key):
 # slug -> the view that renders one round, as `f(activity, topics)`. Every
 # registered activity has an entry; a game ticket replaces its stub with the
 # real round and touches nothing else.
+
+# --- building a topic from an idea (#406) ---------------------------------
+#
+# Four routes and a session key, in the shape #237 already uses: the expensive
+# half is post/redirect/get so a refresh cannot pay for it twice, and the part
+# that takes a minute streams rather than sitting on a request.
+#
+#   GET  /topics/generate          the form
+#   POST /topics/generate          propose a title and a word list -- nothing
+#                                  written, no lookup spent
+#   POST /topics/generate/start    claim the lookups, hold the approved list
+#   GET  /topics/generate/filling  the progress page, which opens...
+#   GET  /topics/generate/stream   ...the SSE fill that does the work
+#
+# The approved list lives in the **session**, as #237's held text does: a title
+# and twenty short words is a few hundred bytes of the signed cookie's ~4 KB,
+# and holding it is what lets the fill be a GET that EventSource can open.
+TOPIC_PLAN_KEY = "topic_plan"
+
+# A pause between words, `seed_topics.PAUSE`'s value and its reason: this fans
+# out at no dictionary and is in no hurry. Twenty words is a minute of somebody
+# else's bandwidth, which is why the page streams rather than waiting.
+TOPIC_FILL_PAUSE = 1.0
+
+
+def _lookup_budget(wanted):
+    """What this fill would cost, in the learner's own daily terms.
+
+    Stated on the approve screen rather than discovered afterwards, which is
+    the whole of #406's decision about the ceiling: a mid-run refusal becomes a
+    number somebody read before pressing the button.
+    """
+    user_id = session.get("user", {}).get("id")
+    limit = LOOKUP_USER_DAILY if user_id is not None else LOOKUP_ANON_DAILY
+    if not limit or limit <= 0:
+        return {"limit": 0, "used": 0, "left": None, "wanted": wanted,
+                "affordable": True}
+    try:
+        used = lookups_used_today(user_id)
+    except Exception:
+        # An unreachable counter cannot answer and the claim itself will
+        # decide. Better a screen with no number than one with a wrong number.
+        app.logger.exception("Could not read today's lookup count")
+        return {"limit": limit, "used": None, "left": None, "wanted": wanted,
+                "affordable": True}
+    left = max(limit - used, 0)
+    return {"limit": limit, "used": used, "left": left, "wanted": wanted,
+            "affordable": wanted <= left}
+
+
+def _vet_proposal(title, words, idea, count):
+    """The proposal with the free checks already done (#391's idea, #389's tool).
+
+    Two things are settled before the learner spends anything, because both are
+    free:
+
+    * **a word no lexicon has** is usually the model inflecting or inventing,
+      and #221 is what it costs to find out afterwards -- a word with no
+      dictionary entry becomes a card carrying translations and no explanation,
+      which is invisible locally because Reverso covers the gap.
+      `parsers.wiktionary_pages()` answers the whole list in one request (#389),
+      and an unreachable lexicon leaves them simply unflagged;
+    * **a word the deck already holds** is worth saying out loud, because a
+      lookup that produces nothing still costs a slot.
+
+    Only the first is **unticked**. A word already in the deck is a *note*, not
+    a veto: #101 keeps one card per word and part of speech, so a deck holding
+    `tip` the noun still gains `tip` the verb, and unticking it would be the
+    screen claiming something it does not know. Nothing is removed from the
+    list either way -- the one thing this must not do is quietly shorten a list
+    somebody asked for.
+    """
+    try:
+        have = existing_words()
+    except Exception:
+        app.logger.exception("Could not read the deck's words")
+        have = set()
+    found = parsers.wiktionary_pages(words)
+
+    entries = []
+    for word in words:
+        missing = found is not None and word.lower() not in found
+        entries.append({
+            "word": word,
+            "already": word.lower() in have,
+            "unknown": missing,
+            "use": not missing,
+        })
+    wanted = sum(1 for entry in entries if entry["use"])
+    return {
+        "title": title or idea[:topicgen.TITLE_MAX_CHARS],
+        "entries": entries,
+        "idea": idea,
+        "count": count,
+        "checked": found is not None,
+        "budget": _lookup_budget(wanted),
+    }
+
+
+@app.route("/topics/generate", methods=["GET", "POST"])
+def generate_topic():
+    """Propose a topic from an idea. Writes nothing and spends no lookup.
+
+    **The write guard runs before the model call.** That is #200's rule and the
+    reason `upload_notes` asks `add_refusal()` at the door before it reads the
+    file: an anonymous visitor cannot save a card (#125), so proposing twenty
+    of them would be paying for a refusal.
+    """
+    if not _generation_available():
+        abort(404)
+
+    refusal = add_refusal()
+    proposal, message = None, None
+
+    if request.method == "POST" and not refusal:
+        idea = topicgen.clean_idea(request.form.get("idea"))
+        count = topicgen.word_count(request.form.get("count"))
+        if not idea:
+            message = "Please describe the topic you have in mind."
+        else:
+            spend = _generation_refusal()
+            if spend:
+                message = spend["message"]
+            else:
+                title, words = topicgen.propose(idea, count)
+                if not words:
+                    message = ("That topic could not be proposed just now. "
+                               "Please try again in a moment.")
+                else:
+                    proposal = _vet_proposal(title, words, idea, count)
+
+    return render_template(
+        "generate_topic.html", proposal=proposal, message=message,
+        refusal=refusal, idea=request.form.get("idea", ""),
+        count=topicgen.word_count(request.form.get("count")),
+        min_words=topicgen.MIN_WORDS, max_words=topicgen.MAX_WORDS,
+        idea_max=topicgen.IDEA_MAX_CHARS,
+        title_max=topicgen.TITLE_MAX_CHARS)
+
+
+@app.route("/topics/generate/start", methods=["POST"])
+def start_topic_fill():
+    """Claim the lookups for an approved list and hold it for the fill.
+
+    **The claim is here, before the redirect, and it is all-or-nothing.** That
+    is #406's decision about the ceiling: the approve screen states the cost,
+    this takes it in one statement, and a refusal arrives while the learner is
+    still looking at the list rather than halfway through a half-built topic.
+
+    Post/redirect/get afterwards, #237's shape, so a refresh of the progress
+    page re-reads the held plan instead of claiming a second batch.
+    """
+    if not _generation_available():
+        abort(404)
+    refusal = add_refusal()
+    if refusal:
+        flash((refusal, None))
+        return redirect(url_for("generate_topic"))
+
+    title = " ".join((request.form.get("title") or "").split())
+    title = title[:topicgen.TITLE_MAX_CHARS]
+    # The words that were **ticked**, in the order the form sent them. A word
+    # the learner unticked is not looked up and not paid for.
+    words, seen = [], set()
+    for word in request.form.getlist("word"):
+        word = (word or "").strip().lower()
+        if word and word not in seen and topicgen.HEADWORD.match(word):
+            seen.add(word)
+            words.append(word)
+
+    if not title or not words:
+        flash(("Choose a title and at least one word first.", None))
+        return redirect(url_for("generate_topic"))
+
+    user_id = session.get("user", {}).get("id")
+    try:
+        allowed, scope, used = claim_word_lookups(
+            user_id, len(words), LOOKUP_USER_DAILY, LOOKUP_ANON_DAILY)
+    except Exception:
+        # #237's rule for an unreachable counter: it cannot enforce a ceiling,
+        # and the same outage has already made the deck unwritable.
+        app.logger.exception("Could not claim the lookups for a topic")
+        allowed, scope = True, None
+
+    if not allowed:
+        limit = LOOKUP_USER_DAILY if scope == "user" else LOOKUP_ANON_DAILY
+        applog.anonymous_limit_hit(scope, used, limit)
+        flash((f"That would need {len(words)} lookups and you have "
+               f"{max(limit - used, 0)} left today. Untick a few words, or "
+               "come back tomorrow.", None))
+        return redirect(url_for("generate_topic"))
+
+    session[TOPIC_PLAN_KEY] = {"title": title, "words": words}
+    return redirect(url_for("filling_topic"))
+
+
+@app.route("/topics/generate/filling")
+def filling_topic():
+    """The progress page. Opens the stream that does the work."""
+    if not _generation_available():
+        abort(404)
+    plan = session.get(TOPIC_PLAN_KEY)
+    if not plan:
+        return redirect(url_for("generate_topic"))
+    return render_template("filling_topic.html", plan=plan)
+
+
+@app.route("/topics/generate/stream")
+def stream_topic_fill():
+    """Look each approved word up and save it, reporting as it goes.
+
+    **Streamed rather than waited on.** `seed_topics.py`'s docstring says why
+    twenty words is not a request: it pauses between lookups and fans out at no
+    dictionary, so this is a minute of work. `/mykola/chat/stream` proved SSE
+    reaches the browser through PythonAnywhere's proxy unbuffered, and this
+    reuses its headers for the same reason.
+
+    **The lookups were already claimed** by `start_topic_fill()`, before this
+    response opened -- a session write after the first byte never reaches the
+    browser, which is the trap that shape avoids.
+
+    **Saved as it goes, so it is resumable.** Each card is committed on arrival,
+    so a dropped connection leaves the words that worked, and #101's duplicate
+    rule makes "ask for it again" the whole of the recovery. A failed lookup is
+    a skipped word rather than a dead run: `lookup_word()` raises when nothing
+    comes back, and Reverso and Merriam-Webster are blocked from PythonAnywhere.
+    """
+    if not _generation_available():
+        abort(404)
+    plan = session.get(TOPIC_PLAN_KEY) or {}
+    words = list(plan.get("words") or [])
+    title = plan.get("title") or ""
+    prefs = current_settings()
+    user = _current_email()
+    # Read before the response opens: `session` is not writable from inside a
+    # generator, and `add_refusal()` reads the request context.
+    refusal = add_refusal()
+
+    def events():
+        if refusal or not words or not title:
+            yield _sse({"type": "error", "message": refusal or
+                        "There is nothing to build."})
+            return
+        saved = skipped = failed = 0
+        for index, word in enumerate(words, start=1):
+            try:
+                entries = lookup_word(
+                    word, prefs.get("translator"),
+                    prefs.get("explanatory_dictionary"))
+            except Exception as error:
+                failed += 1
+                applog.lookup_failed(word, error)
+                yield _sse({"type": "word", "word": word, "index": index,
+                            "total": len(words), "outcome": "failed"})
+                time.sleep(TOPIC_FILL_PAUSE)
+                continue
+
+            added = 0
+            for entry in entries:
+                entry["topic"] = title
+                if _save_and_log(entry, source="topic generator"):
+                    added += 1
+            saved += added
+            if not added:
+                skipped += 1
+            yield _sse({"type": "word", "word": word, "index": index,
+                        "total": len(words), "cards": added,
+                        "outcome": "saved" if added else "skipped"})
+            time.sleep(TOPIC_FILL_PAUSE)
+
+        applog.topic_generated(title, len(words), saved, skipped=skipped,
+                               failed=failed, user=user)
+        yield _sse({"type": "done", "title": title, "saved": saved,
+                    "skipped": skipped, "failed": failed,
+                    "url": url_for("flashcards", topic=title)})
+
+    return Response(
+        stream_with_context(events()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
 GAME_ROUNDS = {activity.slug: _round_stub
                for activity in games.ACTIVITIES.values()
                if activity.kind in games.GAMES_URL_KINDS}

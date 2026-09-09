@@ -52,6 +52,16 @@ Saying yes really adds it: KuantorFlow keeps the card you had and saves the new 
 
 If your vocabulary already lives in a file, hand it over: `.txt`, `.docx` and `.mht` are all read, including OneNote pages pasted from Reverso Context. The file is parsed into proposed cards and shown in the same review popup, side by side with its own text, so you can see where each card came from before you keep it.
 
+### Building a whole topic from an idea
+
+Type what you want a topic to be about — *"renting a flat in London, especially the paperwork"* — say how many words you want, and the app proposes a topic name and a list of words at the same B2–C1 level as the rest of the deck.
+
+Nothing is saved or looked up yet. You get the list first, and you can rename the topic, untick words you do not want and see how many dictionary lookups the rest would cost against your daily allowance. Words that no dictionary seems to have are flagged and unticked for you, and a word your deck already holds is pointed out so you can decide.
+
+When you press **Build the topic**, the words are looked up one at a time and the cards appear as they arrive. It takes about a second per word, so you can watch or come back later. If a word turns out to have no entry anywhere it is skipped and named at the end rather than stopping the rest, and if your connection drops the cards already saved stay saved — start again and only the words still missing are looked up.
+
+You need to be signed in, since only an account can save cards.
+
 ## Your deck
 
 ### Topics and sections

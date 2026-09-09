@@ -146,6 +146,48 @@ def word_vet_failed(count, error):
     _write(CARDS, "WORD-VET-FAILED", words=count, error=str(error)[:200])
 
 
+def topic_proposed(idea, title, words, wanted=0, model=None, user=None):
+    """A model proposed a topic and a word list (#406).
+
+    The **idea** is logged because it is the input nobody else records: the
+    words are about to become cards and the title becomes a topic row, but the
+    sentence that produced them exists only here, and it is the first thing to
+    look at when a proposal comes back odd.
+
+    `words` against `wanted` is the number to watch. A model that habitually
+    returns fifteen when asked for twenty is a prompt problem, and the approve
+    screen hides it -- the learner just sees a slightly short list.
+    """
+    _write(CARDS, "TOPIC-PROPOSED", idea=idea, topic=title, words=words,
+           wanted=wanted, model=model, user=_user(user))
+
+
+def topic_proposal_failed(idea, error, user=None):
+    """The model call behind a proposal failed (#406).
+
+    `textgen`'s rule: the learner is told the topic could not be proposed just
+    now, and the cause goes here rather than in front of them. A silent failure
+    reads as a bug (#30), and this one is otherwise invisible -- the page simply
+    comes back with an empty list.
+    """
+    _write(CARDS, "TOPIC-PROPOSAL-FAILED", idea=idea,
+           error=str(error)[:200], user=_user(user))
+
+
+def topic_generated(title, asked, saved, skipped=0, failed=0, user=None):
+    """A proposed topic was filled in with real cards (#406).
+
+    **One line for the run, beside the per-card CREATE lines rather than
+    instead of them.** Every card still logs its own creation through
+    `_save_and_log()` -- that is the audit trail and this does not replace it.
+    What this adds is the shape of the run: how many were asked for, how many
+    became cards, how many were already in the deck (#101) and how many the
+    dictionaries could not answer at all.
+    """
+    _write(CARDS, "TOPIC-GENERATED", topic=title, asked=asked, saved=saved,
+           skipped=skipped, failed=failed, user=_user(user))
+
+
 def topic_visibility_set(name, public, topic_id=None, user=None,
                          outcome="changed"):
     """A topic was made public or private (#382).
