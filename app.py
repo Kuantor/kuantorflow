@@ -4239,16 +4239,6 @@ TOPIC_PLAN_KEY = "topic_plan"
 TOPIC_FILL_PAUSE = 1.0
 
 
-def _topic_generation_reachable():
-    """Whether this deployment can propose a topic at all.
-
-    `_reachable_activity()`'s rule (#237): with no `ANTHROPIC_API_KEY` the
-    feature is not offered rather than offered and broken, the same way
-    `MYKOLA_AVAILABLE=False` removes the chat widget.
-    """
-    return bool(os.environ.get("ANTHROPIC_API_KEY"))
-
-
 def _lookup_budget(wanted):
     """What this fill would cost, in the learner's own daily terms.
 
@@ -4332,7 +4322,7 @@ def generate_topic():
     file: an anonymous visitor cannot save a card (#125), so proposing twenty
     of them would be paying for a refusal.
     """
-    if not _topic_generation_reachable():
+    if not _generation_available():
         abort(404)
 
     refusal = add_refusal()
@@ -4376,7 +4366,7 @@ def start_topic_fill():
     Post/redirect/get afterwards, #237's shape, so a refresh of the progress
     page re-reads the held plan instead of claiming a second batch.
     """
-    if not _topic_generation_reachable():
+    if not _generation_available():
         abort(404)
     refusal = add_refusal()
     if refusal:
@@ -4423,7 +4413,7 @@ def start_topic_fill():
 @app.route("/topics/generate/filling")
 def filling_topic():
     """The progress page. Opens the stream that does the work."""
-    if not _topic_generation_reachable():
+    if not _generation_available():
         abort(404)
     plan = session.get(TOPIC_PLAN_KEY)
     if not plan:
@@ -4451,7 +4441,7 @@ def stream_topic_fill():
     a skipped word rather than a dead run: `lookup_word()` raises when nothing
     comes back, and Reverso and Merriam-Webster are blocked from PythonAnywhere.
     """
-    if not _topic_generation_reachable():
+    if not _generation_available():
         abort(404)
     plan = session.get(TOPIC_PLAN_KEY) or {}
     words = list(plan.get("words") or [])

@@ -253,6 +253,21 @@
         </form>
     </div>
 
+    {# #406, and it sits here on purpose: the three ways to add cards are one
+       word (above), a whole topic (this), and a file (below), in order of how
+       much they add. Gated on `generation_available` for #237's reason and in
+       its shape — hidden entirely without an API key rather than offered and
+       broken, the same way MYKOLA_AVAILABLE=False removes the chat widget. #}
+    {% if generation_available %}
+    <div class="panel">
+        <h2>Build a topic from an idea</h2>
+        <p class="hint">Describe a subject and the app suggests a topic name and
+           a list of words at your level. You check the list before anything is
+           looked up or saved.</p>
+        <a class="button-link" href="{{ url_for('generate_topic') }}">Build a topic</a>
+    </div>
+    {% endif %}
+
     <div class="panel">
         <h2>Upload notes (.txt, .docx, .mht)</h2>
         <form method="POST" enctype="multipart/form-data">
