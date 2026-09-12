@@ -103,6 +103,27 @@ def _card_fields(entry):
     }
 
 
+def agent_unavailable(error):
+    """The `ai_agent` import failed, so Mykola is off (#412).
+
+    **Written because the alternative is silence.** The import is wrapped in a
+    bare `except Exception` -- deliberately, since the two repos deploy in
+    either order and a missing agent is a supported state, not a crash -- and
+    that same catch used to swallow the reason.
+
+    It matters more than the widget: until #412 the agent's `.env` was also how
+    `ANTHROPIC_API_KEY` reached this process, so a failed import quietly took
+    the word lookup's only configured translator, #237's generated text and
+    #406's topic builder with it. Each of those degrades gracefully on its own
+    and says nothing, which is three designed silences firing at once from one
+    invisible cause.
+
+    In `mykola.log` rather than `cards.log`: this is a fact about the agent, and
+    nothing was written to the deck.
+    """
+    _write(MYKOLA, "AGENT-UNAVAILABLE", error=str(error)[:300])
+
+
 def word_confirmed(word, source, user=None, first=True):
     """A disputed word was confirmed real by a lexicon (#258).
 
