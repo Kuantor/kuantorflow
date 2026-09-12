@@ -1437,6 +1437,19 @@ def _save_preferred_name_from_chat(name):
 # A list, because this is the seam through which anything else the app knows
 # about itself would arrive. Paths that do not exist are skipped by the agent
 # in silence.
+# Where a card goes when nobody chose a topic (#414).
+#
+# **One declaration**, for the reason `TRANSLATORS` and `ACTIVITIES` are each
+# declared once: this used to be the string "general" typed out at every use,
+# and #407 renamed that topic in both databases without the code noticing. Every
+# lookup saved with the box left empty then recreated the topic #407 had just
+# removed -- the consolidation quietly undoing itself, two cards at a time.
+#
+# It is also injected into Mykola (see `get_mykola()`), so a card saved from a
+# conversation lands in the same place as one saved from the page.
+DEFAULT_TOPIC = "General knowledge"
+
+
 MYKOLA_KNOWLEDGE = [Path(__file__).parent / "docs" / "user-guide.md"]
 
 
@@ -1465,6 +1478,11 @@ def get_mykola():
             kwargs["card_reader"] = _cards_for_chat
         if "knowledge_docs" in accepted:                  # #310
             kwargs["knowledge_docs"] = MYKOLA_KNOWLEDGE
+        if "default_topic" in accepted:                   # #414
+            # Where a card with no topic mentioned in conversation goes. The
+            # agent keeps its own "general" for standalone runs against its own
+            # database; this is the deck's answer, and the deck is ours.
+            kwargs["default_topic"] = DEFAULT_TOPIC
         _mykola_agent = MykolaAgent(**kwargs)
     return _mykola_agent
 
@@ -2187,7 +2205,8 @@ def index():
     sign_in_refusal = None  # a lookup refused where signing in helps (#388)
     if request.method == "POST":
         action = request.form.get("action")
-        topic = (request.form.get("topic") or "general").strip() or "general"
+        topic = ((request.form.get("topic") or DEFAULT_TOPIC).strip()
+                 or DEFAULT_TOPIC)
         try:
             if action == "parse_word":
                 word = (request.form.get("word") or "").strip()
@@ -2379,7 +2398,7 @@ def add_card():
     entry = {
         "word": word,
         "pos": cleaned("pos"),
-        "topic": cleaned("topic") or "general",
+        "topic": cleaned("topic") or DEFAULT_TOPIC,
         "explanation_en": cleaned("explanation_en"),
         "explanation_source": _text_source("explanation_source"),
         "examples_en": _example_list("examples_en"),

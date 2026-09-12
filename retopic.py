@@ -140,6 +140,17 @@ PLANS = {
         Merge("medicine", "Health and medicine"),
         Merge("news", "Media and the news"),
     ],
+    # The topic #407 removed and #414 kept recreating. Between the rename and
+    # the fix, every lookup saved with the topic box left empty went to a fresh
+    # `general` -- because the default was a string typed into the code rather
+    # than read from anywhere, so the rename in the database reached nothing.
+    #
+    # The same plan serves both databases: both were recreating it, and a
+    # database where it never reappeared answers `= general already merged`.
+    # Run it **after** deploying #414, or it will start coming back again.
+    "regeneral": [
+        Merge("general", "General knowledge"),
+    ],
 }
 
 
