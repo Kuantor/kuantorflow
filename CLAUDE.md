@@ -562,6 +562,17 @@ Keep the two **in step**: the agent also runs standalone and reads its own
 means rotating **both files** or the app and Mykola quietly end up on different
 keys.
 
+That last point is sharper than it looks, because **Mykola inside the web app
+reads the same environment variable the app does** — `agent.py` builds
+`anthropic.Anthropic()` with no explicit key, exactly as `textgen.py` and
+`topicgen.py` do, and one process has one `os.environ`. So once the key is set
+here it is the one Mykola uses *in the app*, since it is already set before his
+`load_dotenv` runs. Standalone Mykola — `python agent.py`, `flask_app.py` — never
+imports this repo and keeps reading `ai_agent/.env`. Identical keys make that
+distinction invisible, which is the point of copying rather than inventing a
+second one; **different** keys would have the same companion billing two
+accounts depending on how he was started, with nothing anywhere saying so.
+
 **`en.wiktionary.org` is reachable from there** — verified on the deployment
 on 30 August, the day #258 shipped:
 
