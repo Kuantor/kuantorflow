@@ -544,8 +544,23 @@ requirements into the app venv, run **`python apply_schema.py`** (idempotent —
 it prints what it changed and what was already in place; `--dry-run` to look
 first), reload the web app. Note: Reverso and
 Merriam-Webster are blocked from PythonAnywhere's IPs, so those paths fall
-back (Google / Reverso alternatives); `ANTHROPIC_API_KEY` lives in
-`ai_agent/.env`.
+back (Google / Reverso alternatives).
+
+**`ANTHROPIC_API_KEY` belongs in `kuantorflow/.env`** (#412). It used to be read
+from `ai_agent/.env`, which worked only because importing the agent loads that
+file — so the word lookup, #237's generated text and #406's topic builder all
+depended on a repo none of them uses, and a failed agent import took all three
+down without a word. `utils.py` loads this repo's `.env` at `app.py:40`, long
+before the agent import at 215, and `load_dotenv` does not override what is
+already set, so **a value here wins** and the agent's copy is a fallback rather
+than the route. Measured both ways: with both files set, this one is used; with
+only the agent's set, that one still is — so adding it here breaks nothing and
+removing it restores the old behaviour exactly.
+
+Keep the two **in step**: the agent also runs standalone and reads its own
+`.env`, so the key is deliberately duplicated rather than moved, and rotating it
+means rotating **both files** or the app and Mykola quietly end up on different
+keys.
 
 **`en.wiktionary.org` is reachable from there** — verified on the deployment
 on 30 August, the day #258 shipped:
@@ -734,5 +749,5 @@ pull-and-reload releases: the dry run should list exactly one pending step,
 `text_generation_usage`, and `=` against everything else. It creates an empty
 counter table and touches no existing row, so there is nothing to check
 afterwards beyond the script's own output. #237 also needs `ANTHROPIC_API_KEY`
-to be readable by the web app — it arrives through `ai_agent/.env`, the same
-way Mykola's does, and without it the activity simply does not appear.
+to be readable by the web app — set it in `kuantorflow/.env` (#412), and without
+it the activity simply does not appear.

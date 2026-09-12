@@ -214,8 +214,15 @@ try:
     # base module. If the repo or its deps are missing, Mykola is simply disabled.
     from agent import MykolaAgent, api_error_response
     MYKOLA_AVAILABLE = True
-except Exception:  # pragma: no cover - depends on the deployment environment
+except Exception as _agent_import_error:  # pragma: no cover - deployment-dependent
     MYKOLA_AVAILABLE = False
+    # Say why, once, at import (#412). A missing agent is a supported state --
+    # the two repos deploy in either order -- so this is not an error and does
+    # not raise. But it used to be *silent*, and until #412 moved the key it
+    # also meant `ANTHROPIC_API_KEY` never arrived, taking the word lookup's
+    # translator and two activities with it. `applog` helpers never raise, so
+    # this cannot turn a supported state into a failed import.
+    applog.agent_unavailable(_agent_import_error)
 
 _mykola_agent = None
 
