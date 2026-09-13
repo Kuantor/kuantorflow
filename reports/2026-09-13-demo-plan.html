@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>KuantorFlow — Demo Plan</title>
+<style>
+  @page { size: A4; margin: 14mm 15mm 12mm; }
+
+  :root {
+    --ink: #14202e;
+    --muted: #5b6b7d;
+    --line: #dde4ec;
+    --accent: #1b5e9c;
+    --done: #1f7a4d;
+    --wait: #8a6d1f;
+    --soft: #f4f7fa;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.4pt;
+    line-height: 1.45;
+    color: var(--ink);
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h1 { font-size: 20pt; margin: 0 0 2px; letter-spacing: -0.4px; }
+  h2 {
+    font-size: 12pt; margin: 20px 0 8px; padding-bottom: 4px;
+    border-bottom: 2px solid var(--accent); color: var(--accent);
+    letter-spacing: 0.2px;
+  }
+  p { margin: 0 0 7px; }
+
+  header { border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+  .sub { color: var(--muted); font-size: 9.6pt; }
+
+  .banner {
+    margin: 12px 0 0; padding: 9px 12px; border-radius: 6px;
+    background: #eaf5ee; border-left: 4px solid var(--done);
+    font-size: 10pt;
+  }
+  .banner b { color: var(--done); }
+
+  /* --- the week, as steps ------------------------------------------- */
+  .step {
+    display: grid; grid-template-columns: 30px 1fr 92px; gap: 10px;
+    align-items: start; padding: 9px 0; border-bottom: 1px solid var(--line);
+    break-inside: avoid;
+  }
+  .step:last-child { border-bottom: 0; }
+  .n {
+    font-size: 14pt; font-weight: 700; color: var(--accent);
+    text-align: center; line-height: 1.1;
+  }
+  .step h3 { margin: 0 0 3px; font-size: 10.8pt; }
+  .step p { margin: 0; color: var(--muted); font-size: 9.6pt; }
+
+  .tag {
+    justify-self: end; font-size: 8.2pt; font-weight: 700; letter-spacing: .5px;
+    padding: 3px 8px; border-radius: 20px; white-space: nowrap;
+    text-transform: uppercase;
+  }
+  .t-done { background: #e3f3ea; color: var(--done); }
+  .t-next { background: #e7effa; color: var(--accent); }
+  .t-if   { background: #faf3e0; color: var(--wait); }
+
+  /* --- checklist ---------------------------------------------------- */
+  .check { margin: 0; padding: 0; list-style: none; }
+  .check li {
+    position: relative; padding: 5px 0 5px 26px;
+    border-bottom: 1px dotted var(--line); break-inside: avoid;
+  }
+  .check li:last-child { border-bottom: 0; }
+  .check li::before {
+    content: ""; position: absolute; left: 2px; top: 7px;
+    width: 12px; height: 12px; border: 1.5px solid var(--accent);
+    border-radius: 3px;
+  }
+  .check .why { color: var(--muted); font-size: 9.4pt; }
+  .star { color: #c9950c; font-weight: 700; }
+
+  /* --- show order --------------------------------------------------- */
+  ol.show { margin: 0; padding-left: 20px; }
+  ol.show li { padding: 3px 0; break-inside: avoid; }
+  ol.show .why { color: var(--muted); font-size: 9.4pt; }
+
+  /* --- not now ------------------------------------------------------ */
+  table { width: 100%; border-collapse: collapse; font-size: 9.6pt; }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.k { width: 34%; font-weight: 600; white-space: nowrap; }
+  td.v { color: var(--muted); }
+
+  .note {
+    margin-top: 14px; padding: 9px 12px; background: var(--soft);
+    border-radius: 6px; font-size: 9.4pt; color: var(--muted);
+    break-inside: avoid;
+  }
+  .note b { color: var(--ink); }
+
+  .newpage { break-before: page; page-break-before: always; margin-top: 0; }
+
+  footer {
+    margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--line);
+    font-size: 8.6pt; color: var(--muted); display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Showing KuantorFlow to an English teacher</h1>
+  <p class="sub">Plan for the week &middot; 13 September 2026 &middot; target: before the end of next week</p>
+  <div class="banner">
+    <b>No correctness blockers left.</b> Both demo blockers closed &mdash; #231 (Oxford missing <i>can</i> and <i>do</i>) on 28 August, #258 (<i>Real or fake</i> marking a right answer wrong) on 30 August. So this week is <b>verification and polish, not building</b>.
+  </div>
+</header>
+
+<h2>The week, in order</h2>
+
+<div class="step">
+  <div class="n">1</div>
+  <div>
+    <h3>Worksheet print layout &mdash; #340</h3>
+    <p>Printed the worst case: 40 blanks over 865 words. Four pages, every blank intact, <b>no blank split across a page</b>, answer key alone on the last sheet. No code needed.</p>
+  </div>
+  <span class="tag t-done">Done</span>
+</div>
+
+<div class="step">
+  <div class="n">2</div>
+  <div>
+    <h3>Say it out loud when the credits run out &mdash; #99 + #19</h3>
+    <p>One PR, two tickets, one deploy. Turn the silent credit failure into a sentence with your top-up email, and put a first-time-user tip above <i>Look up &amp; save</i>. Your teachers <i>are</i> first-time users.</p>
+  </div>
+  <span class="tag t-next">Next</span>
+</div>
+
+<div class="step">
+  <div class="n">3</div>
+  <div>
+    <h3>Popup polish &mdash; #75, then #208 #84 #120 #227</h3>
+    <p>#75 is one number, affects more than the ticket claims, and lets two workarounds be deleted. Individually trivial; together they are the difference between &ldquo;a project&rdquo; and &ldquo;a product&rdquo;.</p>
+  </div>
+  <span class="tag t-if">If time</span>
+</div>
+
+<div class="step">
+  <div class="n">4</div>
+  <div>
+    <h3>The <i>General</i> topic &mdash; #147</h3>
+    <p>It holds the oldest, messiest cards, misspelled headwords among them. Look at production first: #407 and #414 may have changed it already, and <b>hiding it for the demo may beat fixing it</b>.</p>
+  </div>
+  <span class="tag t-if">If time</span>
+</div>
+
+<h2>The morning of</h2>
+
+<ul class="check">
+  <li><span class="star">&#9733;</span> <b>Check the Anthropic credit balance.</b>
+      <span class="why">&mdash; the single most likely way the demo goes wrong. Mykola just stops answering, with no error.</span></li>
+  <li><span class="star">&#9733;</span> <b>Hard-refresh after the last deploy</b> (Ctrl+F5).
+      <span class="why">&mdash; a cached stylesheet renders a <i>plausible wrong page</i>, not a broken one. You wrote the CSS; you would not notice.</span></li>
+  <li><span class="star">&#9733;</span> <b>Look up one word, confirm translations come back.</b>
+      <span class="why">&mdash; the failure that looks like nothing at all.</span></li>
+  <li><b>Play each game once, on the deck you will show.</b>
+      <span class="why">&mdash; cheaper than any test, and how the last three real bugs were found.</span></li>
+  <li><b>Decide which of the four things you are leading with.</b>
+      <span class="why">&mdash; the deck, the lookup, the games and Mykola are four different pitches.</span></li>
+</ul>
+
+<h2 class="newpage">What to show, in this order</h2>
+
+<ol class="show">
+  <li><b>Generate a text, then the worksheet.</b>
+      <span class="why">Their vocabulary becomes a reading passage, then a printable gap-fill. Lesson <i>preparation</i> &mdash; the one feature a teacher would use even if their students never touched the site.</span></li>
+  <li><b>A round URL is already a homework assignment.</b>
+      <span class="why">Paste <span style="font-family:Consolas,monospace">/games/spell_it/play?topic=Health</span> into a class chat and it <i>is</i> the homework. No code &mdash; it just has never been said out loud.</span></li>
+  <li><b>One deck, ten activities.</b>
+      <span class="why">One vocabulary set drilled ten ways, without re-entering the words per exercise.</span></li>
+  <li><b>Notes upload.</b>
+      <span class="why">Their existing word list becomes a deck without typing it in.</span></li>
+  <li><b>Mykola &mdash; last.</b>
+      <span class="why">The thing that impresses and the thing most likely to wobble. Lead with the lesson material.</span></li>
+</ol>
+
+<div class="note">
+  <b>Say the gap before you are asked.</b> A teacher will want to know how their students are doing within five minutes. Nothing records that yet &mdash; #338 is the foundation and is not built, and there is no teacher&ndash;student relationship at all. Saying so early beats being caught by it.
+</div>
+
+<h2>Deliberately not before the demo</h2>
+
+<table>
+  <tr><td class="k">#418 &mdash; split app.py</td>
+      <td class="v">A refactor with nothing a teacher can see, and the largest effort on the board. Just as valid in October.</td></tr>
+  <tr><td class="k">#338 &mdash; recall memory</td>
+      <td class="v">Waiting on two decisions, and invisible until its second phase.</td></tr>
+  <tr><td class="k">#199 &mdash; open the site</td>
+      <td class="v">The launch blocker, not a demo blocker. The gate stays on; you hand over the keyword.</td></tr>
+  <tr><td class="k">#92 / #94 &mdash; spaced repetition</td>
+      <td class="v">The feature a teacher is most likely to ask for <i>by name</i>. Worth promising, not worth starting this week.</td></tr>
+</table>
+
+<footer>
+  <span>KuantorFlow &middot; demo plan</span>
+  <span>Full version: reports/2026-09-13-demo-plan.md &middot; tracked in #420</span>
+</footer>
+
+</body>
+</html>
