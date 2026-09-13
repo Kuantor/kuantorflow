@@ -32,6 +32,7 @@ happened is reported: the words that appeared, and the ones that did not.
 import re
 
 import applog
+import billing
 import games
 
 # Short creative prose over twenty supplied words is not a task that needs a
@@ -397,7 +398,11 @@ def generate(words, instruction, length, ask=None):
         "words": list(words),
         # The exception is logged in full; the page gets a sentence. What went
         # wrong at Anthropic is not the learner's business and is often their
-        # request id.
-        "error": "The text could not be written just now. Please try again."
+        # request id -- with one exception (#99). An exhausted credit balance
+        # makes "please try again" the wrong instruction, because it will not
+        # work until somebody pays, so `billing` answers that case and leaves
+        # every other failure with the sentence it always had.
+        "error": billing.failure_notice(
+            error, "The text could not be written just now. Please try again.")
                  if error else None,
     }
