@@ -92,6 +92,32 @@ body {
     }
 }
 
+/* A dialog moves out of the panel's way too (#424), and for the reason above
+   rather than a new one: #296 keeps the chat *above* dialogs on purpose, so a
+   learner can ask about the card in front of them -- which stops working the
+   moment the dialog is wide enough to slide underneath it. #227 made the edit
+   popup 700px and the Cancel button went behind the panel; the review popup's
+   two-pane variant has been 940px for longer.
+
+   Padding rather than a margin, because the overlay is a centring flex box
+   across the whole viewport: padding narrows the box the dialog is centred in,
+   so it stays centred in what is left. `* { box-sizing: border-box }` at the
+   top of this file is what keeps `inset: 0` honest while it has padding.
+
+   Same breakpoint as the page shift, deliberately. Below it the space beside
+   the panel is narrower than the dialog, and centring in it would push the
+   dialog's *left* edge off screen -- losing the Word field to save the Cancel
+   button.
+
+   About is excluded: #75 put it above the widget because there is nothing in
+   it to ask about, and its overlay covers the chat completely, so shifting it
+   would be an off-centre dialog over a widget nobody can see. */
+@media (min-width: 1240px) {
+    body.mykola-open .modal-overlay:not(#about-modal) {
+        padding-right: var(--mykola-space);
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .page { transition: none; }
 }
