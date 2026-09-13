@@ -324,7 +324,19 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   plain GET form whose checkboxes are named `topic`, so the round's URL is
   shareable and needs no JavaScript to build. **A round grades the questions it
   asked**, read back from the submitted field names, because the draw is random
-  and re-sampling on POST would mark answers against words nobody saw. Selection
+  and re-sampling on POST would mark answers against words nobody saw. Since
+  #416 that happens in **one place** — `app._graded_answers()`, which wraps
+  `games.asked()` and takes the game's own comparison as a callable, because
+  "correct" really does differ between a typed headword, a stored translation's
+  comma-separated variants, a shuffled sentence and a generated option. It is in
+  `app.py` rather than `games.py` for the reason #389 put the Wiktionary vet in
+  `app._vetted_pseudowords()`: that module holds pure round logic with no
+  request and no database in it. The six rounds that call it are exactly the
+  six that grade an answer against a card row, so #338's per-learner recall is
+  one write there rather than one per round — and the two that must never
+  record anything, *Odd one out* and *Real or fake*, are the two that **cannot**
+  call it, since neither posts a card id. A new graded game inherits both by
+  grading through it. Selection
   and round length live in the Flask session — a signed cookie with a ~4 KB
   ceiling Werkzeug enforces by silently dropping it, so only currently-visible
   topic names go in. #237's generated text goes in too, and the thing that
