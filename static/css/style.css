@@ -118,6 +118,34 @@ body {
     }
 }
 
+/* Narrower than that, the widget gets out of the way instead (#425). There is
+   no arrangement in which both fit: the panel is `min(340px, 100vw - 2rem)`
+   and the minimized bar spans the bottom, so on a phone it sat over the
+   dialog's buttons -- *Add* on the review popup, *Save changes* and *Cancel*
+   on the edit one.
+
+   This narrows #296 rather than reversing it. Keeping the chat usable beside a
+   dialog stays true wherever both can be on screen, which is what the rule
+   above now guarantees; where they cannot, the dialog is what the learner is
+   looking at and the buttons are what they are reaching for. The welcome
+   overlay and About (#75) already cover the widget completely for the same
+   reason.
+
+   **`:not([hidden])` rather than a class the scripts toggle**, because the
+   two kinds of dialog in this app are opened differently: most are in the page
+   with `hidden` on them, while `#dup-warning-modal` and `#proposal-modal` are
+   rendered by Jinja only when they are meant to be seen, so their presence in
+   the DOM *is* the open state. This reads both.
+
+   In CSS rather than in the five places that open a dialog, so that closing
+   one brings the widget back with nothing to remember to call. */
+@media (max-width: 1239.98px) {
+    body:has(.modal-overlay:not([hidden])) #mykola-panel,
+    body:has(.modal-overlay:not([hidden])) #mykola-launcher {
+        display: none;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .page { transition: none; }
 }
