@@ -100,6 +100,45 @@ Implementation details:
 
 ---
 
+## 💡 The tip above the lookup box (#19)
+
+A one-line tip sits above the **Word** field on the front page: *Enter a word
+here and press "Look up & save"*. The front page offers a lookup, an upload and
+a deck all at once, and nothing on it said which one to start with.
+
+- It appears on **every** page load, and disappears the moment the visitor
+  touches the box — focus, typing, or the × button.
+- **Nothing is remembered between visits, deliberately.** A "seen once" flag
+  would mostly be set by whoever was testing the site, who would then never see
+  the tip again and could not tell whether it still worked; a first-time
+  visitor is exactly who has no flag and needs the sentence.
+- Markup: `templates/index.html`, just above the lookup form.
+  Behaviour: `static/js/lookup_tip.js`. Styling: the `.lookup-tip` rules in
+  `static/css/style.css`, in the site blue rather than the amber used by this
+  page's warnings — a tip wearing the error colour reads as an error on a
+  page nobody has touched yet.
+
+---
+
+## 💳 When the Claude credit runs out (#99)
+
+Every paid call here catches its own failure, logs it in full, and shows one
+calm sentence. **An exhausted credit balance is the one failure where "please
+try again" is the wrong instruction**, because it will not work until somebody
+pays — and nothing else on the site looks broken while it is happening.
+
+`billing.py` holds that one question and the one sentence answering it, naming
+`SUPPORT_EMAIL` (settable in the environment) as the address to write to.
+`textgen.generate()` asks it; Mykola's chat already had its own version of the
+same check in `ai_agent`'s `api_error_response()`.
+
+There is **no check on entry**, which is what the ticket first asked for: a
+balance cannot be read without spending a call, so confirming it per page load
+would cost money on every visit to learn something that only matters when a
+paid feature is used — and would still be stale a minute later.
+
+---
+
 ## ⚙️ Settings
 
 User preferences live in JSON files under `settings/`, one per identity

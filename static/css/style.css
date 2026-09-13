@@ -2486,3 +2486,32 @@ button:disabled:hover { background: #9db4c7; }
     color: var(--ink);
 }
 .dup-confirm-list li { margin: 0.15rem 0; }
+
+/* The first-time tip above the lookup box (#19). Styled as guidance rather
+   than as a warning: the amber banners on this page mean something went
+   wrong, and a tip wearing that colour would read as an error on a page
+   nobody has touched yet. */
+.lookup-tip {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0 0 0.75rem;
+    padding: 0.55rem 0.75rem;
+    border-left: 3px solid var(--blue);
+    border-radius: 6px;
+    background: rgba(46, 107, 160, 0.08);
+    font-size: 0.94rem;
+}
+.lookup-tip span { flex: 1; }
+.lookup-tip__close {
+    flex: none;
+    padding: 0 0.35rem;
+    border: 0;
+    background: none;
+    color: inherit;
+    opacity: 0.55;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.lookup-tip__close:hover { opacity: 1; }

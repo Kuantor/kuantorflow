@@ -94,6 +94,7 @@
            Deferred, the panel would open in full and collapse a moment later —
            a flicker on every visit, on the tallest thing on the page. #}
         <script src="{{ url_for('static', filename='js/browse_folds.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/lookup_tip.js') }}" defer></script>
         {# The typed topic box was here until #290. Every topic worth opening is
            a tile — with a picture (#223), a count, and a section that folds
            (#288) — so typing a name you can already see was the slower way to
@@ -225,6 +226,14 @@
            heading then names the dictionary alone. #}
         {%- set named = lookup_providers | select | map(attribute='name') | list -%}
         <h2>Look up a word{% if named %} ({{ named | join(' + ') }}){% endif %}</h2>
+        {# The tip a first-time visitor needs (#19). Above the form rather than
+           inside it, so it can be removed from the page without disturbing the
+           row the two fields sit in. #}
+        <p class="lookup-tip" id="lookup-tip">
+            <span>Enter a word here and press &ldquo;Look up &amp; save&rdquo;</span>
+            <button type="button" class="lookup-tip__close"
+                    aria-label="Hide this tip">&times;</button>
+        </p>
         <form method="POST">
             <input type="hidden" name="action" value="parse_word">
             <div class="form-row">
