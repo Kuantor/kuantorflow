@@ -2502,6 +2502,11 @@ button:disabled:hover { background: #9db4c7; }
     background: rgba(46, 107, 160, 0.08);
     font-size: 0.94rem;
 }
+/* A class selector beats the browser's own `[hidden] { display: none }`, so
+   `display: flex` above would keep the tip on screen after the script hides
+   it -- visible, and no longer dismissible. Caught in a real browser; the
+   markup tests cannot see it. */
+.lookup-tip[hidden] { display: none; }
 .lookup-tip span { flex: 1; }
 .lookup-tip__close {
     flex: none;
