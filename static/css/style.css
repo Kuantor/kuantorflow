@@ -729,6 +729,26 @@ a.button-link { display: inline-block; text-decoration: none;
     font-size: 0.86rem;
 }
 
+/* The stacking order, written down once because it is decided in five places
+   and each of them only knows its own number (#75):
+
+       100  .modal-overlay          every dialog, by default
+       150  the lookup popups       they open on top of another dialog (#372)
+       200  Mykola's launcher and panel
+       250  .welcome-overlay        covers the widget, deliberately
+       260  #about-modal            covers the widget, deliberately (#75)
+       300  .mykola-video-overlay   ┐  the widget's own, and only reachable
+       400  #new-chat-modal         ┘  while no dialog is open
+      1000  .lightbox
+
+   **Above the widget is the exception, not the rule.** #296 put the chat above
+   dialogs on purpose, so a learner can ask Mykola about the card they are
+   looking at, and #372's comment below turns on that choice. The two overlays
+   that break it are the two with nothing to ask about: the welcome screen,
+   which is what you see before the app, and About, which is a page of prose
+   you read and close. A dialog that is part of doing something keeps the chat
+   on top. */
+
 /* About modal */
 .modal-overlay[hidden] { display: none; }
 .modal-overlay {
@@ -2395,6 +2415,13 @@ button:disabled:hover { background: #9db4c7; }
 #lookup-pos-modal,
 #duplicate-confirm-popup,
 #word-edit-popup { z-index: 150; }
+
+/* About sits above the widget (#75). On a phone the panel is most of the
+   screen, so an open chat covered the popup it was supposed to be behind --
+   and unlike the dialogs above, there is nothing here to ask Mykola about:
+   this one is read and closed. The overlay covers the launcher too, which is
+   what makes the popup the only thing on the screen. */
+#about-modal { z-index: 260; }
 
 /* Edit the word (#380). Quiet next to the word it belongs to, and **the same
    box as the speaker beside it**: they are a pair of small controls on one
