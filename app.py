@@ -2945,6 +2945,18 @@ def _answer_variants(translation):
     }
 
 
+def _matched_a_variant(card, given, field):
+    """The quiz's answer rule: one of a stored translation's comma-separated
+    variants, with the Cyrillic ё folded onto е.
+
+    It stays on the quiz's own path rather than joining `games.same_answer()`.
+    Both halves are facts about a stored *translation* -- that it is a list of
+    synonyms, and that one Cyrillic letter is optional in writing -- and
+    neither is a fact about an English headword (#267).
+    """
+    return given.lower().replace("ё", "е") in _answer_variants(card[field])
+
+
 QUIZ_LANGS = {"rus": "Russian", "ukr": "Ukrainian"}
 
 # Quiz language code -> the settings key that controls its visibility
@@ -3475,6 +3487,83 @@ def _round_stub(activity, topics):
                            topics=topics, topic_summary=shown)
 
 
+def _typed_the_word(card, given):
+    """The answer is the card's headword, typed (#267's rule on both sides).
+
+    Three rounds share this and each says why in its own words: a trailing full
+    stop, a doubled space and a hyphen typed as a space are forgiven, and
+    nothing touches the middle of a word, because `resigned` is not `resign`.
+    """
+    return games.same_answer(given, card["word"])
+
+
+def _rebuilt_the_sentence(card, given):
+    """*Rebuild the sentence* is graded against the sentence that travelled
+    with the answer, not against anything on the card.
+
+    Which example was drawn and how it was shuffled are both random, so
+    nothing here could be rebuilt from the card -- and the assembled string is
+    compared rather than chip positions, which is what gets a sentence holding
+    `the` twice right for free.
+    """
+    sentence = request.form.get(f"sentence_{card['id']}", "")
+    return bool(sentence) and games.same_answer(given, sentence)
+
+
+def _chose_the_word(card, given):
+    """*Multiple choice* is graded against an option **the server generated**,
+    so it compares exactly and deliberately does not use `same_answer()`.
+
+    #267's normalisation folds a hyphen to a space, and #131's distractors are
+    slips on the answer: with it, an option generated from `well-being` could
+    normalise back onto the answer and be marked right. Nothing a learner types
+    reaches this -- a radio submits one of the strings the round put on the
+    page -- so the forgiveness that rule exists for has nothing to forgive.
+    """
+    return given.casefold() == card["word"].casefold()
+
+
+def _graded_answers(cards, judge):
+    """What a graded round asked, what was typed for it, and whether it was
+    right -- `[(card, given, correct), ...]` in submission order (#416).
+
+    The six rounds that grade server-side had six copies of this loop: read the
+    questions back out of the submitted field names (`games.asked()`, since the
+    draw is random and re-drawing on POST would mark answers against words
+    nobody saw), take `answer_<id>`, decide. The loop was already identical in
+    five of them and *nearly* identical in the sixth -- *Multiple choice* kept
+    its own inlined copy, which is the shape #414 cost us: one rule living in
+    two places, so a change reaches one of them.
+
+    **Here rather than in `games.py`**, which holds pure round logic with no
+    request and no database in it. `games.asked()` stays what it is; this is
+    its caller. That is the line #389 already drew when the Wiktionary vet went
+    into `app._vetted_pseudowords()` instead of `games.pseudowords()` -- every
+    rule in that module is a property of the deck, and reading a form is not.
+
+    **`judge` is a callable because "correct" genuinely differs by game.** The
+    typed rounds compare a headword through #267's normalisation; the quiz
+    matches one of a stored translation's comma-separated variants and folds a
+    Cyrillic yo onto ye; *Multiple choice* compares an option string the
+    server itself generated, and must **not** use `same_answer()` -- that folds
+    a hyphen to a space, so a generated slip on `well-being` would be marked
+    right.
+
+    It is also the seam the next feature needs. #338 records per-learner recall
+    from exactly the rounds that grade an answer against a real card, and this
+    is that set: one write here rather than one per round, and the two rounds
+    that must never write -- *Odd one out*, whose POST is indexed and carries
+    no card id, and *Real or fake*, whose items are invented words with no row
+    behind them -- are precisely the two that cannot call this.
+    """
+    by_id = {str(card["id"]): card for card in cards}
+    graded = []
+    for card in games.asked(request.form, by_id):
+        given = (request.form.get(f"answer_{card['id']}") or "").strip()
+        graded.append((card, given, bool(judge(card, given))))
+    return graded
+
+
 def _scrambled_round(activity, topics):
     """A round of #133: the middle letters shuffled, the learner rebuilds it.
 
@@ -3503,14 +3592,12 @@ def _scrambled_round(activity, topics):
         # now forgiven, none of which taught a learner anything when marked
         # wrong.
         results = []
-        for card in games.asked(request.form,
-                                {str(c["id"]): c for c in cards}):
-            given = (request.form.get(f"answer_{card['id']}") or "").strip()
+        for card, given, correct in _graded_answers(cards, _typed_the_word):
             results.append({
                 "word": card["word"],
                 "scrambled": request.form.get(f"scrambled_{card['id']}", ""),
                 "user_answer": given,
-                "correct": games.same_answer(given, card["word"]),
+                "correct": correct,
             })
         return render_template(
             "game_scrambled.html", activity=activity, topics=topics,
@@ -3828,21 +3915,15 @@ def _multiple_choice_round(activity, topics):
         #
         # Graded against `answerable` rather than the deduplicated draw, so
         # grading never depends on the dedupe landing the same way twice.
-        by_id = {str(card["id"]): card for card in answerable}
         results = []
-        for key in request.form:
-            if not key.startswith("answer_"):
-                continue
-            card = by_id.pop(key[len("answer_"):], None)
-            if card is None:          # pop, so a repeated field cannot
-                continue              # ask the same question twice
-            given = (request.form.get(key) or "").strip()
+        for card, given, correct in _graded_answers(answerable,
+                                                    _chose_the_word):
             results.append({
                 "prompt": card[field],
                 "word": card["word"],
                 "pos": card.get("pos"),
                 "user_answer": given,
-                "correct": given.casefold() == card["word"].casefold(),
+                "correct": correct,
             })
         return render_template(
             "game_multiple_choice.html", questions=None, results=results,
@@ -3927,9 +4008,7 @@ def _listen_and_type_round(activity, topics):
 
     if request.method == "POST":
         results = []
-        for card in games.asked(request.form,
-                                {str(c["id"]): c for c in cards}):
-            given = (request.form.get(f"answer_{card['id']}") or "").strip()
+        for card, given, correct in _graded_answers(cards, _typed_the_word):
             results.append({
                 "word": card["word"],
                 "pos": card.get("pos"),
@@ -3943,7 +4022,7 @@ def _listen_and_type_round(activity, topics):
                 # `there` is wrong, and that is the exercise rather than a
                 # defect -- telling them apart by ear is the whole point, and
                 # the results say which word was meant.
-                "correct": games.same_answer(given, card["word"]),
+                "correct": correct,
             })
         return render_template(
             "game_listen_and_type.html", activity=activity, topics=topics,
@@ -4072,9 +4151,7 @@ def _spell_it_round(activity, topics):
     if request.method == "POST":
         results = []
         cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
-        for card in games.asked(request.form,
-                                {str(c["id"]): c for c in cards}):
-            given = (request.form.get(f"answer_{card['id']}") or "").strip()
+        for card, given, correct in _graded_answers(cards, _typed_the_word):
             results.append({
                 "word": card["word"],
                 "pos": card.get("pos"),
@@ -4088,7 +4165,7 @@ def _spell_it_round(activity, topics):
                 # `resign` is **wrong** — a different word, and this is the one
                 # game where being approximately right is what is being tested
                 # against.
-                "correct": games.same_answer(given, card["word"]),
+                "correct": correct,
             })
         return render_template(
             "game_spell_it.html", activity=activity, topics=topics,
@@ -4167,9 +4244,8 @@ def _rebuild_the_sentence_round(activity, topics):
 
     if request.method == "POST":
         results = []
-        for card in games.asked(request.form,
-                                {str(c["id"]): c for c in cards}):
-            given = (request.form.get(f"answer_{card['id']}") or "").strip()
+        for card, given, correct in _graded_answers(
+                cards, _rebuilt_the_sentence):
             # The sentence travels with the answer: which example was drawn and
             # how it was shuffled are both random, so nothing here could be
             # rebuilt from the card.
@@ -4186,7 +4262,7 @@ def _rebuild_the_sentence_round(activity, topics):
                 # of two identical words wrong for sitting in the other's slot.
                 # #267's normalisation on both sides, so a doubled space
                 # between chips cannot fail a correct sentence.
-                "correct": bool(sentence) and games.same_answer(given, sentence),
+                "correct": correct,
             })
         return render_template(
             "game_rebuild_the_sentence.html", activity=activity, topics=topics,
@@ -4738,18 +4814,20 @@ def _run_quiz(topics, heading, self_url, back, words):
         # and the reasoning now live in games.asked() (#267), which scrambled
         # and wave two's typed rounds share.
         #
-        # The *comparison* deliberately stays here. A quiz answer is matched
+        # The *comparison* deliberately stays on this path, in
+        # `_matched_a_variant()`. A quiz answer is matched
         # against a stored translation, which is a comma-separated list of
         # synonyms (`_answer_variants()`) and can carry a Cyrillic `ё` — both
         # facts about a translation and neither one about an English headword,
         # so games.normalise_answer() has no business knowing them.
-        cards = games.asked(request.form,
-                            {str(card["id"]): card for card in cards})
+        graded = _graded_answers(
+            cards, lambda card, given: _matched_a_variant(card, given, field))
+        # Narrowed to what was actually asked, because the template's
+        # empty-state guard reads `cards` and a POST that graded nothing is
+        # not a quiz with questions on it.
+        cards = [card for card, _given, _correct in graded]
         results = []
-        for card in cards:
-            user_answer = (request.form.get(f"answer_{card['id']}") or "").strip()
-            normalized = user_answer.lower().replace("ё", "е")
-            correct = normalized in _answer_variants(card[field])
+        for card, user_answer, correct in graded:
             results.append({
                 "word": card["word"],
                 "pos": card.get("pos"),
