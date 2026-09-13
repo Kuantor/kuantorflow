@@ -18,7 +18,9 @@
    press without a reload. #}
 <body data-speech-rate="{{ settings.speech_rate }}">
     <header class="site-header">
-        <a class="brand" href="{{ url_for('index') }}">Kuantor<span>Flow</span></a>
+        {# #208: the greeting lives here now, and the front page no longer repeats
+             it above the first panel. One caption, at the top, on every page. #}
+        <a class="brand" href="{{ url_for('index') }}">Welcome to Kuantor<span>Flow</span></a>
         <nav>
             <a href="{{ url_for('index') }}">Home</a>
             <a href="#" id="settings-link">Settings</a>
