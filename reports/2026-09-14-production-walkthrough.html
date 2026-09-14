@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>KuantorFlow — Production Walkthrough</title>
+<style>
+  @page { size: A4; margin: 14mm 15mm 12mm; }
+
+  :root {
+    --ink: #14202e;
+    --muted: #5b6b7d;
+    --line: #dde4ec;
+    --accent: #1b5e9c;
+    --done: #1f7a4d;
+    --wait: #8a6d1f;
+    --soft: #f4f7fa;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.4pt;
+    line-height: 1.45;
+    color: var(--ink);
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h1 { font-size: 19pt; margin: 0 0 2px; letter-spacing: -0.4px; }
+  h2 {
+    font-size: 12pt; margin: 18px 0 8px; padding-bottom: 4px;
+    border-bottom: 2px solid var(--accent); color: var(--accent);
+  }
+  p { margin: 0 0 7px; }
+
+  header { border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+  .sub { color: var(--muted); font-size: 9.6pt; }
+
+  .banner {
+    margin: 12px 0 0; padding: 9px 12px; border-radius: 6px;
+    background: #eaf5ee; border-left: 4px solid var(--done); font-size: 10pt;
+  }
+  .banner b { color: var(--done); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9.7pt; }
+  th {
+    text-align: left; font-size: 8.4pt; text-transform: uppercase;
+    letter-spacing: .5px; color: var(--muted); border-bottom: 1px solid var(--line);
+    padding: 0 8px 5px;
+  }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.k { width: 30%; font-weight: 600; }
+  td.v { color: var(--muted); }
+  tr { break-inside: avoid; }
+
+  .ok { color: var(--done); font-weight: 700; white-space: nowrap; }
+  .note-tag { color: var(--wait); font-weight: 700; white-space: nowrap; }
+
+  .callout {
+    margin: 12px 0; padding: 10px 12px; background: var(--soft);
+    border-radius: 6px; font-size: 9.7pt; break-inside: avoid;
+  }
+  .callout b { color: var(--ink); }
+
+  .quote {
+    margin: 8px 0; padding: 9px 12px; border-left: 3px solid var(--accent);
+    background: #f7fafd; font-size: 9.5pt; font-style: italic; color: #2c3a49;
+    break-inside: avoid;
+  }
+
+  ul { margin: 0 0 8px; padding-left: 18px; }
+  li { padding: 2px 0; break-inside: avoid; }
+  .why { color: var(--muted); }
+
+  code {
+    font-family: Consolas, "Courier New", monospace; font-size: 9pt;
+    background: #eef3f8; padding: 1px 4px; border-radius: 3px;
+  }
+
+  .newpage { break-before: page; page-break-before: always; margin-top: 0; }
+
+  footer {
+    margin-top: 14px; padding-top: 8px; border-top: 1px solid var(--line);
+    font-size: 8.6pt; color: var(--muted);
+    display: flex; justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Walking the deployed site as a teacher would</h1>
+  <p class="sub">Verification pass &middot; 14 September 2026 &middot; <code>kuantorflow.pythonanywhere.com</code> &middot; anonymous visitor, through the keyword gate</p>
+  <div class="banner">
+    <b>The site is demo-ready.</b> Every path a teacher is likely to take works on the deployment, including the two that spend money. Nothing found that needs fixing before the demo.
+  </div>
+</header>
+
+<p>Everything shipped this week had been verified locally. This is the first end-to-end pass over <b>production</b> since the last three deploys — the only check that can find a problem nobody has thought of.</p>
+
+<h2>What was checked, and what came back</h2>
+
+<table>
+  <tr><th>Check</th><th>Result</th><th></th></tr>
+
+  <tr>
+    <td class="k">Word lookup<br><span class="why" style="font-weight:400">the riskiest one</span></td>
+    <td class="v">A forced lookup of <code>serendipity</code> returned an English explanation, an example sentence, <b>and both translations</b> — Ukrainian and Russian. The topic box defaulted to <i>General knowledge</i>.<br>So the Claude translator key is live and #412's move to <code>kuantorflow/.env</code> held; #414's default topic is working.</td>
+    <td class="ok">Pass</td>
+  </tr>
+
+  <tr>
+    <td class="k">Generate a text<br><span class="why" style="font-weight:400">your lead pitch</span></td>
+    <td class="v">One 100-word passage over <i>Crime and justice</i>: <b>&ldquo;A Complex Trial Concludes&rdquo;</b>, coherent prose using <b>14 deck words</b> — verdict, defendant, fraud, offence, custody, interrogated, alibi, testimony, convict, acquit, lawsuit, parole, sentence.</td>
+    <td class="ok">Pass</td>
+  </tr>
+
+  <tr>
+    <td class="k">Printable worksheet</td>
+    <td class="v">Built from that passage: <b>14 blanks and 14 answer-key items</b>, matched exactly.</td>
+    <td class="ok">Pass</td>
+  </tr>
+
+  <tr>
+    <td class="k">All ten activities</td>
+    <td class="v">Eight games and the quiz each deal a real round over the live deck; none falls into a &ldquo;cannot run&rdquo; page. <i>Fill the gap</i> renders its 20 cards with a real gap; the quiz gives five Ukrainian questions.</td>
+    <td class="ok">Pass</td>
+  </tr>
+
+  <tr>
+    <td class="k">Mykola</td>
+    <td class="v">Asked what <i>Fill the gap</i> is. He described the flip, the self-marking, <i>Finish game</i> and the first-letter hints, citing the user guide — so #82's retrieval fix is live.</td>
+    <td class="ok">Pass</td>
+  </tr>
+
+  <tr>
+    <td class="k">This week's CSS is really deployed</td>
+    <td class="v">Fetched the stylesheet itself (94,549 bytes) and confirmed all five rules are in it: the edit dialog's winning selector, the sideways shift, the phone hiding rule, About at 260, the tip's <code>[hidden]</code>. This is the check for #300's failure mode — a cached stylesheet renders a <i>plausible wrong page</i>.</td>
+    <td class="ok">Pass</td>
+  </tr>
+
+  <tr>
+    <td class="k">The deck a visitor sees</td>
+    <td class="v"><b>21 topics, about 538 cards</b> — the 18 seeded curriculum topics plus <i>Fantasy world</i> (2), <i>Law and order</i> (9) and <i>Psychology, feelings and emotions</i> (17).</td>
+    <td class="ok">Pass</td>
+  </tr>
+</table>
+
+<h2 class="newpage">One open question, answered for free</h2>
+
+<div class="callout">
+  <b>#147 is not a demo risk.</b> The ticket worries that the <i>General</i> topic holds the oldest, messiest cards — misspelled headwords among them — and that a teacher browsing the deck will find them.
+  <br><br>
+  On the deployment there is <b>no <i>General</i> or <i>General knowledge</i> topic visible at all</b>, and <code>/flashcards/General&nbsp;knowledge</code> returns <b>404</b> for a visitor. The three non-curriculum topics that <i>are</i> visible were spot-checked and their headwords are clean: <code>appeal</code>, <code>felony</code>, <code>jurisprudence</code>, <code>statute</code>, <code>warrant</code>, <code>castle</code>, <code>wisdom</code>.
+  <br><br>
+  So the messy cards are not reachable by browsing. <b>Recommendation: spend nothing on #147 before the demo.</b> That answer cost one page load instead of a production database dump.
+</div>
+
+<h2>Two things I got wrong on the way</h2>
+
+<p><b>I briefly concluded the lookup was silently failing.</b> It was not. Both words I tried were already in the deck, so the app correctly showed its duplicate warning — and I had searched the page for the wrong phrases before deciding nothing had happened. Worth recording because &ldquo;it does nothing&rdquo; was exactly the wrong diagnosis, and it is the one this site is most likely to invite.</p>
+
+<p><b>A near-miss worth knowing about for any scripted interaction here.</b> Going to submit the text-generation form programmatically, my first selector matched the <i>account deletion</i> form from <code>base.html</code> instead — it is rendered on every page. I inspected the form before submitting rather than after, so nothing happened.</p>
+
+<div class="quote">
+  Both of these are arguments for the runbook's own line: play it yourself, on the deck you will show. A person clicking the button cannot misidentify which form they are on.
+</div>
+
+<h2>What was not checked, and what it cost</h2>
+
+<ul>
+  <li><b>The print dialog on production.</b> <span class="why">Verified locally against the same templates — 40 blanks over 865 words, four pages, key alone on the last sheet.</span></li>
+  <li><b>Anything behind Google sign-in.</b> <span class="why">Not something I can do on your behalf.</span></li>
+  <li><b>Any path that writes a card.</b> <span class="why">The review popup was opened and read; <i>Add</i> was never pressed, so nothing was saved to your database.</span></li>
+</ul>
+
+<p><b>Spend:</b> one word lookup and one text generation from the day's allowance. Nothing else that costs money was exercised.</p>
+
+<h2>What I would do with what is left</h2>
+
+<ul>
+  <li><b>Keep the remaining budget for demo day.</b> <span class="why">Being able to diagnose a surprise that afternoon is worth more than any polish ticket landed beforehand.</span></li>
+  <li><b>#120</b> — the Settings &times; scrolling out of reach on a phone — <span class="why">only if there is room. It needs a teacher to open Settings, on a phone, and scroll.</span></li>
+  <li><b>Nothing on #147, #418 or #338.</b> <span class="why">The first is answered above; the other two have no outcome a teacher can see.</span></li>
+</ul>
+
+<footer>
+  <span>KuantorFlow &middot; production walkthrough</span>
+  <span>Pairs with reports/2026-09-13-demo-plan.md &middot; #420</span>
+</footer>
+
+</body>
+</html>
