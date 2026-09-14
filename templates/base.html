@@ -768,15 +768,36 @@
                 settingsError.hidden = true;
                 settingsSave.disabled = true;
                 settingsSave.textContent = "Saving…";
-                // #127 decides which cards this page is showing and #363 the
-                // order its topics come in, so the page in front of the user
-                // goes stale the moment either changes. Compared against
-                // defaultChecked, which holds what the server rendered (and is
-                // moved forward after each save below).
-                var listChanged = ["individual_cards", "alphabetical_topics"]
-                    .some(function (name) {
-                        return settingsForm[name].checked
-                            !== settingsForm[name].defaultChecked;
+                // Nearly every setting here is read by the **server** when it
+                // renders a page, so the page in front of the learner goes
+                // stale the moment one of them changes: #127 decides which
+                // cards it shows, #363 the order of its topics, and #46/#79
+                // whether a card carries its Ukrainian or Russian at all.
+                //
+                // **Asked of the form, not of a list of names** (#433). This
+                // was `["individual_cards", "alphabetical_topics"]` — the two
+                // settings whose authors happened to think about it — so
+                // hiding a language stored the choice and left the cards on
+                // screen exactly as they were. It is the same flaw the
+                // `defaultChecked` loop below carries a comment about, one
+                // screen higher and unfixed: a list cannot be remembered by
+                // the next setting's author, and a loop cannot be forgotten.
+                //
+                // The default is therefore **reload**, and the exemptions are
+                // declared. `defaultChecked`/`defaultValue` hold what the
+                // server rendered, and are moved forward after each save.
+                var APPLIED_WITHOUT_A_RELOAD = ["speech_rate",
+                                                "mykola_typewriter"];
+                var listChanged = Array.prototype.some.call(
+                    settingsForm.querySelectorAll("input, select"),
+                    function (el) {
+                        if (!el.name) return false;
+                        if (APPLIED_WITHOUT_A_RELOAD.indexOf(el.name) !== -1) {
+                            return false;   // the browser acts on these itself
+                        }
+                        return (el.type === "checkbox" || el.type === "radio")
+                            ? el.checked !== el.defaultChecked
+                            : el.value !== el.defaultValue;
                     });
                 fetch("{{ url_for('save_settings') }}", {
                     method: "POST",
