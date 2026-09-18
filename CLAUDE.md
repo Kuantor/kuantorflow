@@ -30,6 +30,28 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
 
 ## Key modules & patterns
 
+- **`web.py` / `rounds.py` / `app.py`** — the split (#418). `web.py` holds the
+  Flask object, the configuration, the identity and permission helpers and the
+  two spending guards; `rounds.py` holds the games chassis, the ten rounds and
+  the quiz; `app.py` holds everything else and imports `rounds` **for its side
+  effects**, asking it for nothing. The dependency runs one way — `web.py` ←
+  `rounds.py` ← `app.py` — and nothing below `app.py` may import it, or the
+  route table comes along and the split is undone.
+  **`web.py` takes only what two or more feature modules need.** That is the
+  whole admission rule, and it is what decided the two cases that looked
+  borderline: the spending guards moved there because `_generation_refusal()`
+  is asked by #237's reader *and* #406's topic builder, while
+  `GENERATED_TEXT_KEY` stayed with the round, because only the reader reads it.
+  A thing with one caller lives with its caller. Without that rule `web.py`
+  becomes `app.py` under another name, which is the one way this refactor can
+  fail while every test stays green.
+  **Callers reach these names through the module** — `web.is_admin()`, never a
+  copy bound at import (#436). A bare `is_admin()` in `app.py` still answers
+  correctly and is simply the one call site a stub can no longer reach, which
+  is why `automation/tests/test_web_is_the_shared_module.py` asserts it: the
+  failure is silent in both directions, and that file is the only thing that
+  would notice. The names stay bound into `app.py` as well, for the tests that
+  call `app_module.is_admin()` rather than patch it.
 - **`app.py`** — routes; a keyword **gate** (`before_request`) blocks every
   page until the keyword is entered; optional Google OAuth — a sign-in upserts
   a row in **`users`** (#148), keyed on Google's `sub` so an email change
