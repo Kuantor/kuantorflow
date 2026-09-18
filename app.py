@@ -128,6 +128,23 @@ from web import (
     current_settings,
     _sections_for_visitor,
     _private_marks,
+    GENERATED_COUNT_KEY,
+    GENERATION_ANON_LIMIT,
+    GENERATION_BUSY_PROMPT,
+    GENERATION_DAILY_LIMIT,
+    GENERATION_SIGN_IN_PROMPT,
+    GENERATION_USER_DAILY,
+    GENERATION_USER_LIMIT_PROMPT,
+    LOOKED_UP_COUNT_KEY,
+    LOOKUP_ANON_DAILY,
+    LOOKUP_ANON_LIMIT,
+    LOOKUP_BUSY_PROMPT,
+    LOOKUP_SIGN_IN_PROMPT,
+    LOOKUP_USER_DAILY,
+    LOOKUP_USER_LIMIT_PROMPT,
+    _generation_available,
+    _generation_refusal,
+    _lookup_refusal,
 )
 
 # --- Mykola AI chat, imported from the ai_agent repo (NOT duplicated here) ---
@@ -1836,7 +1853,7 @@ def index():
                     # spends nothing at all. Asked **once** and kept --
                     # `_lookup_refusal()` claims the slot as it answers,
                     # so a second call would take a second slot.
-                    lookup_refusal = _lookup_refusal()
+                    lookup_refusal = web._lookup_refusal()
                     if lookup_refusal:
                         # A ceiling an account has already reached is not
                         # something signing in fixes; the anonymous ones
@@ -2443,7 +2460,7 @@ def lookup_json():
     # the same key, and a learner past their day's lookups could carry on
     # through the edit dialog. Anonymous visitors never reach it -- refused
     # above by #191 -- so only the per-account row is ever claimed.
-    refusal = _lookup_refusal()
+    refusal = web._lookup_refusal()
     if refusal:
         return {"ok": False, "error": refusal["message"]}, 429
 
@@ -2724,7 +2741,7 @@ def inject_activities():
         "game_activities": games.panel("game"),
         "quiz_activity": games.ACTIVITIES["quiz"],
         "reader_activity": games.ACTIVITIES["read_a_text"],
-        "generation_available": _generation_available(),
+        "generation_available": web._generation_available(),
         "activity_picker_url": activity_picker_url,
         "activity_play_url": activity_play_url,
         # Said in one place because three surfaces say it (#261), and a tooltip
@@ -2749,18 +2766,6 @@ def game_picker(game):
         activity, url_for("game_play", game=activity.slug))
 
 
-def _generation_available():
-    """Whether text generation can run — #237's "no key, no panel" (#253).
-
-    Read at **request time**, never at import. `ANTHROPIC_API_KEY` reaches this
-    process only as a side effect of importing `ai_agent`, which loads its own
-    `.env` (see AI_AGENT_PATH above), and that import happens after this
-    module's constants would have been evaluated. A module-level constant would
-    therefore read None on a perfectly working deployment.
-    """
-    return bool(os.environ.get("ANTHROPIC_API_KEY"))
-
-
 def _reachable_activity(slug):
     """The activity behind a /games/ URL, or **None** if it is not there.
 
@@ -2776,131 +2781,17 @@ def _reachable_activity(slug):
     this for the chat widget.
     """
     found = games.activity(slug, kind=games.GAMES_URL_KINDS)
-    if found is None or (found.kind == "reader" and not _generation_available()):
+    if found is None or (found.kind == "reader" and not web._generation_available()):
         return None
     return found
 
 
-# --- #388: what a word lookup may spend -----------------------------------
+# --- #237: the text this visitor is holding ---------------------------------
+# What the round remembers between requests. The *ceilings* moved to `web.py`
+# with the other spending guards (#418); these two are not policy, they are the
+# session keys the reader reads back, so they stay with the round that writes
+# them.
 #
-# `parse_word` is the one paid path anybody can reach. One press asks the
-# translator **once per language** and then walks the dictionary, and since
-# #353 that translator is a licensed API on our own key -- so this is a
-# metered spend, not the free scraping #199 was written about. The same
-# failure #200 fixed for uploads, and the gate is no answer to it: a shared
-# password is not an authorisation, and it does nothing about a signed-in
-# learner in a loop.
-#
-#   LOOKUP_ANON_LIMIT  - per browser session, held in the Flask session with no
-#     database behind it. A **nudge, not a spend cap**: clearing cookies resets
-#     it, exactly as #164 documents for its own counter. Its job is the sign-in
-#     prompt; the daily rows below are what bound the bill.
-#   LOOKUP_USER_DAILY  - per account, per day, counted in a row.
-#   LOOKUP_ANON_DAILY  - **anonymous lookups only**, per day, counted in the
-#     row whose user_id is 0. Deliberately not "everybody": an anonymous run
-#     must not be able to exhaust what the people who signed up may spend,
-#     which is the failure #199 names for #164's shared ceiling.
-#
-# Three rather than one because they answer different questions -- "sign in to
-# carry on", "you have had a lot today", "the site has had a lot today" -- and
-# only the first is something signing in fixes. 0 (or unset) disables any of
-# them, which is also how `seed_topics.py` stays unaffected: it never reaches
-# this code, since a console script has no session and no request.
-LOOKUP_ANON_LIMIT = _int_env("LOOKUP_ANON_LIMIT", 3)
-LOOKUP_USER_DAILY = _int_env("LOOKUP_USER_DAILY", 50)
-LOOKUP_ANON_DAILY = _int_env("LOOKUP_ANON_DAILY", 300)
-
-# How many words this browser session has looked up, for the anonymous nudge.
-LOOKED_UP_COUNT_KEY = "looked_up_words"
-
-LOOKUP_SIGN_IN_PROMPT = (
-    "You've looked up your free words. Sign in with Google to look up more "
-    "— and to save the cards you make.")
-LOOKUP_USER_LIMIT_PROMPT = (
-    "You've looked up a lot of words today. Come back tomorrow for more.")
-LOOKUP_BUSY_PROMPT = (
-    "KuantorFlow has looked up a lot of words today. Please sign in or try "
-    "again tomorrow.")
-
-
-def _lookup_refusal():
-    """Why this visitor may not look a word up, or None if they may.
-
-    **Called before the providers, never after**, which is the whole point:
-    #200's precedent, where notes upload called Claude before the write guard
-    and an anonymous visitor could spend the budget on cards that would then be
-    refused.
-
-    Returns `{"message": ..., "sign_in": bool}` so the page can offer the
-    button that would actually help. Signing in is the way past the anonymous
-    nudge and past the anonymous daily ceiling; it is not the way past an
-    account's own ceiling, and saying otherwise would send somebody to a
-    sign-in that changes nothing.
-
-    **Claiming happens here**, which is why this is not a predicate like
-    `can_add_cards()`: asking and taking cannot be two steps, or two workers
-    both take the last slot.
-    """
-    if web.is_blocked():
-        return {"message": web.blocked_notice(), "sign_in": False}
-
-    user_id = web._current_user_id()
-    if user_id is None:
-        used = session.get(LOOKED_UP_COUNT_KEY, 0)
-        if LOOKUP_ANON_LIMIT and used >= LOOKUP_ANON_LIMIT:
-            applog.anonymous_limit_hit("lookup", used, LOOKUP_ANON_LIMIT)
-            return {"message": LOOKUP_SIGN_IN_PROMPT, "sign_in": True}
-
-    try:
-        allowed, scope, used = utils.claim_word_lookup(
-            user_id, LOOKUP_USER_DAILY, LOOKUP_ANON_DAILY)
-    except Exception:
-        # Best-effort in the same direction as #164's and #237's counters: an
-        # unreachable database cannot enforce a ceiling, and a lookup is still
-        # useful when the deck cannot be read -- the review popup is where its
-        # cards would go, and it needs no database to draw them.
-        app.logger.exception("Could not count the word lookup")
-        allowed, scope = True, None
-
-    if not allowed:
-        applog.anonymous_limit_hit(
-            scope, used,
-            LOOKUP_USER_DAILY if scope == "user" else LOOKUP_ANON_DAILY)
-        return {
-            "message": (LOOKUP_USER_LIMIT_PROMPT if scope == "user"
-                        else LOOKUP_BUSY_PROMPT),
-            # An account's own ceiling is not something signing in fixes; the
-            # anonymous one is, because an account has a ceiling of its own.
-            "sign_in": scope != "user",
-        }
-
-    if user_id is None:
-        session[LOOKED_UP_COUNT_KEY] = session.get(LOOKED_UP_COUNT_KEY, 0) + 1
-    return None
-
-
-# --- #237: writing a text out of the learner's own words ------------------
-#
-# The three ceilings, all tunable like #164's pair. They are not really about
-# the bill — a 150-word text costs an eighth of a cent — but about a loop (a
-# bot, or somebody leaning on the regenerate button) and about the sign-in
-# nudge.
-#
-#   GENERATION_ANON_LIMIT  — per browser session, held in the Flask session
-#     with no database behind it. A **nudge, not a spend cap**: clearing
-#     cookies resets it, exactly as #164 documents for its own counter. That is
-#     fine because the daily ceiling is the thing actually bounding the bill.
-#   GENERATION_USER_DAILY  — per account, per day, counted in a row.
-#   GENERATION_DAILY_LIMIT — everybody, per day, counted in a row. Anonymous
-#     texts count towards it too.
-#
-# 0 (or unset) disables any of them.
-GENERATION_ANON_LIMIT = _int_env("GENERATION_ANON_LIMIT", 1)
-GENERATION_USER_DAILY = _int_env("GENERATION_USER_DAILY", 10)
-GENERATION_DAILY_LIMIT = _int_env("GENERATION_DAILY_LIMIT", 100)
-
-# How many texts this browser session has been given, for the anonymous nudge.
-GENERATED_COUNT_KEY = "generated_texts"
 # The text itself, held so re-reading, flipping back and a stray refresh cost
 # nothing (#237's "generate once").
 #
@@ -2916,65 +2807,6 @@ GENERATED_COUNT_KEY = "generated_texts"
 GENERATED_TEXT_KEY = "generated_text"
 # The learner's "what it should be about", remembered like the selection.
 INSTRUCTION_KEY = "generated_about"
-
-GENERATION_SIGN_IN_PROMPT = (
-    "You've read your free text. Sign in with Google to write more.")
-GENERATION_USER_LIMIT_PROMPT = (
-    "You've written all your texts for today. Come back tomorrow for more.")
-GENERATION_BUSY_PROMPT = (
-    "KuantorFlow has written a lot of texts today. Please try again tomorrow.")
-
-
-def _generation_refusal():
-    """Why this visitor may not spend a generation, or None if they may.
-
-    **Called before the API call, never after** — #200 is the precedent and it
-    is exactly this shape: notes upload called Claude before the write guard, so
-    an anonymous visitor could spend API budget on a card that would then be
-    refused. Worse here, because this is the one activity that costs real money
-    every time it runs.
-
-    Returns `{"message": …, "sign_in": bool}` so the page can offer the button
-    that would actually help. A refusal for being blocked, or by the site-wide
-    ceiling, is not something signing in fixes.
-
-    **Claiming happens here**, which is why this is not a predicate like
-    `can_add_cards()`: asking and taking cannot be two steps, or two workers
-    both take the last slot.
-    """
-    if web.is_blocked():
-        return {"message": web.blocked_notice(), "sign_in": False}
-
-    user_id = session.get("user", {}).get("id")
-    if user_id is None:
-        used = session.get(GENERATED_COUNT_KEY, 0)
-        if GENERATION_ANON_LIMIT and used >= GENERATION_ANON_LIMIT:
-            applog.anonymous_limit_hit("generate", used, GENERATION_ANON_LIMIT)
-            return {"message": GENERATION_SIGN_IN_PROMPT, "sign_in": True}
-
-    try:
-        allowed, scope, used = utils.claim_text_generation(
-            user_id, GENERATION_USER_DAILY, GENERATION_DAILY_LIMIT)
-    except Exception:
-        # Best-effort in the same direction as #164's counter: an unreachable
-        # database cannot enforce a ceiling, and it has already made the deck
-        # unreadable, so there are no words to write about anyway.
-        app.logger.exception("Could not count the generated text")
-        allowed, scope = True, None
-
-    if not allowed:
-        applog.anonymous_limit_hit(scope, used, GENERATION_USER_DAILY
-                                   if scope == "user" else GENERATION_DAILY_LIMIT)
-        return {
-            "message": (GENERATION_USER_LIMIT_PROMPT if scope == "user"
-                        else GENERATION_BUSY_PROMPT),
-            # Signing in is the way past the anonymous nudge, not past a
-            # ceiling an account has already reached or the site's own.
-            "sign_in": False,
-        }
-
-    session[GENERATED_COUNT_KEY] = session.get(GENERATED_COUNT_KEY, 0) + 1
-    return None
 
 
 def _held_generation():
@@ -3040,7 +2872,7 @@ def _read_a_text_round(activity, topics):
             topic_summary=_topic_summary(topics), **extra)
 
     if request.method == "POST":
-        refusal = _generation_refusal()
+        refusal = web._generation_refusal()
         if refusal:
             # Whatever they are holding, not only a text matching this request:
             # the instruction box may well be what they just changed, and the
@@ -3961,7 +3793,7 @@ def _lookup_budget(wanted):
     number somebody read before pressing the button.
     """
     user_id = session.get("user", {}).get("id")
-    limit = LOOKUP_USER_DAILY if user_id is not None else LOOKUP_ANON_DAILY
+    limit = web.LOOKUP_USER_DAILY if user_id is not None else web.LOOKUP_ANON_DAILY
     if not limit or limit <= 0:
         return {"limit": 0, "used": 0, "left": None, "wanted": wanted,
                 "affordable": True}
@@ -4036,7 +3868,7 @@ def generate_topic():
     file: an anonymous visitor cannot save a card (#125), so proposing twenty
     of them would be paying for a refusal.
     """
-    if not _generation_available():
+    if not web._generation_available():
         abort(404)
 
     refusal = web.add_refusal()
@@ -4048,7 +3880,7 @@ def generate_topic():
         if not idea:
             message = "Please describe the topic you have in mind."
         else:
-            spend = _generation_refusal()
+            spend = web._generation_refusal()
             if spend:
                 message = spend["message"]
             else:
@@ -4080,7 +3912,7 @@ def start_topic_fill():
     Post/redirect/get afterwards, #237's shape, so a refresh of the progress
     page re-reads the held plan instead of claiming a second batch.
     """
-    if not _generation_available():
+    if not web._generation_available():
         abort(404)
     refusal = web.add_refusal()
     if refusal:
@@ -4105,7 +3937,7 @@ def start_topic_fill():
     user_id = session.get("user", {}).get("id")
     try:
         allowed, scope, used = utils.claim_word_lookups(
-            user_id, len(words), LOOKUP_USER_DAILY, LOOKUP_ANON_DAILY)
+            user_id, len(words), web.LOOKUP_USER_DAILY, web.LOOKUP_ANON_DAILY)
     except Exception:
         # #237's rule for an unreachable counter: it cannot enforce a ceiling,
         # and the same outage has already made the deck unwritable.
@@ -4113,7 +3945,7 @@ def start_topic_fill():
         allowed, scope = True, None
 
     if not allowed:
-        limit = LOOKUP_USER_DAILY if scope == "user" else LOOKUP_ANON_DAILY
+        limit = web.LOOKUP_USER_DAILY if scope == "user" else web.LOOKUP_ANON_DAILY
         applog.anonymous_limit_hit(scope, used, limit)
         flash((f"That would need {len(words)} lookups and you have "
                f"{max(limit - used, 0)} left today. Untick a few words, or "
@@ -4127,7 +3959,7 @@ def start_topic_fill():
 @app.route("/topics/generate/filling")
 def filling_topic():
     """The progress page. Opens the stream that does the work."""
-    if not _generation_available():
+    if not web._generation_available():
         abort(404)
     plan = session.get(TOPIC_PLAN_KEY)
     if not plan:
@@ -4155,7 +3987,7 @@ def stream_topic_fill():
     a skipped word rather than a dead run: `lookup_word()` raises when nothing
     comes back, and Reverso and Merriam-Webster are blocked from PythonAnywhere.
     """
-    if not _generation_available():
+    if not web._generation_available():
         abort(404)
     plan = session.get(TOPIC_PLAN_KEY) or {}
     words = list(plan.get("words") or [])
