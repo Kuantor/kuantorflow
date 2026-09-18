@@ -1,4 +1,3 @@
-import hashlib
 import inspect
 import json
 import os
@@ -71,13 +70,18 @@ from utils import (
     upsert_user,
 )
 
-# The Flask object and the configuration it is built with now live in
-# `web.py` (#418). Imported rather than defined, so a feature module can
-# take `app` from there without importing this module and closing a loop.
+# The Flask object, its configuration, and the identity and permission
+# helpers now live in `web.py` (#418). Imported rather than defined, so a
+# feature module can take `app` and `is_admin()` from there without
+# importing this module and closing a loop.
 #
-# Bound into this namespace on purpose: every route below reads these
-# names from here, so patching `app.ACCESS_KEYWORD` in a test still
-# reaches the code that test means to exercise.
+# `import web` is what the routes below actually call through --
+# `web.viewer()`, never the copy bound here -- so one patch on
+# `web.viewer` reaches this module and every module still to be written
+# (#436). The names are bound here as well, and only for that: a handful
+# of tests call `app_module.is_admin()` directly rather than patch it,
+# and keeping both spellings valid costs nothing.
+import web
 from web import (
     app,
     _bool_env,
@@ -94,6 +98,36 @@ from web import (
     ANONYMOUS_DAILY_LIMIT,
     LOG_DIR,
     APP_BOOT_ID,
+    _current_email,
+    DELETE_NOT_YOURS,
+    DELETE_SIGN_IN_PROMPT,
+    EDIT_NOT_YOURS,
+    EDIT_SIGN_IN_PROMPT,
+    MOVE_NOT_YOURS,
+    MOVE_SIGN_IN_PROMPT,
+    ADD_SIGN_IN_PROMPT,
+    SIGN_IN_TO_DELETE_ACCOUNT,
+    ADMIN_ACCOUNT_UNDELETABLE,
+    current_block,
+    is_blocked,
+    blocked_notice,
+    can_add_cards,
+    add_refusal,
+    can_delete_card,
+    _card_refusal,
+    can_move_card,
+    move_refusal,
+    can_edit_card,
+    edit_refusal,
+    delete_refusal,
+    is_admin,
+    _current_user_id,
+    _identity_token,
+    cards_owner_filter,
+    viewer,
+    current_settings,
+    _sections_for_visitor,
+    _private_marks,
 )
 
 # --- Mykola AI chat, imported from the ai_agent repo (NOT duplicated here) ---
@@ -224,325 +258,6 @@ def _email_verified(info):
     return str(claim).strip().lower() == "true"
 
 
-def _current_email():
-    """Email of the signed-in visitor, or None for anonymous visitors."""
-    return (session.get("user") or {}).get("email")
-
-
-# Refusals shown when a delete is not this visitor's to make (#162). The first
-# is the wording given in the issue; the second is #125's problem — no identity
-# at all — rather than the card belonging to someone else.
-DELETE_NOT_YOURS = ("This card was created by admin or another user. "
-                    "You cannot delete the card.")
-DELETE_SIGN_IN_PROMPT = ("Sign in with Google to delete cards you have added.")
-# #176: the same two refusals, for editing.
-EDIT_NOT_YOURS = ("This card was created by admin or another user. "
-                  "You cannot edit the card.")
-EDIT_SIGN_IN_PROMPT = "Sign in with Google to edit cards you have added."
-# #177: moving a card between topics is an edit, with its own wording.
-MOVE_NOT_YOURS = ("This card was created by admin or another user. "
-                  "You cannot move the card.")
-MOVE_SIGN_IN_PROMPT = "Sign in with Google to move cards you have added."
-# #125: shown when a visitor with no account tries to write to the database.
-# The wording is the issue's own, so the popup says what was specified.
-ADD_SIGN_IN_PROMPT = ("Please sign in with Google to make any changes "
-                      "of the database.")
-# #165: an anonymous visitor has no account, and neither does a sign-in whose
-# users row could not be written (#148).
-SIGN_IN_TO_DELETE_ACCOUNT = "Sign in with Google to delete your account."
-# The admin keeps the site running; removing that account from inside the app
-# is a footgun with no upside. Admin-ness lives in ADMIN_EMAILS (#158), so the
-# way out is to stop being an admin first — then the account deletes normally.
-ADMIN_ACCOUNT_UNDELETABLE = (
-    "Admin account cannot be deleted. Remove this address from ADMIN_EMAILS "
-    "first, then delete the account.")
-
-
-def current_block():
-    """This visitor's block, or None (issue #126). Cached for the request.
-
-    One query per signed-in request, not per call: the widget, the card pages
-    and the save routes all ask, and `g` is exactly the scope the answer is
-    valid for. Anonymous visitors have no account to block, so they never
-    reach the database here.
-
-    A dead database means no block is visible. That is the same tolerance the
-    rest of the app already has (a failed users-row write still signs you in),
-    and it fails in the direction that keeps the site usable — a blocked
-    account gets its restrictions back the moment the database answers again,
-    and #125 still refuses every write while `_current_user_id()` is unusable.
-    """
-    if "kf_block" not in g:
-        try:
-            g.kf_block = utils.get_user_block(_current_user_id())
-        except Exception:
-            app.logger.exception("Could not read the block state")
-            g.kf_block = None
-    return g.kf_block
-
-
-def is_blocked():
-    """Whether this request's visitor is a blocked account (issue #126)."""
-    return current_block() is not None
-
-
-def blocked_notice():
-    """What a blocked user is told when they try to change something (#126).
-
-    Names an admin address so the message is an instruction rather than a
-    dead end — that is the whole of the issue's "shown the admin's address so
-    they can ask for access back". With no ADMIN_EMAILS configured there is
-    nobody to name, so the sentence stops after the fact.
-    """
-    admin = next(iter(sorted(ADMIN_EMAILS)), None)
-    if admin:
-        return ("Your account is blocked, so you cannot change the database. "
-                f"Write to {admin} to ask for access.")
-    return "Your account is blocked, so you cannot change the database."
-
-
-def can_add_cards():
-    """Whether this request's visitor may write cards (issue #125).
-
-    Signed in *and* carrying a users-row id. The id is the requirement rather
-    than a name in the session, because #89 records who added a card and a
-    card with no owner cannot be deleted by its author later (#162) — so a
-    sign-in whose users row could not be written is refused here too. That is
-    the fail-closed direction: the alternative writes an unowned card that
-    nobody but an admin can ever remove.
-
-    Admin-ness is not consulted: an admin is signed in, so they already pass.
-
-    A blocked account (#126) is refused here too — same answer, different
-    reason, which is what `add_refusal()` is for.
-    """
-    return _current_user_id() is not None and not is_blocked()
-
-
-def add_refusal():
-    """Why this visitor may not add cards, or None if they may.
-
-    Two refusals share one path: no account at all (#125) and an account that
-    has been blocked (#126). The distinction only ever shows in the wording,
-    so it lives here rather than at each of the four call sites.
-    """
-    if can_add_cards():
-        return None
-    return blocked_notice() if is_blocked() else ADD_SIGN_IN_PROMPT
-
-
-def can_delete_card(card):
-    """Whether this request's visitor may delete `card` (issue #162).
-
-    Presentation only — it decides whether the cross is greyed. The rule is
-    enforced again in delete_card(), which is what actually protects the row;
-    this exists so the UI does not offer an action that will be refused.
-    """
-    if is_blocked():
-        # Checked before admin-ness: an admin who blocked their own account
-        # is telling the app something, and #165 already refuses to let the
-        # admin delete that account, so this cannot lock the site's owner out
-        # of anything permanent.
-        return False
-    if is_admin():
-        return True
-    user_id = _current_user_id()
-    if user_id is None:
-        return False
-    return card.get("added_by_user_id") == user_id
-
-
-def _card_refusal(card, not_yours, sign_in_prompt):
-    """Why this visitor may not change `card`, or None if they may.
-
-    The three ways to change a card — delete (#162), edit (#176) and move
-    (#177) — share one rule and differ only in wording, so they share this and
-    supply their own sentences. A blocked account (#126) is told that instead,
-    since it is the more informative answer.
-    """
-    if can_delete_card(card):
-        return None
-    if is_blocked():
-        return blocked_notice()
-    return not_yours if _current_user_id() is not None else sign_in_prompt
-
-
-def can_move_card(card):
-    """Whether this visitor may move `card` to another topic (issue #177).
-
-    A move is an edit: the card sits in a shared topic, but it is still its
-    author's, so moving someone else's card is closer to editing theirs than
-    to organising your own.
-    """
-    return can_delete_card(card)
-
-
-def move_refusal(card):
-    """The tooltip explaining why the move control is greyed, or None."""
-    return _card_refusal(card, MOVE_NOT_YOURS, MOVE_SIGN_IN_PROMPT)
-
-
-def can_edit_card(card):
-    """Whether this visitor may edit `card` (issue #176).
-
-    Deliberately the same rule as deleting (#162): the admin may change any
-    card, a signed-in user only their own, and nobody else at all. Editing a
-    card's word is as destructive as removing it — the person who added it
-    would find it silently different — so a weaker rule here would undo #162.
-
-    Kept as its own name rather than a call site of can_delete_card so that if
-    the two ever do diverge, the change is a visible one.
-    """
-    return can_delete_card(card)
-
-
-def edit_refusal(card):
-    """The tooltip explaining why the pencil is greyed, or None if it isn't."""
-    return _card_refusal(card, EDIT_NOT_YOURS, EDIT_SIGN_IN_PROMPT)
-
-
-def delete_refusal(card):
-    """The tooltip explaining why the cross is greyed, or None if it isn't."""
-    return _card_refusal(card, DELETE_NOT_YOURS, DELETE_SIGN_IN_PROMPT)
-
-
-def is_admin():
-    """Whether this request's visitor is an administrator (issue #158).
-
-    Three things must hold, and the check fails closed if any is missing: the
-    visitor is signed in, Google reported their email as verified, and the
-    address is in ADMIN_EMAILS. Requiring `email_verified` is what stops an
-    account that merely *claims* a listed address from inheriting the
-    privileges; a session predating this check carries no such claim and is
-    therefore not admin until its owner signs in again.
-
-    Nothing uses the privilege yet — #126 (blocking) and #162 (deleting any
-    card) are what will ask.
-    """
-    user = session.get("user") or {}
-    if not user.get("email_verified"):
-        return False
-    email = (user.get("email") or "").strip().lower()
-    return bool(email) and email in ADMIN_EMAILS
-
-
-def _current_user_id():
-    """Row id of the signed-in visitor (#89), or None.
-
-    None covers three cases that the database cannot tell apart afterwards and
-    does not need to: an anonymous visitor, a sign-in whose users row could not
-    be written (#148), and any card saved before the column existed.
-
-    This is the only place the id may come from. It must never be read from
-    request data — the review popup posts hidden fields, so a browser could
-    otherwise attribute its cards to somebody else.
-    """
-    return (session.get("user") or {}).get("id")
-
-
-def _identity_token():
-    """Opaque stamp for this identity, or None for an anonymous visitor (#170).
-
-    The chat widget keeps its transcript in localStorage and has to know
-    whether a stored thread belongs to whoever is signed in *now* — clearing
-    on the way out cannot cover an identity change the browser never sees,
-    like a session expiring or being repaired server-side.
-
-    A salted digest rather than the id or the email, because this is written
-    into localStorage: readable by anything on the origin and still there
-    after sign-out. Equality is the only thing the widget asks of it.
-
-    The token changes if SECRET_KEY does, which discards stored threads once.
-    """
-    key = _current_user_id() or _current_email()
-    if not key:
-        return None
-    salted = f"{app.secret_key}:{key}".encode("utf-8")
-    return hashlib.sha256(salted).hexdigest()[:16]
-
-
-def cards_owner_filter():
-    """The owner to restrict card reads to, or None for the shared deck (#127).
-
-    None whenever the filter cannot mean anything: the setting is off, or the
-    visitor has no account to own cards. An anonymous visitor is the case that
-    matters — they share config-default.json, so if the toggle were ever left
-    on there they would all see an empty site with no way to change it back
-    (#102 makes that config read-only for them).
-
-    Returning None rather than a falsy id also keeps the SQL honest: the query
-    layer treats None as "no filter", never as "owned by nobody".
-    """
-    if not current_settings()["individual_cards"]:
-        return None
-    return _current_user_id()
-
-
-def viewer():
-    """Who is asking, for #382's topic visibility: `(user id, is admin)`.
-
-    Deliberately **not** `cards_owner_filter()`, and passed beside it rather
-    than instead of it. That one is #127's setting -- what this visitor asked
-    to look at, None when they asked for everything. This is who they *are*,
-    which no setting changes, and it is what decides whether a private topic
-    exists for them at all.
-
-    Every card read takes both, because the two answer different halves of the
-    same query: "whose cards do you want" and "whose topics may you see".
-
-    A dict, spread with `**viewer()`, so the two arrive as **keywords**. Two
-    bare positionals after `cards_owner_filter()` read as three anonymous
-    filters at twenty-five call sites, and every stub in the test suite would
-    have to know their order to stand in for one of these functions.
-    """
-    return {"viewer_id": _current_user_id(), "admin": is_admin()}
-
-
-def current_settings():
-    """Settings for this request (issue #86): the signed-in user's own config
-    file, or the shared default config for anonymous visitors. Always returns a
-    complete, valid dict — a missing or corrupt file falls back to defaults."""
-    return settings_store.load(_current_user_id(), _current_email())
-
-
-def _sections_for_visitor(owner=None):
-    """`utils.get_topics_by_section()` in the order this visitor asked for (#363).
-
-    The single reader of `alphabetical_topics`, and the reason is the shape of
-    the bug it prevents: four pages list topics — the browse tiles, the
-    picker, `/topics.json` behind the widget's own re-render, and Mykola's
-    context — and a fifth that asked the database directly would quietly be
-    the one page ordered differently from the rest. Calling this is how a page
-    gets the ordering; there is nothing to remember.
-
-    Raises what the query raises. Callers that must survive a dead database
-    already catch it, and `_visible_sections()` is the one that does it for
-    the picker.
-    """
-    if owner is None:
-        owner = cards_owner_filter()
-    return utils.get_topics_by_section(
-        owner, alphabetical=current_settings()["alphabetical_topics"],
-        **viewer())
-
-
-def _private_marks():
-    """The padlocks this visitor's browse page draws (#382), or `{}`.
-
-    A map beside the sections rather than a third element in their pairs --
-    #223's icons set that precedent, and for the same reason: the pair is read
-    by the index page, the move dialog and the Mykola widget's own renderer.
-
-    A dead database costs the padlocks and nothing else, exactly as it costs
-    the sections themselves one line above.
-    """
-    try:
-        return utils.private_topics(**viewer())
-    except Exception:
-        app.logger.exception("Could not list the private topics")
-        return {}
-
-
 def _save_and_log(entry, source, fills=None, allow_duplicate=False):
     """Save one card and record the outcome in logs/cards.log (#30).
 
@@ -560,10 +275,10 @@ def _save_and_log(entry, source, fills=None, allow_duplicate=False):
     quietly writing. Callers that face a person check beforehand, so the
     visitor gets the sign-in prompt rather than an error.
     """
-    refusal = add_refusal()
+    refusal = web.add_refusal()
     if refusal:
-        applog.card_add_denied(entry, source=source, user=_current_email(),
-                               reason="blocked" if is_blocked() else "anonymous")
+        applog.card_add_denied(entry, source=source, user=web._current_email(),
+                               reason="blocked" if web.is_blocked() else "anonymous")
         raise PermissionError(refusal)
     # Which card this one is about to sit beside (#379), read *before* the
     # write while "the card with this word and pos" still names exactly one
@@ -577,7 +292,7 @@ def _save_and_log(entry, source, fills=None, allow_duplicate=False):
             alongside = existing[0] if existing else None
         except Exception:
             app.logger.exception("Could not read the card being duplicated")
-    card_id = utils.save_flashcard(entry, added_by_user_id=_current_user_id(),
+    card_id = utils.save_flashcard(entry, added_by_user_id=web._current_user_id(),
                              allow_duplicate=allow_duplicate)
     if card_id is None:
         # A duplicate, but this lookup may still carry what the stored card is
@@ -590,13 +305,13 @@ def _save_and_log(entry, source, fills=None, allow_duplicate=False):
         filled = utils.fill_missing_fields(entry)
         if filled:
             applog.card_filled(entry, filled, source=source,
-                               user=_current_email())
+                               user=web._current_email())
             if fills is not None:
                 fills.append(filled)
         else:
-            applog.card_skipped(entry, source=source, user=_current_email())
+            applog.card_skipped(entry, source=source, user=web._current_email())
         return False
-    applog.card_created(entry, source=source, user=_current_email(),
+    applog.card_created(entry, source=source, user=web._current_email(),
                         card_id=card_id, alongside=alongside)
     return True
 
@@ -633,9 +348,9 @@ def duplicate_notice(entries):
     Only ever an *addition* to the existing message: the plain wording is
     correct whenever the blocking card is one they can actually find.
     """
-    if not current_settings()["individual_cards"]:
+    if not web.current_settings()["individual_cards"]:
         return None
-    owner = _current_user_id()
+    owner = web._current_user_id()
     try:
         for entry in entries:
             existing = utils.find_duplicate(entry.get("word"), entry.get("pos"))
@@ -689,8 +404,8 @@ def _mark_already_saved(cards):
         # #186: duplicate detection is global while #127 hides other people's
         # cards, so "already in DB" can be said about a card the visitor
         # cannot find. Read once for the popup rather than per card.
-        hidden_matters = current_settings()["individual_cards"]
-        owner = _current_user_id()
+        hidden_matters = web.current_settings()["individual_cards"]
+        owner = web._current_user_id()
     except Exception:
         # Unknown, so nothing is claimed. The same answer #145's
         # `_word_already_saved()` gives to an unreachable database, for the
@@ -798,7 +513,7 @@ def _example_list(field):
 def _hidden_languages():
     """Language names this identity has hidden in Settings (#46/#79/#111),
     in the form the agent's whitelist expects — e.g. ["Russian"]."""
-    prefs = current_settings()
+    prefs = web.current_settings()
     hidden = []
     if not prefs["show_ukrainian"]:
         hidden.append("Ukrainian")
@@ -825,7 +540,7 @@ def _agent_kwargs(method, away_hours=None):
         kwargs["away_hours"] = away_hours
     # ai_agent#50: deliberate less, answer shorter. Only ever passed when it is
     # on, so an agent that predates the parameter behaves as it always did.
-    if "fast" in params and current_settings().get("mykola_fast_thinking"):
+    if "fast" in params and web.current_settings().get("mykola_fast_thinking"):
         kwargs["fast"] = True
     return kwargs
 
@@ -896,9 +611,9 @@ def _mykola_chat_inputs():
     # presentation: this is the refusal that holds for a request made by hand.
     # Before the length and content checks, so a blocked visitor cannot use
     # the endpoint's answers to probe anything.
-    if is_blocked():
-        applog.mykola_denied(user=_current_email())
-        return None, (jsonify({"error": blocked_notice()}), 403)
+    if web.is_blocked():
+        applog.mykola_denied(user=web._current_email())
+        return None, (jsonify({"error": web.blocked_notice()}), 403)
 
     if request.content_length and request.content_length > MAX_MYKOLA_REQUEST_BYTES:
         return None, (jsonify({"error": "Your message is too long. Please shorten it and try again."}), 413)
@@ -972,7 +687,7 @@ def _current_user_log_dir() -> Path:
     and two addresses sharing a local part fed one person's conversations into
     another's welcome-back recap.
     """
-    user_id = _current_user_id()
+    user_id = web._current_user_id()
     if user_id is None:
         return LOG_DIR
     user_dir = LOG_DIR / str(user_id)
@@ -987,7 +702,7 @@ def _migrate_log_dir(user_dir: Path) -> None:
     """Move this visitor's pre-#174 email-keyed chat folder onto its id-keyed
     name. On read rather than by a script, for the same reason as the settings
     store: a user who hasn't signed in since #148 has logs but no users row."""
-    prefix = _safe_email_prefix(_current_email())
+    prefix = _safe_email_prefix(web._current_email())
     if not prefix:
         return
     legacy = LOG_DIR / prefix
@@ -1309,7 +1024,7 @@ def _save_preferred_name_from_chat(name):
     appear after signing in again, since `_current_first_name()` reads the
     session, not the database.
     """
-    user_id = _current_user_id()
+    user_id = web._current_user_id()
     if user_id is None:
         raise PermissionError(
             "Sign in with Google and I shall remember what to call you.")
@@ -1319,7 +1034,7 @@ def _save_preferred_name_from_chat(name):
     user = dict(session.get("user") or {})
     user["preferred_name"] = name
     session["user"] = user
-    applog.preferred_name_set(user_id, name, user=_current_email())
+    applog.preferred_name_set(user_id, name, user=web._current_email())
     return name
 
 
@@ -1393,9 +1108,9 @@ def get_mykola():
 
 def _topics_for_chat():
     """Topics and card counts, as this visitor is allowed to see them."""
-    owner = cards_owner_filter()
+    owner = web.cards_owner_filter()
     return [{"topic": name, "cards": count}
-            for _section, topics in _sections_for_visitor(owner)
+            for _section, topics in web._sections_for_visitor(owner)
             for name, count in topics]
 
 
@@ -1421,7 +1136,7 @@ def _cards_for_chat(topic, limit):
     """
     hidden = [_TRANSLATION_COLUMNS[name] for name in _hidden_languages()
               if name in _TRANSLATION_COLUMNS]
-    cards = utils.get_flashcards_by_topic(topic, cards_owner_filter(), **viewer())[:limit]
+    cards = utils.get_flashcards_by_topic(topic, web.cards_owner_filter(), **web.viewer())[:limit]
     if not hidden:
         return cards
     return [{k: v for k, v in card.items() if k not in hidden}
@@ -1453,9 +1168,9 @@ def inject_mykola():
     answers every message with a refusal would be worse than not offering it.
     """
     return {
-        "mykola_enabled": MYKOLA_AVAILABLE and not is_blocked(),
+        "mykola_enabled": MYKOLA_AVAILABLE and not web.is_blocked(),
         "app_boot_id": APP_BOOT_ID,
-        "mykola_identity": _identity_token(),
+        "mykola_identity": web._identity_token(),
     }
 
 
@@ -1584,25 +1299,25 @@ def inject_auth():
         "current_user": session.get("user"),
         "google_auth_enabled": GOOGLE_AUTH_AVAILABLE,
         # Admin-only UI is then a plain {% if is_admin %} (#158).
-        "is_admin": is_admin(),
+        "is_admin": web.is_admin(),
         # Why the delete-account control is greyed, or None if it isn't (#165).
-        "account_delete_refusal": (ADMIN_ACCOUNT_UNDELETABLE if is_admin()
+        "account_delete_refusal": (web.ADMIN_ACCOUNT_UNDELETABLE if web.is_admin()
                                    else None),
         # Callables, not values: they answer per card (#162, #176).
-        "can_delete_card": can_delete_card,
-        "delete_refusal": delete_refusal,
-        "can_edit_card": can_edit_card,
-        "edit_refusal": edit_refusal,
-        "can_move_card": can_move_card,
-        "move_refusal": move_refusal,
+        "can_delete_card": web.can_delete_card,
+        "delete_refusal": web.delete_refusal,
+        "can_edit_card": web.can_edit_card,
+        "edit_refusal": web.edit_refusal,
+        "can_move_card": web.can_move_card,
+        "move_refusal": web.move_refusal,
         # #125: the sign-in dialog's text, kept in one place so the popup and
         # the JSON refusal cannot drift apart.
-        "add_sign_in_prompt": ADD_SIGN_IN_PROMPT,
-        "can_add_cards": can_add_cards(),
+        "add_sign_in_prompt": web.ADD_SIGN_IN_PROMPT,
+        "can_add_cards": web.can_add_cards(),
         # #126: a blocked visitor is already signed in, so the dialog must not
         # offer them a sign-in link; the Settings popup names the admin.
-        "is_blocked": is_blocked(),
-        "blocked_notice": blocked_notice() if is_blocked() else None,
+        "is_blocked": web.is_blocked(),
+        "blocked_notice": web.blocked_notice() if web.is_blocked() else None,
     }
 
 
@@ -1611,7 +1326,7 @@ def inject_settings():
     """Expose the active settings to every template (issue #86) — the seam the
     Settings UI (#13), dictionary choice (#20) and language switches (#46)
     will read from."""
-    active = current_settings()
+    active = web.current_settings()
     return {
         "settings": active,
         # The bounds the Settings popup puts on #235's round-length box, read
@@ -1790,13 +1505,13 @@ def account_delete():
     Signed-in visitors only: an anonymous visitor has no account, and a
     sign-in whose users row could not be written (#148) has nothing to delete.
     """
-    user_id = _current_user_id()
+    user_id = web._current_user_id()
     if user_id is None:
-        return jsonify({"ok": False, "error": SIGN_IN_TO_DELETE_ACCOUNT}), 403
-    if is_admin():
+        return jsonify({"ok": False, "error": web.SIGN_IN_TO_DELETE_ACCOUNT}), 403
+    if web.is_admin():
         # Enforced here, not only by greying the button: the control is
         # presentation and a hand-made POST goes straight past it (#162).
-        return jsonify({"ok": False, "error": ADMIN_ACCOUNT_UNDELETABLE}), 403
+        return jsonify({"ok": False, "error": web.ADMIN_ACCOUNT_UNDELETABLE}), 403
 
     # Anything other than an explicit "delete" keeps the cards. The safer of
     # the two options is the one a malformed request falls back to.
@@ -1835,13 +1550,13 @@ def save_settings():
             "error": "Sign in with Google to change settings.",
         }), 403
     changes = request.get_json(silent=True) or {}
-    stored = settings_store.update(changes, _current_user_id(),
-                                   _current_email())
+    stored = settings_store.update(changes, web._current_user_id(),
+                                   web._current_email())
     # Logged here rather than in settings_store (#161): the store is also read
     # on every request and writes a file when one does not exist yet, so logging
     # from inside it would record a *visit* as a change. This is the one place a
     # person deliberately changes something.
-    applog.settings_changed(changes, stored, user=_current_email())
+    applog.settings_changed(changes, stored, user=web._current_email())
     return jsonify({"ok": True, "settings": stored})
 
 
@@ -1952,7 +1667,7 @@ def mykola_recap():
     (issue ai_agent#30). The recap is an optional nicety: anonymous visitors,
     empty histories, older agent versions, and errors all return
     {"recap": null} so the widget silently keeps its normal greeting."""
-    if not MYKOLA_AVAILABLE or not session.get("user") or is_blocked():
+    if not MYKOLA_AVAILABLE or not session.get("user") or web.is_blocked():
         return jsonify({"recap": None})
     # The learner already said goodbye today: wish them a good rest instead
     # of restarting the dialogue (ai_agent#39). Deterministic — no model call.
@@ -1989,10 +1704,10 @@ def mykola_restart_check():
     """
     if not MYKOLA_AVAILABLE:
         return jsonify({"restart": False, "reason": "unavailable"})
-    if is_blocked():
+    if web.is_blocked():
         # No conversation to restart — the widget is not there (#126).
         return jsonify({"restart": False, "reason": "blocked"})
-    hours = current_settings()["restart_chat_interval"]
+    hours = web.current_settings()["restart_chat_interval"]
     if not hours:
         return jsonify({"restart": False, "reason": "disabled"})
 
@@ -2065,10 +1780,10 @@ def topics_json():
     the move dialog offers as suggestions (#177). Adding the first without
     keeping the second would have emptied that dialog's datalist.
     """
-    owner = cards_owner_filter()
+    owner = web.cards_owner_filter()
     try:
-        topics = utils.get_topics(owner, **viewer())
-        sections = _sections_for_visitor(owner)
+        topics = utils.get_topics(owner, **web.viewer())
+        sections = web._sections_for_visitor(owner)
     except Exception:
         topics, sections = [], []
     # Icons ride alongside as a name -> URL map rather than as a third element
@@ -2082,7 +1797,7 @@ def topics_json():
     # rebuilds the very block index.html renders, so a mark drawn on one and not
     # the other would vanish the moment a card was saved from chat.
     return jsonify({"topics": topics, "sections": sections, "icons": icons,
-                    "private": _private_marks()})
+                    "private": web._private_marks()})
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -2132,12 +1847,12 @@ def index():
                         else:
                             message = lookup_refusal["message"]
                     else:
-                        prefs = current_settings()
+                        prefs = web.current_settings()
                         # The provider-by-provider detail is logged by the parser;
                         # this line carries the identity it cannot see (#30).
                         applog.lookup_started(
                             word, prefs["translator"],
-                            prefs["explanatory_dictionary"], user=_current_email())
+                            prefs["explanatory_dictionary"], user=web._current_email())
                         entries = lookup_word(
                             word, topic=topic,
                             translator=prefs["translator"],
@@ -2159,7 +1874,7 @@ def index():
                             entry.get("translation_ukr")
                             or entry.get("translation_rus")
                             for entry in entries)
-                        if prefs["cards_automatically"] and not can_add_cards():
+                        if prefs["cards_automatically"] and not web.can_add_cards():
                             # #125/#126: nothing may be written, so the automatic
                             # save cannot happen. The lookup already succeeded, so
                             # show its cards in the review popup rather than
@@ -2167,12 +1882,12 @@ def index():
                             # leaves them there to be added.
                             applog.card_add_denied(
                                 {"word": word}, source="automatic add",
-                                user=_current_email(),
-                                reason="blocked" if is_blocked() else "anonymous")
+                                user=web._current_email(),
+                                reason="blocked" if web.is_blocked() else "anonymous")
                             proposed = entries
                             proposed_topic = topic
                             proposed_degraded = degraded
-                            write_refusal = add_refusal()
+                            write_refusal = web.add_refusal()
                         elif prefs["cards_automatically"]:
                             # 'Add cards automatically' is on (#13): skip the
                             # review popup, write the cards straight to the DB.
@@ -2228,7 +1943,7 @@ def index():
                 # Every upload, not only the expensive kinds: which file calls
                 # Claude cannot be known without parsing it, and parsing is the
                 # thing being paid for.
-                write_refusal = add_refusal()
+                write_refusal = web.add_refusal()
                 file = request.files.get("notes_file")
                 if write_refusal:
                     pass          # refused: the file is not even read
@@ -2245,10 +1960,10 @@ def index():
                                 file.filename, data, topic=topic)
                     except Exception as e:
                         applog.file_rejected(file.filename, e,
-                                             user=_current_email())
+                                             user=web._current_email())
                         raise
                     applog.file_parsed(file.filename, len(data), len(entries),
-                                       topic=topic, user=_current_email(),
+                                       topic=topic, user=web._current_email(),
                                        elapsed_ms=timer.ms)
                     if not entries:
                         message = "No vocabulary entries found in that file."
@@ -2266,13 +1981,13 @@ def index():
         _mark_already_saved(proposed)
 
     try:
-        sections = _sections_for_visitor()
+        sections = web._sections_for_visitor()
     except Exception:
         sections = []  # DB unreachable (e.g. locally) — page still works
 
     return render_template(
         "index.html", message=message, sections=sections,
-        private_marks=_private_marks(),
+        private_marks=web._private_marks(),
         proposed=proposed, proposed_topic=proposed_topic,
         proposed_degraded=proposed_degraded,
         source_content=source_content, duplicate_warning=duplicate_warning,
@@ -2305,15 +2020,15 @@ def add_card():
         "translation_rus": cleaned("translation_rus"),
         "examples_rus": _example_list("examples_rus"),
     }
-    refusal = add_refusal()
+    refusal = web.add_refusal()
     if refusal:
         # #125/#126. Answered here rather than by hiding the button: these
         # forms are ordinary POSTs and a hand-made one goes straight past the
         # UI. `sign_in_required` is what tells the popup to show the message
         # instead of its generic "saving failed" alert.
         applog.card_add_denied(entry, source="review popup",
-                               user=_current_email(),
-                               reason="blocked" if is_blocked() else "anonymous")
+                               user=web._current_email(),
+                               reason="blocked" if web.is_blocked() else "anonymous")
         return {"ok": False, "sign_in_required": True, "error": refusal}, 403
     # The learner was shown the card they already have and answered "add it
     # anyway" (#379). #101 is lifted for this one press: it exists to stop
@@ -2377,14 +2092,14 @@ def topic_visibility(topic_id):
     #176 put ownership in the statement rather than in a check before it. The
     template only decides what to draw.
     """
-    if is_blocked():
-        flash((blocked_notice(), None))
+    if web.is_blocked():
+        flash((web.blocked_notice(), None))
         return redirect(url_for("flashcards", topic=request.form.get("topic", "")))
     public = (request.form.get("visibility") or "public") == "public"
-    outcome = utils.set_topic_visibility(topic_id, public, **viewer())
+    outcome = utils.set_topic_visibility(topic_id, public, **web.viewer())
     name = request.form.get("topic", "")
     applog.topic_visibility_set(name, public, topic_id=topic_id,
-                                user=_current_email(), outcome=outcome)
+                                user=web._current_email(), outcome=outcome)
     message = TOPIC_VISIBILITY_MESSAGES.get(outcome)
     if message:
         flash((message, None))
@@ -2406,11 +2121,11 @@ def flashcards(topic):
     same rule rather than trusted.
     """
     wanted = request.args.get("t", type=int)
-    found = utils.resolve_topic(topic, topic_id=wanted, **viewer())
+    found = utils.resolve_topic(topic, topic_id=wanted, **web.viewer())
     if found is None:
         abort(404)
-    cards = utils.get_flashcards_by_topic(found["name"], cards_owner_filter(),
-                                    **viewer())
+    cards = utils.get_flashcards_by_topic(found["name"], web.cards_owner_filter(),
+                                    **web.viewer())
     # The move dialog's topic suggestions (#177) are fetched from
     # /topics.json when it first opens, rather than queried here: this page is
     # loaded by everyone and the list is only needed by someone who actually
@@ -2420,7 +2135,7 @@ def flashcards(topic):
         # Who may change it, which is not the same as who may see it: the
         # admin reads every topic (#382) and still does not own this one.
         can_set_visibility=(found["created_by_user_id"] is not None
-                            and found["created_by_user_id"] == _current_user_id()))
+                            and found["created_by_user_id"] == web._current_user_id()))
 
 
 # A tiny sample deck so the card-deck activity (#78) can be opened and its
@@ -2461,9 +2176,9 @@ def card_deck(topic):
     The flip animation is scoped to this page's template, so it stays local to
     this activity and doesn't affect the rest of the app.
     """
-    prefs = current_settings()
+    prefs = web.current_settings()
     try:
-        cards = utils.get_flashcards_by_topic(topic, cards_owner_filter(), **viewer())
+        cards = utils.get_flashcards_by_topic(topic, web.cards_owner_filter(), **web.viewer())
         demo = False
     except Exception:
         # DB unreachable — fall back to the sample deck so the activity still
@@ -2486,36 +2201,36 @@ def delete_card(topic, card_id):
     landed the route had no identity check at all, so anyone past the keyword
     gate could delete any card.
     """
-    if is_blocked():
+    if web.is_blocked():
         # #126: a blocked account keeps its cards but may not remove them,
         # exactly as it may not add any. Checked before ownership, so the
         # answer does not depend on whose card it is.
-        applog.card_delete_denied(card_id, topic=topic, user=_current_email(),
+        applog.card_delete_denied(card_id, topic=topic, user=web._current_email(),
                                   reason="blocked")
-        flash((blocked_notice(), None))
+        flash((web.blocked_notice(), None))
         return redirect(url_for("flashcards", topic=topic))
 
-    user_id = _current_user_id()
-    admin = is_admin()
+    user_id = web._current_user_id()
+    admin = web.is_admin()
     if not admin and user_id is None:
         # No identity at all — an anonymous visitor, or a sign-in whose users
         # row could not be written (#148). Nothing can be theirs, so this is
         # #125's sign-in prompt rather than #162's "someone else's card".
-        applog.card_delete_denied(card_id, topic=topic, user=_current_email(),
+        applog.card_delete_denied(card_id, topic=topic, user=web._current_email(),
                                   reason="anonymous")
-        flash((DELETE_SIGN_IN_PROMPT, None))
+        flash((web.DELETE_SIGN_IN_PROMPT, None))
         return redirect(url_for("flashcards", topic=topic))
 
     word, outcome = utils.delete_flashcard(card_id, owner_id=user_id, admin=admin)
     if outcome == "deleted":
-        applog.card_deleted(card_id, word, topic=topic, user=_current_email())
+        applog.card_deleted(card_id, word, topic=topic, user=web._current_email())
         flash((f"Deleted card '{word}'.", None))
     elif outcome == "denied":
         applog.card_delete_denied(card_id, topic=topic,
-                                  user=_current_email(), reason="not owner")
-        flash((DELETE_NOT_YOURS, None))
+                                  user=web._current_email(), reason="not owner")
+        flash((web.DELETE_NOT_YOURS, None))
     else:
-        applog.card_delete_missed(card_id, topic=topic, user=_current_email())
+        applog.card_delete_missed(card_id, topic=topic, user=web._current_email())
         flash(("Card not found — it may have already been deleted.", None))
     return redirect(url_for("flashcards", topic=topic))
 
@@ -2530,17 +2245,17 @@ def move_card(topic, card_id):
     """
     to_topic = (request.form.get("to_topic") or "").strip()
 
-    if is_blocked():
-        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+    if web.is_blocked():
+        applog.card_edit_denied(card_id, topic=topic, user=web._current_email(),
                                 reason="blocked")
-        flash((blocked_notice(), None))
+        flash((web.blocked_notice(), None))
         return redirect(url_for("flashcards", topic=topic))
-    user_id = _current_user_id()
-    admin = is_admin()
+    user_id = web._current_user_id()
+    admin = web.is_admin()
     if not admin and user_id is None:
-        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+        applog.card_edit_denied(card_id, topic=topic, user=web._current_email(),
                                 reason="anonymous")
-        flash((MOVE_SIGN_IN_PROMPT, None))
+        flash((web.MOVE_SIGN_IN_PROMPT, None))
         return redirect(url_for("flashcards", topic=topic))
     if not to_topic:
         flash(("Choose a topic to move the card to.", None))
@@ -2549,9 +2264,9 @@ def move_card(topic, card_id):
     outcome, detail = utils.move_flashcard(card_id, to_topic, owner_id=user_id,
                                      admin=admin)
     if outcome == "denied":
-        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+        applog.card_edit_denied(card_id, topic=topic, user=web._current_email(),
                                 reason="not owner")
-        flash((MOVE_NOT_YOURS, None))
+        flash((web.MOVE_NOT_YOURS, None))
         return redirect(url_for("flashcards", topic=topic))
     if outcome == "missing":
         flash(("Card not found — it may have already been deleted.", None))
@@ -2565,7 +2280,7 @@ def move_card(topic, card_id):
     # and then dropped, so the log could say where a card had landed but never
     # where it came from — the one thing a move is actually about.
     applog.card_moved(card_id, word, from_topic, to_topic,
-                      user=_current_email())
+                      user=web._current_email())
     flash((f"Moved '{word}' to '{to_topic}'.", to_topic))
 
     # Moving the last card out of a topic makes that topic cease to exist —
@@ -2573,7 +2288,7 @@ def move_card(topic, card_id):
     # anything to show, for a topic that has vanished from the chips, reads as
     # a bug; the topic list is the honest destination.
     try:
-        remaining = [name for name, _ in utils.get_topics(cards_owner_filter(), **viewer())]
+        remaining = [name for name, _ in utils.get_topics(web.cards_owner_filter(), **web.viewer())]
     except Exception:
         remaining = [from_topic]      # DB unreachable: stay put rather than guess
     if from_topic not in remaining:
@@ -2627,8 +2342,8 @@ def word_check():
     word = (data.get("word") or "").strip()
     if not word:
         return {"ok": False, "error": "word is required"}, 400
-    if is_blocked():
-        return {"ok": False, "error": blocked_notice()}, 403
+    if web.is_blocked():
+        return {"ok": False, "error": web.blocked_notice()}, 403
 
     if word.lower() in utils.confirmed_words():
         return {"ok": True, "real": True, "known": True,
@@ -2643,7 +2358,7 @@ def word_check():
         try:
             first = utils.remember_confirmed_word(word, verdict.get("source", ""))
             applog.word_confirmed(word, verdict.get("source", ""),
-                                  user=_current_email(), first=first)
+                                  user=web._current_email(), first=first)
         except Exception:
             # The confirmation still stands for this learner and this round;
             # it simply was not remembered for the next one.
@@ -2680,8 +2395,8 @@ def saved_json():
         return {"ok": False, "error": "word is required"}, 400
     try:
         state = utils.find_saved_words([(word, pos or None)])[0]
-        hidden_matters = current_settings()["individual_cards"]
-        owner = _current_user_id()
+        hidden_matters = web.current_settings()["individual_cards"]
+        owner = web._current_user_id()
     except Exception:
         app.logger.exception("Could not check whether a renamed word is saved")
         return {"ok": True, "known": False, "mark": {}}
@@ -2712,10 +2427,10 @@ def lookup_json():
     part of speech that was asked about, and `entries` for everything the
     lookup found, so the dialog can offer a choice when nothing matched.
     """
-    if is_blocked():
-        return {"ok": False, "error": blocked_notice()}, 403
-    if not is_admin() and _current_user_id() is None:
-        return {"ok": False, "error": EDIT_SIGN_IN_PROMPT}, 403
+    if web.is_blocked():
+        return {"ok": False, "error": web.blocked_notice()}, 403
+    if not web.is_admin() and web._current_user_id() is None:
+        return {"ok": False, "error": web.EDIT_SIGN_IN_PROMPT}, 403
 
     payload = request.get_json(silent=True) or {}
     word = (payload.get("word") or "").strip()
@@ -2732,10 +2447,10 @@ def lookup_json():
     if refusal:
         return {"ok": False, "error": refusal["message"]}, 429
 
-    prefs = current_settings()
+    prefs = web.current_settings()
     applog.lookup_started(word, prefs["translator"],
                           prefs["explanatory_dictionary"],
-                          user=_current_email())
+                          user=web._current_email())
     try:
         entries = lookup_word(
             word,
@@ -2769,16 +2484,16 @@ def edit_card(topic, card_id):
     def cleaned(field):
         return (request.form.get(field) or "").strip() or None
 
-    if is_blocked():
-        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+    if web.is_blocked():
+        applog.card_edit_denied(card_id, topic=topic, user=web._current_email(),
                                 reason="blocked")
-        return {"ok": False, "error": blocked_notice()}, 403
-    user_id = _current_user_id()
-    admin = is_admin()
+        return {"ok": False, "error": web.blocked_notice()}, 403
+    user_id = web._current_user_id()
+    admin = web.is_admin()
     if not admin and user_id is None:
-        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+        applog.card_edit_denied(card_id, topic=topic, user=web._current_email(),
                                 reason="anonymous")
-        return {"ok": False, "error": EDIT_SIGN_IN_PROMPT}, 403
+        return {"ok": False, "error": web.EDIT_SIGN_IN_PROMPT}, 403
 
     word = cleaned("word")
     if not word:
@@ -2812,7 +2527,7 @@ def edit_card(topic, card_id):
     outcome, detail = utils.update_flashcard(card_id, entry, owner_id=user_id,
                                        admin=admin)
     if outcome == "updated":
-        applog.card_edited(entry, source="card page", user=_current_email(),
+        applog.card_edited(entry, source="card page", user=web._current_email(),
                            card_id=card_id, changed=detail)
         return {"ok": True, "changed": detail}
     if outcome == "unchanged":
@@ -2824,9 +2539,9 @@ def edit_card(topic, card_id):
             f"Another card for {named} already exists, so this one cannot be "
             "renamed to it.")}, 409
     if outcome == "denied":
-        applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
+        applog.card_edit_denied(card_id, topic=topic, user=web._current_email(),
                                 reason="not owner")
-        return {"ok": False, "error": EDIT_NOT_YOURS}, 403
+        return {"ok": False, "error": web.EDIT_NOT_YOURS}, 403
     return {"ok": False, "error": "Card not found — it may have been deleted."}, 404
 
 
@@ -2879,7 +2594,7 @@ def _visible_sections():
     nothing to offer rather than a 500.
     """
     try:
-        return _sections_for_visitor()
+        return web._sections_for_visitor()
     except Exception:
         app.logger.exception("Could not list topics for the picker")
         return []
@@ -2939,7 +2654,7 @@ def _render_picker(activity, start_url):
     quiz_langs = {}
     quiz_lang = None
     if activity.picks_language:
-        prefs = current_settings()
+        prefs = web.current_settings()
         visible_langs = _visible_quiz_langs(prefs)
         if len(visible_langs) > 1:
             quiz_langs = visible_langs
@@ -3126,10 +2841,10 @@ def _lookup_refusal():
     `can_add_cards()`: asking and taking cannot be two steps, or two workers
     both take the last slot.
     """
-    if is_blocked():
-        return {"message": blocked_notice(), "sign_in": False}
+    if web.is_blocked():
+        return {"message": web.blocked_notice(), "sign_in": False}
 
-    user_id = _current_user_id()
+    user_id = web._current_user_id()
     if user_id is None:
         used = session.get(LOOKED_UP_COUNT_KEY, 0)
         if LOOKUP_ANON_LIMIT and used >= LOOKUP_ANON_LIMIT:
@@ -3227,8 +2942,8 @@ def _generation_refusal():
     `can_add_cards()`: asking and taking cannot be two steps, or two workers
     both take the last slot.
     """
-    if is_blocked():
-        return {"message": blocked_notice(), "sign_in": False}
+    if web.is_blocked():
+        return {"message": web.blocked_notice(), "sign_in": False}
 
     user_id = session.get("user", {}).get("id")
     if user_id is None:
@@ -3332,7 +3047,7 @@ def _read_a_text_round(activity, topics):
             # answer to "you cannot have another" is to leave the one they have
             # on the screen rather than to clear it as well.
             return page(held=_held_generation(), refusal=refusal)
-        cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+        cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
         chosen = textgen.words_for_text(cards, length)
         if not chosen:
             return page(held=None, refusal=None)
@@ -3479,7 +3194,7 @@ def _scrambled_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
     cards = games.one_per_word(cards)
 
     if request.method == "POST":
@@ -3610,7 +3325,7 @@ def _real_or_fake_round(activity, topics):
         return (word.isalpha() and len(word) >= games.MIN_INVENTED_LENGTH
                 and " " not in word)
 
-    in_selection = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    in_selection = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
     kept, dropped = games.playable(in_selection, usable)
     # Deduplicated: #101 keeps one card per word *and part of speech*, so a
     # word that is both a noun and a verb is two cards, and the same word twice
@@ -3624,8 +3339,8 @@ def _real_or_fake_round(activity, topics):
     selected = [card["word"]
                 for card in games.one_per_word(card for card, _ in kept)]
     everything = utils.get_flashcards_by_topics(
-        games.visible_topic_names(_visible_sections()), cards_owner_filter(),
-        **viewer())
+        games.visible_topic_names(_visible_sections()), web.cards_owner_filter(),
+        **web.viewer())
 
     wanted_fake = words // 2
     # Everything the deck knows is English, plus everything a learner has
@@ -3692,7 +3407,7 @@ def _fill_the_gap_round(activity, topics):
     in the page and gone when they leave it (#233's rule about a game that
     records a score does not apply to a game that records nothing).
     """
-    prefs = current_settings()
+    prefs = web.current_settings()
     wanted = prefs["gapped_deck_size"]
     field, label = _gap_translation(prefs)
     # #334. `none` is the default and reproduces #235 exactly, so a learner who
@@ -3702,7 +3417,7 @@ def _fill_the_gap_round(activity, topics):
     # One card per word, before the eligibility rule so a duplicate never
     # reaches `dropped` (#272's rule). Shuffled first, so which of a word's
     # cards survives is not always the lowest id.
-    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
     random.shuffle(cards)
     cards = games.one_per_word(cards)
 
@@ -3775,7 +3490,7 @@ def _multiple_choice_round(activity, topics):
     is hidden in Settings (#46/#79). A second rule for the same question would
     drift from the first inside a month.
     """
-    prefs = current_settings()
+    prefs = web.current_settings()
     langs = _visible_quiz_langs(prefs)
     words = games.word_count(request.args.get("words"),
                              games.remembered_word_count(session))
@@ -3798,7 +3513,7 @@ def _multiple_choice_round(activity, topics):
     field = f"translation_{lang}"
     page["lang_name"] = QUIZ_LANGS[lang]
 
-    in_selection = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    in_selection = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
     usable, untranslated = games.playable(
         in_selection,
         lambda card: bool(card.get(field)) and bool((card.get("word") or "").strip()))
@@ -3842,7 +3557,7 @@ def _multiple_choice_round(activity, topics):
     if len(pool) < MIN_SELF_SUFFICIENT_POOL:
         wider = utils.get_flashcards_by_topics(
             games.visible_topic_names(_visible_sections()),
-            cards_owner_filter(), **viewer())
+            web.cards_owner_filter(), **web.viewer())
         spare = [(c.get("word") or "").strip() for c in wider
                  if (c.get("word") or "").strip()]
 
@@ -3897,11 +3612,11 @@ def _listen_and_type_round(activity, topics):
     written down as a deliberate exception in #268 rather than left to look
     like an oversight.
     """
-    prefs = current_settings()
+    prefs = web.current_settings()
     words = games.word_count(request.args.get("words"),
                              games.remembered_word_count(session))
     field, label = _gap_translation(prefs)
-    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
 
     if request.method == "POST":
         results = []
@@ -4007,7 +3722,7 @@ def _odd_one_out_round(activity, topics):
             questions=None, results=results, words=words, dropped=0,
             score=sum(1 for r in results if r["correct"]))
 
-    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
     by_topic = games.by_topic(cards)
     questions = games.odd_one_out_round(
         by_topic, words, _topic_sections(_visible_sections()))
@@ -4047,7 +3762,7 @@ def _spell_it_round(activity, topics):
 
     if request.method == "POST":
         results = []
-        cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+        cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
         for card, given, correct in _graded_answers(cards, _typed_the_word):
             results.append({
                 "word": card["word"],
@@ -4073,7 +3788,7 @@ def _spell_it_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
     cards = games.one_per_word(cards)
     usable, dropped = games.playable(
         cards,
@@ -4136,7 +3851,7 @@ def _rebuild_the_sentence_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
     cards = games.one_per_word(cards)
 
     if request.method == "POST":
@@ -4324,7 +4039,7 @@ def generate_topic():
     if not _generation_available():
         abort(404)
 
-    refusal = add_refusal()
+    refusal = web.add_refusal()
     proposal, message = None, None
 
     if request.method == "POST" and not refusal:
@@ -4367,7 +4082,7 @@ def start_topic_fill():
     """
     if not _generation_available():
         abort(404)
-    refusal = add_refusal()
+    refusal = web.add_refusal()
     if refusal:
         flash((refusal, None))
         return redirect(url_for("generate_topic"))
@@ -4445,11 +4160,11 @@ def stream_topic_fill():
     plan = session.get(TOPIC_PLAN_KEY) or {}
     words = list(plan.get("words") or [])
     title = plan.get("title") or ""
-    prefs = current_settings()
-    user = _current_email()
+    prefs = web.current_settings()
+    user = web._current_email()
     # Read before the response opens: `session` is not writable from inside a
     # generator, and `add_refusal()` reads the request context.
-    refusal = add_refusal()
+    refusal = web.add_refusal()
 
     def events():
         if refusal or not words or not title:
@@ -4676,7 +4391,7 @@ def _run_quiz(topics, heading, self_url, back, words):
     with no translation in the chosen language. Several topics grade as one run
     because they are one list of cards by the time they get here.
     """
-    prefs = current_settings()
+    prefs = web.current_settings()
     langs = _visible_quiz_langs(prefs)
     # `activity` rides along for #266's shared shortfall sentence, which reads
     # `needs` off it. The quiz's own page predates the chassis and never needed
@@ -4700,7 +4415,7 @@ def _run_quiz(topics, heading, self_url, back, words):
     # was asked 20 has no way to tell that from the word limit. 74 of the 569
     # cards in production have no Ukrainian and 38 no Russian, so this is a
     # number people will actually meet.
-    in_selection = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    in_selection = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
     usable, untranslated = games.playable(in_selection,
                                           lambda card: card.get(field))
     cards = [card for card, _ in usable]
