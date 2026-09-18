@@ -34,6 +34,7 @@ import applog
 import games
 import topicgen
 import settings_store
+import utils
 import textgen
 import parsers
 from parsers import lookup_word, parse_notes_preview
@@ -183,7 +184,7 @@ def _record_sign_in(info):
     """Persist the signed-in identity (#148); return (user_id, preferred_name).
 
     Returns (None, None) if the row can't be written — an unreachable database
-    must not cost the user their login, the same way get_topics() and
+    must not cost the user their login, the same way utils.get_topics() and
     _word_already_saved() already tolerate one.
     """
     google_sub = (info.get("sub") or "").strip()
@@ -194,7 +195,7 @@ def _record_sign_in(info):
         app.logger.warning("Google sign-in without sub/email; not recording it")
         return None, None
     try:
-        return upsert_user(
+        return utils.upsert_user(
             google_sub, email,
             display_name=_claim(info, "name"),
             given_name=_claim(info, "given_name"),
@@ -273,7 +274,7 @@ def current_block():
     """
     if "kf_block" not in g:
         try:
-            g.kf_block = get_user_block(_current_user_id())
+            g.kf_block = utils.get_user_block(_current_user_id())
         except Exception:
             app.logger.exception("Could not read the block state")
             g.kf_block = None
@@ -505,7 +506,7 @@ def current_settings():
 
 
 def _sections_for_visitor(owner=None):
-    """`get_topics_by_section()` in the order this visitor asked for (#363).
+    """`utils.get_topics_by_section()` in the order this visitor asked for (#363).
 
     The single reader of `alphabetical_topics`, and the reason is the shape of
     the bug it prevents: four pages list topics — the browse tiles, the
@@ -520,7 +521,7 @@ def _sections_for_visitor(owner=None):
     """
     if owner is None:
         owner = cards_owner_filter()
-    return get_topics_by_section(
+    return utils.get_topics_by_section(
         owner, alphabetical=current_settings()["alphabetical_topics"],
         **viewer())
 
@@ -536,7 +537,7 @@ def _private_marks():
     the sections themselves one line above.
     """
     try:
-        return private_topics(**viewer())
+        return utils.private_topics(**viewer())
     except Exception:
         app.logger.exception("Could not list the private topics")
         return {}
@@ -546,7 +547,7 @@ def _save_and_log(entry, source, fills=None, allow_duplicate=False):
     """Save one card and record the outcome in logs/cards.log (#30).
 
     Every card written by the app goes through here or through the explicit
-    applog calls next to the other save_flashcard() call sites — keep it that
+    applog calls next to the other utils.save_flashcard() call sites — keep it that
     way when adding a new save path.
 
     Returns True when a row was actually written (False = duplicate).
@@ -572,11 +573,11 @@ def _save_and_log(entry, source, fills=None, allow_duplicate=False):
     alongside = None
     if allow_duplicate:
         try:
-            existing = find_duplicate(entry.get("word"), entry.get("pos"))
+            existing = utils.find_duplicate(entry.get("word"), entry.get("pos"))
             alongside = existing[0] if existing else None
         except Exception:
             app.logger.exception("Could not read the card being duplicated")
-    card_id = save_flashcard(entry, added_by_user_id=_current_user_id(),
+    card_id = utils.save_flashcard(entry, added_by_user_id=_current_user_id(),
                              allow_duplicate=allow_duplicate)
     if card_id is None:
         # A duplicate, but this lookup may still carry what the stored card is
@@ -586,7 +587,7 @@ def _save_and_log(entry, source, fills=None, allow_duplicate=False):
         #
         # Still returns False. A fill is **not** a save, and saying otherwise
         # is how #308 had Mykola confirming a card that was never written.
-        filled = fill_missing_fields(entry)
+        filled = utils.fill_missing_fields(entry)
         if filled:
             applog.card_filled(entry, filled, source=source,
                                user=_current_email())
@@ -637,7 +638,7 @@ def duplicate_notice(entries):
     owner = _current_user_id()
     try:
         for entry in entries:
-            existing = find_duplicate(entry.get("word"), entry.get("pos"))
+            existing = utils.find_duplicate(entry.get("word"), entry.get("pos"))
             if existing and existing[1] != owner:
                 return HIDDEN_DUPLICATE_NOTE
     except Exception:
@@ -650,7 +651,7 @@ def _word_already_saved(word):
     """Whether the word already has cards (issue #145). A DB error is treated
     as 'unknown' → no warning, so lookups keep working when the DB is down."""
     try:
-        return flashcard_word_exists(word)
+        return utils.flashcard_word_exists(word)
     except Exception:
         return False
 
@@ -666,7 +667,7 @@ def _mark_already_saved(cards):
     card parsed from notes often carries no part of speech at all:
 
     * `card` -- the same word and part of speech is already saved, so Add
-      writes nothing. Not nothing at all: `fill_missing_fields()` still fills
+      writes nothing. Not nothing at all: `utils.fill_missing_fields()` still fills
       what the stored card left empty (#349), and the sentence says so rather
       than implying a second copy;
     * `word` -- the word is saved under some other part of speech. This card
@@ -683,7 +684,7 @@ def _mark_already_saved(cards):
     the end of the month.
     """
     try:
-        states = find_saved_words([(card.get("word"), card.get("pos"))
+        states = utils.find_saved_words([(card.get("word"), card.get("pos"))
                                    for card in cards])
         # #186: duplicate detection is global while #127 hides other people's
         # cards, so "already in DB" can be said about a card the visitor
@@ -760,7 +761,7 @@ def _text_source(field):
 
     Both dialogs clear the matching hidden field as soon as anybody types in
     the box beside it, so edited text arrives here with nothing to claim --
-    which is the same answer `update_flashcard()` reaches on its own.
+    which is the same answer `utils.update_flashcard()` reaches on its own.
     """
     value = (request.form.get(field) or "").strip().lower()
     return value if value in EXPLANATION_SOURCES else None
@@ -859,7 +860,7 @@ def _anonymous_quota_refusal():
         return jsonify({"error": SIGN_IN_PROMPT, "sign_in_required": True}), 402
 
     try:
-        allowed, today = claim_anonymous_message(ANONYMOUS_DAILY_LIMIT)
+        allowed, today = utils.claim_anonymous_message(ANONYMOUS_DAILY_LIMIT)
     except Exception:
         app.logger.exception("Could not count the anonymous message")
         allowed, today = True, 0
@@ -1284,7 +1285,7 @@ def _save_card_from_chat(entry):
             f"{named} is already saved, so no second copy was added. {hidden}")
     where = None
     try:
-        where = duplicate_topic(entry.get("word"), entry.get("pos"))
+        where = utils.duplicate_topic(entry.get("word"), entry.get("pos"))
     except Exception:
         # A dead database costs the topic name, not the correction itself —
         # saying "already saved" without it still beats claiming it was.
@@ -1312,7 +1313,7 @@ def _save_preferred_name_from_chat(name):
     if user_id is None:
         raise PermissionError(
             "Sign in with Google and I shall remember what to call you.")
-    if not set_preferred_name(user_id, name):
+    if not utils.set_preferred_name(user_id, name):
         raise RuntimeError("I could not find your account to note that in.")
 
     user = dict(session.get("user") or {})
@@ -1406,7 +1407,7 @@ _TRANSLATION_COLUMNS = {"Ukrainian": "translation_ukr",
 def _cards_for_chat(topic, limit):
     """One topic's cards, filtered exactly as the browse page filters them.
 
-    Through `get_flashcards_by_topic()` with `cards_owner_filter()`, so #127
+    Through `utils.get_flashcards_by_topic()` with `cards_owner_filter()`, so #127
     holds here too: a learner who has hidden other people's cards must not
     have Mykola read them out. Anything else would make the chat a way around
     a setting the rest of the site honours.
@@ -1420,7 +1421,7 @@ def _cards_for_chat(topic, limit):
     """
     hidden = [_TRANSLATION_COLUMNS[name] for name in _hidden_languages()
               if name in _TRANSLATION_COLUMNS]
-    cards = get_flashcards_by_topic(topic, cards_owner_filter(), **viewer())[:limit]
+    cards = utils.get_flashcards_by_topic(topic, cards_owner_filter(), **viewer())[:limit]
     if not hidden:
         return cards
     return [{k: v for k, v in card.items() if k not in hidden}
@@ -1764,7 +1765,7 @@ def delete_account(user_id, keep_cards=True) -> dict:
     result = {"cards": 0, "kept": keep_cards, "logs": False,
               "settings": False, "row": False}
 
-    result["cards"] = resolve_user_cards(user_id, keep_cards)
+    result["cards"] = utils.resolve_user_cards(user_id, keep_cards)
 
     log_dir = LOG_DIR / str(user_id)
     if log_dir.is_dir():
@@ -1778,7 +1779,7 @@ def delete_account(user_id, keep_cards=True) -> dict:
     except FileNotFoundError:
         pass  # nothing saved yet — not a failure
 
-    result["row"] = delete_user(user_id)
+    result["row"] = utils.delete_user(user_id)
     return result
 
 
@@ -2046,7 +2047,7 @@ def test_db_connection():
     the reason.
     """
     try:
-        conn = get_db_connection()
+        conn = utils.get_db_connection()
         conn.close()
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -2066,12 +2067,12 @@ def topics_json():
     """
     owner = cards_owner_filter()
     try:
-        topics = get_topics(owner, **viewer())
+        topics = utils.get_topics(owner, **viewer())
         sections = _sections_for_visitor(owner)
     except Exception:
         topics, sections = [], []
     # Icons ride alongside as a name -> URL map rather than as a third element
-    # in each pair (#223). The pair is what `get_topics_by_section()` returns and
+    # in each pair (#223). The pair is what `utils.get_topics_by_section()` returns and
     # what the move dialog reads; widening it would push a presentation concern
     # into the database layer and into every existing reader.
     icons = {name: topic_icon(name)
@@ -2371,7 +2372,7 @@ def topic_visibility(topic_id):
     A write, so it is a POST and it is logged (#30) -- including its refusals,
     which are the two answers a learner will report as "it did nothing".
 
-    The permission is `set_topic_visibility()`'s, not this route's: the rule is
+    The permission is `utils.set_topic_visibility()`'s, not this route's: the rule is
     "your own topic", and it belongs beside the UPDATE for the reason #162 and
     #176 put ownership in the statement rather than in a check before it. The
     template only decides what to draw.
@@ -2380,7 +2381,7 @@ def topic_visibility(topic_id):
         flash((blocked_notice(), None))
         return redirect(url_for("flashcards", topic=request.form.get("topic", "")))
     public = (request.form.get("visibility") or "public") == "public"
-    outcome = set_topic_visibility(topic_id, public, **viewer())
+    outcome = utils.set_topic_visibility(topic_id, public, **viewer())
     name = request.form.get("topic", "")
     applog.topic_visibility_set(name, public, topic_id=topic_id,
                                 user=_current_email(), outcome=outcome)
@@ -2405,10 +2406,10 @@ def flashcards(topic):
     same rule rather than trusted.
     """
     wanted = request.args.get("t", type=int)
-    found = resolve_topic(topic, topic_id=wanted, **viewer())
+    found = utils.resolve_topic(topic, topic_id=wanted, **viewer())
     if found is None:
         abort(404)
-    cards = get_flashcards_by_topic(found["name"], cards_owner_filter(),
+    cards = utils.get_flashcards_by_topic(found["name"], cards_owner_filter(),
                                     **viewer())
     # The move dialog's topic suggestions (#177) are fetched from
     # /topics.json when it first opens, rather than queried here: this page is
@@ -2462,7 +2463,7 @@ def card_deck(topic):
     """
     prefs = current_settings()
     try:
-        cards = get_flashcards_by_topic(topic, cards_owner_filter(), **viewer())
+        cards = utils.get_flashcards_by_topic(topic, cards_owner_filter(), **viewer())
         demo = False
     except Exception:
         # DB unreachable — fall back to the sample deck so the activity still
@@ -2505,7 +2506,7 @@ def delete_card(topic, card_id):
         flash((DELETE_SIGN_IN_PROMPT, None))
         return redirect(url_for("flashcards", topic=topic))
 
-    word, outcome = delete_flashcard(card_id, owner_id=user_id, admin=admin)
+    word, outcome = utils.delete_flashcard(card_id, owner_id=user_id, admin=admin)
     if outcome == "deleted":
         applog.card_deleted(card_id, word, topic=topic, user=_current_email())
         flash((f"Deleted card '{word}'.", None))
@@ -2545,7 +2546,7 @@ def move_card(topic, card_id):
         flash(("Choose a topic to move the card to.", None))
         return redirect(url_for("flashcards", topic=topic))
 
-    outcome, detail = move_flashcard(card_id, to_topic, owner_id=user_id,
+    outcome, detail = utils.move_flashcard(card_id, to_topic, owner_id=user_id,
                                      admin=admin)
     if outcome == "denied":
         applog.card_edit_denied(card_id, topic=topic, user=_current_email(),
@@ -2572,7 +2573,7 @@ def move_card(topic, card_id):
     # anything to show, for a topic that has vanished from the chips, reads as
     # a bug; the topic list is the honest destination.
     try:
-        remaining = [name for name, _ in get_topics(cards_owner_filter(), **viewer())]
+        remaining = [name for name, _ in utils.get_topics(cards_owner_filter(), **viewer())]
     except Exception:
         remaining = [from_topic]      # DB unreachable: stay put rather than guess
     if from_topic not in remaining:
@@ -2629,7 +2630,7 @@ def word_check():
     if is_blocked():
         return {"ok": False, "error": blocked_notice()}, 403
 
-    if word.lower() in confirmed_words():
+    if word.lower() in utils.confirmed_words():
         return {"ok": True, "real": True, "known": True,
                 "source": "a check somebody already made"}
     if not _word_check_allowed():
@@ -2640,7 +2641,7 @@ def word_check():
     verdict = parsers.confirm_word(word)
     if verdict.get("real"):
         try:
-            first = remember_confirmed_word(word, verdict.get("source", ""))
+            first = utils.remember_confirmed_word(word, verdict.get("source", ""))
             applog.word_confirmed(word, verdict.get("source", ""),
                                   user=_current_email(), first=first)
         except Exception:
@@ -2678,7 +2679,7 @@ def saved_json():
     if not word:
         return {"ok": False, "error": "word is required"}, 400
     try:
-        state = find_saved_words([(word, pos or None)])[0]
+        state = utils.find_saved_words([(word, pos or None)])[0]
         hidden_matters = current_settings()["individual_cards"]
         owner = _current_user_id()
     except Exception:
@@ -2802,13 +2803,13 @@ def edit_card(topic, card_id):
     # #191's dialog fills these boxes from a fresh lookup, so either really can
     # hold a dictionary's words -- and it clears the matching hidden field the
     # moment somebody edits a box, which leaves this None and
-    # `update_flashcard()` clearing the stored credit for that field alone.
+    # `utils.update_flashcard()` clearing the stored credit for that field alone.
     for text, credit in (("explanation_en", "explanation_source"),
                          ("examples_en", "examples_source")):
         if text in entry:
             entry[credit] = _text_source(credit)
 
-    outcome, detail = update_flashcard(card_id, entry, owner_id=user_id,
+    outcome, detail = utils.update_flashcard(card_id, entry, owner_id=user_id,
                                        admin=admin)
     if outcome == "updated":
         applog.card_edited(entry, source="card page", user=_current_email(),
@@ -2872,7 +2873,7 @@ def _visible_quiz_langs(prefs):
 
 
 def _visible_sections():
-    """`get_topics_by_section()` for this visitor, or [] if the DB is down.
+    """`utils.get_topics_by_section()` for this visitor, or [] if the DB is down.
 
     Same tolerance the index page has: a dead database leaves the picker with
     nothing to offer rather than a 500.
@@ -3136,7 +3137,7 @@ def _lookup_refusal():
             return {"message": LOOKUP_SIGN_IN_PROMPT, "sign_in": True}
 
     try:
-        allowed, scope, used = claim_word_lookup(
+        allowed, scope, used = utils.claim_word_lookup(
             user_id, LOOKUP_USER_DAILY, LOOKUP_ANON_DAILY)
     except Exception:
         # Best-effort in the same direction as #164's and #237's counters: an
@@ -3237,7 +3238,7 @@ def _generation_refusal():
             return {"message": GENERATION_SIGN_IN_PROMPT, "sign_in": True}
 
     try:
-        allowed, scope, used = claim_text_generation(
+        allowed, scope, used = utils.claim_text_generation(
             user_id, GENERATION_USER_DAILY, GENERATION_DAILY_LIMIT)
     except Exception:
         # Best-effort in the same direction as #164's counter: an unreachable
@@ -3331,7 +3332,7 @@ def _read_a_text_round(activity, topics):
             # answer to "you cannot have another" is to leave the one they have
             # on the screen rather than to clear it as well.
             return page(held=_held_generation(), refusal=refusal)
-        cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+        cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
         chosen = textgen.words_for_text(cards, length)
         if not chosen:
             return page(held=None, refusal=None)
@@ -3478,7 +3479,7 @@ def _scrambled_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     cards = games.one_per_word(cards)
 
     if request.method == "POST":
@@ -3609,7 +3610,7 @@ def _real_or_fake_round(activity, topics):
         return (word.isalpha() and len(word) >= games.MIN_INVENTED_LENGTH
                 and " " not in word)
 
-    in_selection = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    in_selection = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     kept, dropped = games.playable(in_selection, usable)
     # Deduplicated: #101 keeps one card per word *and part of speech*, so a
     # word that is both a noun and a verb is two cards, and the same word twice
@@ -3622,7 +3623,7 @@ def _real_or_fake_round(activity, topics):
     # that is not the real one.
     selected = [card["word"]
                 for card in games.one_per_word(card for card, _ in kept)]
-    everything = get_flashcards_by_topics(
+    everything = utils.get_flashcards_by_topics(
         games.visible_topic_names(_visible_sections()), cards_owner_filter(),
         **viewer())
 
@@ -3631,7 +3632,7 @@ def _real_or_fake_round(activity, topics):
     # already disputed and won (#258). The second set is small and grows from
     # real disagreements -- and a word that has been settled once must never be
     # offered as invented again, which is the whole reason it is written down.
-    known = games.vocabulary(everything) | confirmed_words()
+    known = games.vocabulary(everything) | utils.confirmed_words()
     # Vetted against a lexicon before the round rather than after a dispute
     # (#389). Measured over 60 rounds of this deck, one round in three offered
     # a real English word as invented -- `defence`, `provision`, `edition` and
@@ -3701,7 +3702,7 @@ def _fill_the_gap_round(activity, topics):
     # One card per word, before the eligibility rule so a duplicate never
     # reaches `dropped` (#272's rule). Shuffled first, so which of a word's
     # cards survives is not always the lowest id.
-    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     random.shuffle(cards)
     cards = games.one_per_word(cards)
 
@@ -3797,7 +3798,7 @@ def _multiple_choice_round(activity, topics):
     field = f"translation_{lang}"
     page["lang_name"] = QUIZ_LANGS[lang]
 
-    in_selection = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    in_selection = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     usable, untranslated = games.playable(
         in_selection,
         lambda card: bool(card.get(field)) and bool((card.get("word") or "").strip()))
@@ -3839,7 +3840,7 @@ def _multiple_choice_round(activity, topics):
     # that is a query nobody needs.
     spare, wider = [], in_selection
     if len(pool) < MIN_SELF_SUFFICIENT_POOL:
-        wider = get_flashcards_by_topics(
+        wider = utils.get_flashcards_by_topics(
             games.visible_topic_names(_visible_sections()),
             cards_owner_filter(), **viewer())
         spare = [(c.get("word") or "").strip() for c in wider
@@ -3900,7 +3901,7 @@ def _listen_and_type_round(activity, topics):
     words = games.word_count(request.args.get("words"),
                              games.remembered_word_count(session))
     field, label = _gap_translation(prefs)
-    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
 
     if request.method == "POST":
         results = []
@@ -3953,7 +3954,7 @@ def _listen_and_type_round(activity, topics):
 
 
 def _topic_sections(sections):
-    """`{topic: section}` from `get_topics_by_section()`'s shape (#269).
+    """`{topic: section}` from `utils.get_topics_by_section()`'s shape (#269).
 
     Only used to *prefer* an intruder from another section, so a topic missing
     from it costs nothing -- the preference simply does not fire for that one.
@@ -4006,7 +4007,7 @@ def _odd_one_out_round(activity, topics):
             questions=None, results=results, words=words, dropped=0,
             score=sum(1 for r in results if r["correct"]))
 
-    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     by_topic = games.by_topic(cards)
     questions = games.odd_one_out_round(
         by_topic, words, _topic_sections(_visible_sections()))
@@ -4046,7 +4047,7 @@ def _spell_it_round(activity, topics):
 
     if request.method == "POST":
         results = []
-        cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+        cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
         for card, given, correct in _graded_answers(cards, _typed_the_word):
             results.append({
                 "word": card["word"],
@@ -4072,7 +4073,7 @@ def _spell_it_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     cards = games.one_per_word(cards)
     usable, dropped = games.playable(
         cards,
@@ -4135,7 +4136,7 @@ def _rebuild_the_sentence_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    cards = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     cards = games.one_per_word(cards)
 
     if request.method == "POST":
@@ -4250,7 +4251,7 @@ def _lookup_budget(wanted):
         return {"limit": 0, "used": 0, "left": None, "wanted": wanted,
                 "affordable": True}
     try:
-        used = lookups_used_today(user_id)
+        used = utils.lookups_used_today(user_id)
     except Exception:
         # An unreachable counter cannot answer and the claim itself will
         # decide. Better a screen with no number than one with a wrong number.
@@ -4285,7 +4286,7 @@ def _vet_proposal(title, words, idea, count):
     somebody asked for.
     """
     try:
-        have = existing_words()
+        have = utils.existing_words()
     except Exception:
         app.logger.exception("Could not read the deck's words")
         have = set()
@@ -4388,7 +4389,7 @@ def start_topic_fill():
 
     user_id = session.get("user", {}).get("id")
     try:
-        allowed, scope, used = claim_word_lookups(
+        allowed, scope, used = utils.claim_word_lookups(
             user_id, len(words), LOOKUP_USER_DAILY, LOOKUP_ANON_DAILY)
     except Exception:
         # #237's rule for an unreachable counter: it cannot enforce a ceiling,
@@ -4699,7 +4700,7 @@ def _run_quiz(topics, heading, self_url, back, words):
     # was asked 20 has no way to tell that from the word limit. 74 of the 569
     # cards in production have no Ukrainian and 38 no Russian, so this is a
     # number people will actually meet.
-    in_selection = get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
+    in_selection = utils.get_flashcards_by_topics(topics, cards_owner_filter(), **viewer())
     usable, untranslated = games.playable(in_selection,
                                           lambda card: card.get(field))
     cards = [card for card, _ in usable]
