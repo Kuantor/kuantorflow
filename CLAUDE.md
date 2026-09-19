@@ -587,6 +587,19 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
 - **Significant PRs get a report** — a Markdown + PDF verification report
   committed under `kuantorflow_automation/test_reports/` (render with
   `reports/scripts/md_to_pdf.py`). Small PRs are exempt unless asked.
+- **The console one-offs live in `scripts/`** (#442) — `apply_schema.py`,
+  `seed_topics.py` + `seed_words.py`, `claim_topics.py`, `claim_flashcards.py`,
+  `retopic.py`. They are run, never imported by the app, which is why they can
+  sit in a directory of their own while the app's modules stay flat in the root
+  (see #442 for why *those* have not moved: seven `Path(__file__)` sites that
+  would fail **silently** one level down).
+  Each one starts with `import _bootstrap`, and **its position is load-bearing**:
+  `python scripts/seed_topics.py` puts `scripts/` on `sys.path`, not the repo
+  root, so without it the line below — `import utils` — cannot resolve. The test
+  suite cannot see that mistake, because `conftest.py` has both directories on
+  the path either way; `automation/tests/test_scripts_run_from_their_directory.py`
+  runs each script in a subprocess instead, which is the only thing that would.
+  `seed_words.py` is the exception and imports nothing at all.
 - Build-time tooling lives in `reports/scripts/` — `md_to_docx.py`,
   `md_to_pdf.py`, and `to_webp.py` (#234), which sizes artwork to the tiles
   and banners. Its numbers are measured against the eighteen topic icons,
@@ -597,7 +610,7 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
 ## Deploy (PythonAnywhere)
 
 `git pull` **both** `kuantorflow` and `ai_agent` (siblings), install
-requirements into the app venv, run **`python apply_schema.py`** (idempotent —
+requirements into the app venv, run **`python scripts/apply_schema.py`** (idempotent —
 it prints what it changed and what was already in place; `--dry-run` to look
 first), reload the web app. Note: Reverso and
 Merriam-Webster are blocked from PythonAnywhere's IPs, so those paths fall
@@ -652,8 +665,8 @@ commands** — from a Bash console, in the `kuantorflow` directory, with the app
 venv active:
 
 ```bash
-python apply_schema.py --dry-run   # read this first
-python apply_schema.py             # then apply
+python scripts/apply_schema.py --dry-run   # read this first
+python scripts/apply_schema.py             # then apply
 ```
 
 Reload the web app afterwards. Re-running is safe and says `nothing to do`.
@@ -670,8 +683,8 @@ the failure #180 exists to prevent.
 creator in a section an owner, which is what lets them be made private at all:
 
 ```bash
-venv/bin/python claim_topics.py --owner <email> --dry-run
-venv/bin/python claim_topics.py --owner <email>
+venv/bin/python scripts/claim_topics.py --owner <email> --dry-run
+venv/bin/python scripts/claim_topics.py --owner <email>
 ```
 
 Read the dry run: `+` is a topic it would claim, `=` is one created by somebody
@@ -681,8 +694,8 @@ thing deciding who can see it. Re-running says `nothing to do`.
 **`claim_flashcards.py` finishes that job** (#396) — the topics' cards:
 
 ```bash
-venv/bin/python claim_flashcards.py --owner <email> --dry-run
-venv/bin/python claim_flashcards.py --owner <email>
+venv/bin/python scripts/claim_flashcards.py --owner <email> --dry-run
+venv/bin/python scripts/claim_flashcards.py --owner <email>
 ```
 
 `+` is a topic and how many of its cards have no author; `=` names another
@@ -694,8 +707,8 @@ eighteen seeded topics where one fits and renames the survivors, from a plan
 declared in the script and nowhere else:
 
 ```bash
-venv/bin/python retopic.py --plan pa --dry-run
-venv/bin/python retopic.py --plan pa
+venv/bin/python scripts/retopic.py --plan pa --dry-run
+venv/bin/python scripts/retopic.py --plan pa
 ```
 
 `--plan local` is the other one; the two databases drifted apart and neither
@@ -726,14 +739,14 @@ re-run and safe to skip forever on a database that already has cards. When you d
 want it, from `~/kuantorflow` with the app's venv:
 
 ```bash
-venv/bin/python seed_topics.py --dry-run
+venv/bin/python scripts/seed_topics.py --dry-run
 ```
 
 Read that first: it names any topic it would **move** out of `Other`, which is
 the only thing it does to data somebody else made. Then:
 
 ```bash
-venv/bin/python seed_topics.py
+venv/bin/python scripts/seed_topics.py
 ```
 
 Expect it to take a while — 360 words × (two translations + a dictionary), with a

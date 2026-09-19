@@ -74,6 +74,10 @@ never to run again.
 import argparse
 import sys
 
+# `scripts/` is what `sys.path` gets when this file is run, not the repo
+# root -- so the app's modules below need the root put there first (#442).
+import _bootstrap  # noqa: F401
+
 import applog
 from utils import get_db_connection
 

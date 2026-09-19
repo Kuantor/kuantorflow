@@ -33,6 +33,10 @@ a PythonAnywhere console run needs:
 import argparse
 import sys
 
+# `scripts/` is what `sys.path` gets when this file is run, not the repo
+# root -- so the app's modules below need the root put there first (#442).
+import _bootstrap  # noqa: F401
+
 from utils import claim_unowned_topics, get_db_connection
 
 # Where the topics that nobody placed deliberately end up (#215), and so where

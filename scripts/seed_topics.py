@@ -53,6 +53,10 @@ import argparse
 import sys
 import time
 
+# `scripts/` is what `sys.path` gets when this file is run, not the repo
+# root -- so the app's modules below need the root put there first (#442).
+import _bootstrap  # noqa: F401
+
 import applog
 import settings_store
 import seed_words
