@@ -47,6 +47,8 @@ CHAT = "chat"
 CHAT_ANON = "chat:anon"
 LOOKUP = "lookup"
 LOOKUP_ANON = "lookup:anon"
+RECAP = "recap"
+UPLOAD = "upload"
 GENERATE = "generate"
 GENERATE_ALL = "generate:all"
 

@@ -773,6 +773,66 @@ def _generation_refusal():
     return None
 
 
+# --- what an account may spend in a day (#447) -------------------------------
+#
+# #164 gave the chat an anonymous allowance and no account one, and #200 made
+# the notes upload account-only without a number. Both were right while the
+# keyword gate was on: a signed-in visitor was, by construction, somebody who
+# had been handed a keyword and then chosen to sign in. #199 removes the gate
+# and the premise with it.
+#
+# And a Google account is a cost barrier rather than a bot barrier -- driving
+# the OAuth flow with a real one is ordinary browser automation, and aged
+# accounts sell in bulk. So signing in has to *raise* a ceiling rather than
+# remove it, which for these three it did.
+#
+# Sized above a real day's use rather than tightly: a limit a genuine learner
+# can reach is worse than none, because it lands on the one person who was
+# using the thing properly. 0 turns any of them off.
+CHAT_USER_DAILY = _int_env("CHAT_USER_DAILY", 150)
+RECAP_USER_DAILY = _int_env("RECAP_USER_DAILY", 20)
+UPLOAD_USER_DAILY = _int_env("UPLOAD_USER_DAILY", 20)
+
+# An account that has spent its own day has nothing to be offered -- signing in
+# is what it already did -- so these say "tomorrow" rather than prompting.
+# `GENERATION_USER_LIMIT_PROMPT` is the precedent.
+CHAT_USER_LIMIT_PROMPT = (
+    "You have talked with Mykola a lot today. Come back tomorrow for more.")
+RECAP_USER_LIMIT_PROMPT = (
+    "You have caught up a lot today. Come back tomorrow for more.")
+UPLOAD_USER_LIMIT_PROMPT = (
+    "You have imported all your files for today. Come back tomorrow for more.")
+
+
+def account_refusal(action, limit, prompt):
+    """Why this account may not spend another `action` today, or None (#447).
+
+    Anonymous visitors get None: they have their own allowances, which are the
+    caller's to check and are a different question -- this is the ceiling that
+    signing in raises rather than removes.
+
+    **Claims as it asks**, like every other guard here, so "may I?" and "then I
+    have" cannot drift apart between two workers. A caller that asks must
+    therefore be about to spend, which is why each one sits immediately before
+    the call it guards and after every cheaper refusal.
+
+    A dead database allows and logs, as #164's counter and #237's both do: an
+    unreachable database cannot enforce a ceiling and has already broken the
+    page around it.
+    """
+    user_id = session.get("user", {}).get("id")
+    if user_id is None or not limit or limit <= 0:
+        return None
+    try:
+        allowed, used = utils.claim_action(action, user_id, limit)
+    except Exception:
+        app.logger.exception("Could not count %s", action)
+        return None
+    if allowed:
+        return None
+    applog.anonymous_limit_hit(action, used, limit)
+    return prompt
+
 # --- streaming ---------------------------------------------------------------
 # The Server-Sent Events frame format, here because two features stream: the
 # chat and #406's topic fill. Eight lines of protocol rather than anything
