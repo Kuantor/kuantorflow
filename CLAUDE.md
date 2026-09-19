@@ -454,6 +454,33 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   cap. **A blocked account is refused outright** (#126 drew its line at
   writing when a lookup was free scraping; since #353 it is a spend, and #237
   already refuses them the other paid activity).
+- **`action_usage`** (#447) — what each identity has spent today, per action,
+  and the one table the three counters above became. They were the same table
+  three times, differing only in the name of the counter column, each with its
+  own near-identical claim statement; #447 needs ceilings on three more
+  actions, and six copies would have made the repetition the design.
+  `claim_action(action, user_id, limit, amount=1)` is the whole API, and
+  `action_used_today()` the free read #406's approve screen needs.
+  **It replaced them with no data step.** Every query against the three was
+  `WHERE day = CURDATE()`, nothing read a past day, and no report or admin page
+  read them at all — so the old rows were left to age out rather than migrated,
+  and the tables are still in `schema.sql` until a later change drops them. The
+  one visible effect was on the day of the deploy, when spend already counted
+  reset to zero because the new table started empty.
+  **The `action` says whose pool a row is**, which `user_id = 0` could not: it
+  meant anonymous lookups only in #388 and everybody's texts in #237, and one
+  table would have collided them into a single counter. Account rows carry a
+  real id under a bare name (`lookup`, `generate`, `chat`); shared rows sit on
+  `ALL_ACCOUNTS` under a scoped one (`lookup:anon`, `generate:all`). The names
+  are written out in `utils.py` rather than built from strings, because a typo
+  in an action name does not fail — it silently opens a fresh ceiling nothing
+  has ever counted against.
+  **Every claim is all or nothing, including a single slot.** `used + 1 <=
+  limit` is the same test as `used < limit`, so #406's batch is not a second
+  statement — it is this one with a count in it, and a partial claim is the
+  half-built topic that ceiling exists to prevent. `ROW_COUNT()` read straight
+  after the conditional update is what says whether *this* call took the last
+  slot rather than somebody else.
 - **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
   a lexicon confirmed. The game invents with a trigram model trained on the
   deck, so it sometimes produces real English and marks the learner wrong for
@@ -832,6 +859,18 @@ first lookup after the reload writes the day's first row. Nothing else changes
 on the day — except that a lookup now has a ceiling, which is the point.
 `LOOKUP_ANON_LIMIT`, `LOOKUP_USER_DAILY` and `LOOKUP_ANON_DAILY` tune it from
 the environment; 0 turns any of them off.
+
+**#447 needs `apply_schema.py`, and it is one step**: `action_usage` is a
+brand-new table, so the `schema.sql` pass creates it on an existing database
+and no migration is needed (#237's shape). The dry run should show
+`~ action_usage` and `=` against everything else.
+
+Nothing is migrated into it. The three tables it replaces hold day-scoped
+counters that nothing reads past today, so their rows are left to age out and
+the tables stay in `schema.sql` until a later change drops them. **The one
+visible effect is on the day**: spend already counted resets to zero, because
+the new table starts empty, so every ceiling is a little looser for the rest of
+that day.
 
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
 a brand-new table, so the `schema.sql` pass creates it on an existing database
