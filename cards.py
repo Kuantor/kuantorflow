@@ -482,6 +482,18 @@ def index():
                 # thing being paid for.
                 write_refusal = web.add_refusal()
                 file = request.files.get("notes_file")
+                # The account's own day (#447). #200 made this account-only and
+                # gave it no number, which was right while the keyword gate
+                # meant an account was somebody you had handed a keyword to.
+                #
+                # Claimed here, beside #125's refusal and before `file.read()`,
+                # for #200's own reason: which file calls Claude cannot be known
+                # without parsing it, and parsing is the thing being paid for.
+                # A refusal past the ceiling therefore costs nothing either.
+                if not write_refusal:
+                    write_refusal = web.account_refusal(
+                        utils.UPLOAD, web.UPLOAD_USER_DAILY,
+                        web.UPLOAD_USER_LIMIT_PROMPT)
                 if write_refusal:
                     pass          # refused: the file is not even read
                 elif file is None or not file.filename:

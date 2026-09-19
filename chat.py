@@ -265,6 +265,19 @@ def _mykola_chat_inputs():
     if refusal:
         return None, refusal
 
+    # And the account's own day (#447). Signing in used to remove the ceiling
+    # rather than raise it, which was right behind the keyword gate and is not
+    # once anybody can reach the site: every message is an Anthropic call, and
+    # one purchased Google account is not a barrier to anything.
+    #
+    # Here rather than in the routes because all three of them — the widget's
+    # POST, ai_agent's /api/chat and the SSE stream — come through this
+    # function, so a message is claimed once however it was asked.
+    spent = web.account_refusal(utils.CHAT, web.CHAT_USER_DAILY,
+                                web.CHAT_USER_LIMIT_PROMPT)
+    if spent:
+        return None, (jsonify({"error": spent, "sign_in_required": False}), 402)
+
     return {"question": question, "history": history, "chat_id": chat_id}, None
 
 
@@ -888,6 +901,19 @@ def mykola_recap():
         return jsonify({
             "recap": f"{name}, please have a rest, and return tomorrow! Goodnight!"
         })
+
+    # The account's day (#447), and **after** the farewell check above, which
+    # is deterministic and costs nothing: claiming before it would spend a slot
+    # on a message the model never writes. Every guard here sits after the free
+    # refusals and immediately before the call it pays for.
+    #
+    # A refusal is `{"recap": None}`, which is what every other thing that can
+    # go wrong here answers — the recap is an optional nicety, so the widget
+    # keeps its normal greeting rather than showing an error.
+    if web.account_refusal(utils.RECAP, web.RECAP_USER_DAILY,
+                           web.RECAP_USER_LIMIT_PROMPT):
+        return jsonify({"recap": None})
+
     agent = get_mykola()
     if not hasattr(agent, "recap"):  # older ai_agent checkout
         return jsonify({"recap": None})

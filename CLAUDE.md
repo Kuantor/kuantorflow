@@ -481,6 +481,28 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   half-built topic that ceiling exists to prevent. `ROW_COUNT()` read straight
   after the conditional update is what says whether *this* call took the last
   slot rather than somebody else.
+- **Per-account ceilings** (#447) — `CHAT_USER_DAILY` (150),
+  `RECAP_USER_DAILY` (20) and `UPLOAD_USER_DAILY` (20), all `_int_env` and 0 to
+  disable, claimed through `web.account_refusal()`. Mykola's chat, the
+  welcome-back recap and the notes upload had **no account ceiling at all**:
+  signing in removed the limit rather than raising it. That was right while the
+  keyword gate was on — a signed-in visitor was by construction somebody handed
+  a keyword who then chose to sign in — and #199 removes the premise. A Google
+  account is a cost barrier rather than a bot barrier, so the exemption was
+  worth what an account costs to buy.
+  **Each guard sits after every free refusal and immediately before the call it
+  pays for**, and that ordering is the easy thing to get wrong: the recap's
+  farewell answer (ai_agent#39) is deterministic, so claiming before it would
+  spend a slot on a sentence the model never writes. The upload claims beside
+  #125's refusal and before `file.read()`, for #200's own reason — which file
+  calls Claude cannot be known without parsing it, and parsing is the thing
+  being paid for.
+  The chat claims in `_mykola_chat_inputs()` rather than in a route, so the
+  widget's POST, ai_agent's `/api/chat` and the SSE stream share one allowance
+  and a streamed message does not cost two.
+  A refusal carries `sign_in_required: False` — they already signed in, so
+  there is nothing to offer and the answer is tomorrow. The recap's refusal is
+  `{"recap": None}`, like every other thing that can go wrong there.
 - **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
   a lexicon confirmed. The game invents with a trigram model trained on the
   deck, so it sometimes produces real English and marks the learner wrong for
