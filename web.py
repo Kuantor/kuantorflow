@@ -26,6 +26,8 @@ the ones #418 has not written yet.
 import hashlib
 import json
 import os
+import secrets
+import sys
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -39,10 +41,69 @@ import settings_store
 import utils
 
 
+SECRET_KEY_MISSING = """SECRET_KEY is not set.
+
+The session cookie is signed with it, and the signature is the only thing that
+stops a visitor writing their own -- saying they are signed in, that their
+address is verified, and that it is the admin's (#445). So this refuses to
+start rather than serve with a key somebody could guess.
+
+Put a random one in kuantorflow/.env:
+
+    python -c "import secrets; print(secrets.token_hex(32))"
+
+and add it as  SECRET_KEY=<the value>  (see .env.example).
+"""
+
+LOCAL_ENTRY_POINT = "app.py"
+
+RANDOM_KEY_WARNING = """WARNING: SECRET_KEY is not set; using a random key for this run.
+         Sessions will not survive a restart. See .env.example."""
+
+
+def _secret_key():
+    """The key the session cookie is signed with, or refuse to start (#445).
+
+    It used to fall back to the literal "dev-secret-change-me", which is in
+    this repository. A Flask session cookie is **signed, not encrypted**, so
+    that string was the whole of the protection: with it, anyone can mint a
+    cookie the app accepts -- measured, past the keyword gate and with
+    `is_admin()` answering True. #274 hardened this cookie's `Secure`,
+    `SameSite` and `HttpOnly` flags, which protect it in transit; none of them
+    is relevant to a cookie written from scratch.
+
+    So: **no fixed fallback, ever.** With `SECRET_KEY` set, that is the key.
+    Without it, `python app.py` gets a **random** key for that run and a loud
+    warning, and every other way of starting refuses.
+
+    Random rather than fixed is the point of the local case. It costs one
+    inconvenience -- restarting signs you out, because the old cookies no
+    longer verify -- and buys the thing that matters: an unset key can never
+    produce a *predictable* one. If this ever misjudges a deployment as local,
+    the failure is sessions that do not survive a reload, which is visible and
+    harmless, rather than sessions anybody can forge, which is neither.
+
+    The shape is `SESSION_COOKIE_SECURE`'s, a few lines below, and for the
+    reason its comment gives: the default is the safe one, so a forgotten
+    override breaks locally and visibly rather than quietly unprotecting the
+    deployed site.
+    """
+    key = os.environ.get("SECRET_KEY")
+    if key:
+        return key
+    # `python app.py` -- the local entry point, which relaxes the cookie's
+    # Secure flag below for the same reason. A WSGI server, a console script
+    # and pytest all fail this test, which is intended: only the thing a
+    # person runs on their own machine gets the convenience.
+    if Path(sys.argv[0]).name == LOCAL_ENTRY_POINT:
+        print(RANDOM_KEY_WARNING, file=sys.stderr)
+        return secrets.token_hex(32)
+    raise RuntimeError(SECRET_KEY_MISSING)
+
+
 app = Flask(__name__)
-# Needed for flash messages (session cookie). Override in production:
-# set the SECRET_KEY environment variable on PythonAnywhere.
-app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+# The session cookie is signed with this, and nothing else protects it (#445).
+app.secret_key = _secret_key()
 
 # How long a signed-in session survives once marked permanent (see the OAuth
 # callback). Keeps the visitor greeted by name across browser restarts without

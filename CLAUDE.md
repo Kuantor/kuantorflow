@@ -616,6 +616,35 @@ first), reload the web app. Note: Reverso and
 Merriam-Webster are blocked from PythonAnywhere's IPs, so those paths fall
 back (Google / Reverso alternatives).
 
+**`SECRET_KEY` is required, and the app refuses to start without it** (#445).
+The Flask session cookie is **signed, not encrypted**: the payload is plain
+base64 anyone can read, and the signature is the only thing that stops a
+visitor writing their own — one claiming they are signed in, that their
+address is verified, and that it is the admin's. `is_admin()` requires
+`email_verified` (#158), but that field is *inside* the cookie, so every check
+that reads the session sits downstream of the signature.
+
+It used to fall back to the literal `dev-secret-change-me`, which is in this
+repository — so the signature was worth nothing, and a forged cookie walked
+past the keyword gate with `is_admin()` answering True. #274 hardened the same
+cookie's `Secure`, `SameSite` and `HttpOnly` flags; those protect it *in
+transit*, and none of them applies to a cookie written from scratch.
+
+There is **no fixed fallback**. A configured key is used as given; `python
+app.py` alone falls back to a **random** key for that run, with a warning, so
+sessions do not survive a restart; every other entry point — WSGI, `flask
+run`, a console script, pytest — refuses. Random rather than fixed is the
+point: if that check ever misjudged a deployment as local, the failure would
+be sessions that do not persist, which is visible and harmless, rather than
+sessions anybody can forge, which is neither.
+
+Generate one with `python -c "import secrets; print(secrets.token_hex(32))"`.
+
+**Changing it signs everyone out once** and discards stored chat threads once,
+because `_identity_token()` (#170) is a salted digest of it and the widget
+compares that against `localStorage`. Both are one-time and neither needs a
+migration.
+
 **`ANTHROPIC_API_KEY` belongs in `kuantorflow/.env`** (#412). It used to be read
 from `ai_agent/.env`, which worked only because importing the agent loads that
 file — so the word lookup, #237's generated text and #406's topic builder all
