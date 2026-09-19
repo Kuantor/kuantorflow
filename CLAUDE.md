@@ -15,7 +15,7 @@ PythonAnywhere (MySQL).
 | Repo | Role |
 |---|---|
 | **kuantorflow** (this) | The web app: routes, templates, parsers, settings, DB access. |
-| **[ai_agent](https://github.com/Kuantor/ai_agent)** | Mykola, the RAG AI companion. **Imported, never duplicated** — `app.py` adds it to `sys.path` (`AI_AGENT_PATH`, default sibling `../ai_agent`) and imports `MykolaAgent`. If missing, `MYKOLA_AVAILABLE=False` and the widget just doesn't render. |
+| **[ai_agent](https://github.com/Kuantor/ai_agent)** | Mykola, the RAG AI companion. **Imported, never duplicated** — `chat.py` adds it to `sys.path` (`AI_AGENT_PATH`, default sibling `../ai_agent`) and imports `MykolaAgent`. If missing, `MYKOLA_AVAILABLE=False` and the widget just doesn't render. |
 | **[kuantorflow_automation](https://github.com/Kuantor/kuantorflow_automation)** | The pytest suite + DB backup + maintenance scripts. Tests live **there**, not here. Checked out one level deeper than a sibling — `../automation/kuantorflow_automation` — so `../kuantorflow_automation` finds nothing. |
 
 ## Run locally
@@ -30,20 +30,36 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
 
 ## Key modules & patterns
 
-- **The split (#418)** — five modules where there was one, in dependency order:
+- **The split (#418)** — six modules where there was one, in dependency order:
   **`web.py`** (the Flask object, the configuration, the identity and
   permission helpers, the two spending guards, the SSE frame),
   **`icons.py`** (topic and activity icons, registered as Jinja filters),
   **`cards.py`** (the deck, everything that reads or writes a card,
   `_save_and_log()`, and #406's topic builder), **`rounds.py`** (the games
-  chassis, the ten rounds and the quiz), and **`app.py`** (Mykola's chat, the
-  gate, sign-in, settings, account deletion — and the three side-effect
-  imports). The dependency runs **one way**: `web.py` ← `icons.py` ←
-  `cards.py` ← `rounds.py` ← `app.py`. **Nothing may import `app.py`**, or the
-  route table comes along and the split is undone.
+  chassis, the ten rounds and the quiz), **`chat.py`** (Mykola: the agent
+  import, the `_mykola_agent` singleton, the chat routes and the per-user chat
+  logs), and **`app.py`**, now 538 lines: the gate, sign-in, settings, account
+  deletion, and four side-effect imports. The dependency runs **one way**:
+  `web.py` ← `icons.py` ← `cards.py` ← `rounds.py` ← `chat.py` ← `app.py`.
+  **Nothing may import `app.py`**, or the route table comes along and the
+  split is undone.
   `cards.py` moved *before* the chat, reversing the order #418 gives, because
   Mykola's card saver is a card save: `chat.py` has to be able to import
   `cards`, and a module cannot import one that does not exist yet.
+  **Two rules keep a move cheap, and both are tested** in
+  `automation/tests/test_web_is_the_shared_module.py`. A module is reached
+  *through* its name — `web.is_admin()`, `cards._save_and_log()` — never
+  through a copy bound at import (#436), because a bare call still answers
+  correctly and is simply the one site a stub can no longer reach. And
+  `app.py` imports the feature modules for their **side effects** alone: a
+  `from rounds import …` means something was left half-moved.
+  **Moving a block? Compare the routes.** A decorated function's `ast` line
+  number is the `def`, not the decorator, so a block boundary drawn from it
+  leaves `@app.route` behind — which then attaches to the *next* function. It
+  has happened twice: once as a `SyntaxError`, once silently, with
+  `/mykola/chat` quietly answering with a database test. Count every route,
+  context processor and `before_request` across all six modules before and
+  after, and expect the same set.
   **`web.py` takes only what two or more feature modules need.** That is the
   whole admission rule, and it is what decided the two cases that looked
   borderline: the spending guards moved there because `_generation_refusal()`
@@ -64,7 +80,7 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   a row in **`users`** (#148), keyed on Google's `sub` so an email change
   updates rather than forks it, and the session carries `id`, the name claims
   and `preferred_name`. A dead database still lets the user in, with
-  `id = None`. `_current_first_name()` is the single place that decides what
+  `id = None`. `chat._current_first_name()` is the single place that decides what
   Mykola calls someone: `preferred_name` → `given_name` → first word of the
   display name. `given_name` is used **whole** by design ("Anna Maria" stays
   "Anna Maria"); shortening it is the app guessing at a nickname, and
@@ -378,8 +394,8 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   re-reads the held text rather than paying for a second one, and the held copy
   is keyed on the topics, length and instruction that produced it, so changing
   any of them offers a fresh text instead of silently showing an old one.
-- **Mykola widget** lives in `templates/base.html`; endpoints `/mykola/chat`,
-  `/mykola/recap`. Its intelligence comes from the `ai_agent` package.
+- **Mykola widget** lives in `templates/base.html`; its Python is `chat.py`
+  (#418), endpoints `/mykola/chat`, `/mykola/recap`. Its intelligence comes from the `ai_agent` package.
   **Agent tools are hosted here**: the agent defines them, this app injects the
   callable that touches the database (`card_saver` → `_save_card_from_chat`,
   `name_saver` → `_save_preferred_name_from_chat`, ai_agent#62). Injection is
@@ -591,10 +607,14 @@ back (Google / Reverso alternatives).
 from `ai_agent/.env`, which worked only because importing the agent loads that
 file — so the word lookup, #237's generated text and #406's topic builder all
 depended on a repo none of them uses, and a failed agent import took all three
-down without a word. `utils.py` loads this repo's `.env` at `app.py:40`, long
-before the agent import at 215, and `load_dotenv` does not override what is
-already set, so **a value here wins** and the agent's copy is a fallback rather
-than the route. Measured both ways: with both files set, this one is used; with
+down without a word. `app.py` imports `utils` — which loads this repo's `.env`
+— near the top, and the agent import now lives in `chat.py`, which `app.py`
+imports **last** (#418). `load_dotenv` does not override what is already set,
+so **a value here wins** and the agent's copy is a fallback rather than the
+route. Two things would now have to go wrong at once to reverse that, which is
+why `automation/tests/test_api_key_route.py` stopped reading the order off
+`app.py`'s source and asks the interpreter for it instead — both imports used
+to be lines in one file, and they no longer are. Measured both ways: with both files set, this one is used; with
 only the agent's set, that one still is — so adding it here breaks nothing and
 removing it restores the old behaviour exactly.
 
