@@ -39,9 +39,15 @@ import sys
 from collections import namedtuple
 from pathlib import Path
 
+# `scripts/` is what `sys.path` gets when this file is run, not the repo
+# root -- so the app's modules below need the root put there first (#442).
+import _bootstrap  # noqa: F401
+
 from utils import get_db_connection
 
-SCHEMA_PATH = Path(__file__).with_name("schema.sql")
+# `schema.sql` stays in the repo root; this script moved to `scripts/` (#442),
+# so the file it applies is one level up rather than beside it.
+SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schema.sql"
 
 # What a step creates. Existence of this object is the whole idempotency
 # check — there is no record of "which migrations ran", because the database
