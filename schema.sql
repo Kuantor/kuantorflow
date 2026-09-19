@@ -72,6 +72,42 @@ CREATE TABLE IF NOT EXISTS word_lookup_usage (
     PRIMARY KEY (day, user_id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- What each identity has spent today, per action (#447).
+--
+-- One table instead of a fourth copy. `anonymous_usage` (#164),
+-- `text_generation_usage` (#237) and `word_lookup_usage` (#388) are the same
+-- table three times over, differing only in the name of the counter column and
+-- in whether they carry a `user_id`; each arrived with its own near-identical
+-- claim statement. #447 needs ceilings on three more actions, and six of them
+-- would have made the repetition the design rather than an accident.
+--
+-- Moving the three needs **no data step**, which is the reason this is cheap:
+-- every query against them is `WHERE day = CURDATE()`, nothing in the repo
+-- reads a past day, and no report or admin page reads them at all. So the old
+-- rows are not migrated, they are simply left to age out. The one visible
+-- effect is on the day of the deploy, when quota already spent resets to zero
+-- because this table starts empty -- a single day of slightly looser ceilings.
+--
+-- **`action` says whose pool a row is**, which the `user_id = 0` sentinel
+-- could not. It meant two different things in the two tables it appeared in:
+-- anonymous lookups only in #388, and everybody's texts in #237. Now the
+-- account rows carry a real id and the shared rows are named -- `lookup:anon`
+-- is the anonymous pool, `generate:all` is everybody's -- so the difference is
+-- legible in the data rather than only in a docstring.
+--
+-- No foreign key to `users`, as in #237 and #388: these are day-scoped
+-- counters rather than attribution, and a stale row that expires the same day
+-- beats another RESTRICT/CASCADE decision on the account-deletion path (#165).
+CREATE TABLE IF NOT EXISTS action_usage (
+    day        DATE NOT NULL,
+    user_id    INT NOT NULL DEFAULT 0,
+    action     VARCHAR(32) NOT NULL,
+    used       INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                   ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (day, user_id, action)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- Words a learner disputed and a dictionary confirmed (#258).
 --
 -- *Real or fake* invents words with a character trigram trained on the deck,
