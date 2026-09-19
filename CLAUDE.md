@@ -30,13 +30,20 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
 
 ## Key modules & patterns
 
-- **`web.py` / `rounds.py` / `app.py`** — the split (#418). `web.py` holds the
-  Flask object, the configuration, the identity and permission helpers and the
-  two spending guards; `rounds.py` holds the games chassis, the ten rounds and
-  the quiz; `app.py` holds everything else and imports `rounds` **for its side
-  effects**, asking it for nothing. The dependency runs one way — `web.py` ←
-  `rounds.py` ← `app.py` — and nothing below `app.py` may import it, or the
+- **The split (#418)** — five modules where there was one, in dependency order:
+  **`web.py`** (the Flask object, the configuration, the identity and
+  permission helpers, the two spending guards, the SSE frame),
+  **`icons.py`** (topic and activity icons, registered as Jinja filters),
+  **`cards.py`** (the deck, everything that reads or writes a card,
+  `_save_and_log()`, and #406's topic builder), **`rounds.py`** (the games
+  chassis, the ten rounds and the quiz), and **`app.py`** (Mykola's chat, the
+  gate, sign-in, settings, account deletion — and the three side-effect
+  imports). The dependency runs **one way**: `web.py` ← `icons.py` ←
+  `cards.py` ← `rounds.py` ← `app.py`. **Nothing may import `app.py`**, or the
   route table comes along and the split is undone.
+  `cards.py` moved *before* the chat, reversing the order #418 gives, because
+  Mykola's card saver is a card save: `chat.py` has to be able to import
+  `cards`, and a module cannot import one that does not exist yet.
   **`web.py` takes only what two or more feature modules need.** That is the
   whole admission rule, and it is what decided the two cases that looked
   borderline: the spending guards moved there because `_generation_refusal()`
@@ -231,7 +238,7 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   write path asks the predicate *and* leans on `_save_and_log()`, which
   refuses on its own.
 - **`applog.py`** — the action logs in `logs/` (`cards.log`, `dict.log`,
-  `parsed_files.log`, #30). Card writes go through `app._save_and_log()`;
+  `parsed_files.log`, #30). Card writes go through `cards._save_and_log()`;
   **a new save or delete path must log too**. Helpers never raise, so logging
   can't break a request. `KF_LOGS_DIR` redirects the directory (the test
   suite points it at a temp dir). A writer with no request behind it —
@@ -307,7 +314,7 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   requested**: the model is asked for plain prose and `games.mark_words()`
   finds the words afterwards, so the page can say which ones actually appeared
   instead of claiming a coverage nobody checked. Spending is guarded *before*
-  the call (#200) by `app._generation_refusal()`, and with no
+  the call (#200) by `web._generation_refusal()`, and with no
   `ANTHROPIC_API_KEY` the activity is not reachable at all — `_reachable_activity()`
   404s it and the tile does not render, the same way `MYKOLA_AVAILABLE=False`
   removes the chat widget.
@@ -338,7 +345,7 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   dropped connection leaves what worked and #101 makes running it again the
   whole of the recovery. Every card still goes through `_save_and_log()`.
 - **The games chassis** — `/games/<slug>` is the picker and `/games/<slug>/play`
-  a round, dispatched through `GAME_ROUNDS` in `app.py`; a game is one entry
+  a round, dispatched through `GAME_ROUNDS` in `rounds.py`; a game is one entry
   there plus one in `ACTIVITIES`. **`/quiz` is a separate endpoint from
   `/quiz/<topic>` on purpose** (#250): with both rules on one endpoint `url_for`
   must choose between the path converter and a repeated query parameter, and it
@@ -347,12 +354,12 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   shareable and needs no JavaScript to build. **A round grades the questions it
   asked**, read back from the submitted field names, because the draw is random
   and re-sampling on POST would mark answers against words nobody saw. Since
-  #416 that happens in **one place** — `app._graded_answers()`, which wraps
+  #416 that happens in **one place** — `rounds._graded_answers()`, which wraps
   `games.asked()` and takes the game's own comparison as a callable, because
   "correct" really does differ between a typed headword, a stored translation's
   comma-separated variants, a shuffled sentence and a generated option. It is in
-  `app.py` rather than `games.py` for the reason #389 put the Wiktionary vet in
-  `app._vetted_pseudowords()`: that module holds pure round logic with no
+  `rounds.py` rather than `games.py` for the reason #389 put the Wiktionary vet in
+  `rounds._vetted_pseudowords()`: that module holds pure round logic with no
   request and no database in it. The six rounds that call it are exactly the
   six that grade an answer against a card row, so #338's per-learner recall is
   one write there rather than one per round — and the two that must never
@@ -459,7 +466,7 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   invented** — `defence`, `provision`, `edition`, `version` and `bailment`
   among them — so #258's dispute path was the only thing standing between a
   learner and being marked wrong for being right, and it only works if they
-  notice and press the button. The vet lives in `app._vetted_pseudowords()`,
+  notice and press the button. The vet lives in `rounds._vetted_pseudowords()`,
   **not** in `games.pseudowords()`, which has no network or database in it —
   every filter that function holds is a property of the *deck*, and this one is
   a property of English. Rejected words are fed back as `known`, which blocks

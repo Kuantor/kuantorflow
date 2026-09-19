@@ -24,6 +24,7 @@ the ones #418 has not written yet.
 """
 
 import hashlib
+import json
 import os
 import uuid
 from datetime import timedelta
@@ -709,3 +710,19 @@ def _generation_refusal():
 
     session[GENERATED_COUNT_KEY] = session.get(GENERATED_COUNT_KEY, 0) + 1
     return None
+
+
+# --- streaming ---------------------------------------------------------------
+# The Server-Sent Events frame format, here because two features stream: the
+# chat and #406's topic fill. Eight lines of protocol rather than anything
+# either of them owns, which is the same reason the spending guards are above
+# -- a helper with two callers in two features cannot live inside one of them.
+
+def _sse(payload) -> str:
+    """One Server-Sent Event carrying a JSON object.
+
+    `ensure_ascii` stays on: the frame travels as one line, and a stray raw
+    newline inside a Ukrainian reply would end the event early and split one
+    message into two malformed ones.
+    """
+    return "data: " + json.dumps(payload, ensure_ascii=True) + "\n\n"
