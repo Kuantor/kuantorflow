@@ -674,9 +674,14 @@
                     .then(function (resp) { return resp.json(); })
                     .then(function (data) {
                         testDbResult.className = data.ok ? "test-db-ok" : "test-db-bad";
+                        // Shown as the server wrote it, without an "Error: "
+                        // prefix: since #457 the failure message is a sentence
+                        // for the person who pressed the button rather than a
+                        // driver exception, and prefixing it reads as though
+                        // something went wrong with the check itself.
                         testDbResult.textContent = data.ok
                             ? "Database connection successful!"
-                            : "Error: " + (data.error || "connection failed");
+                            : (data.error || "The database is not answering.");
                     })
                     .catch(function () {
                         // The request itself never arrived — saying "database

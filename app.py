@@ -527,6 +527,15 @@ def save_settings():
     return jsonify({"ok": True, "settings": stored})
 
 
+# What a failed database check says out loud (#457). Written for the person
+# who pressed the button, which is the whole point: a learner looking at an
+# empty deck cannot otherwise tell #127's individual-cards filter or #382's
+# private topics -- both of which are working correctly -- from a database
+# that is not answering. That use is why this endpoint stays open to everyone
+# rather than becoming admin-only.
+DB_UNREACHABLE = "The database is not answering. Please try again in a minute."
+
+
 @app.route("/db/test", methods=["POST"])
 def test_db_connection():
     """Is the database reachable? (#184)
@@ -538,13 +547,32 @@ def test_db_connection():
 
     A failure is a normal answer here, not a server error: the caller asked a
     question and gets one, so this stays 200 either way and the popup shows
-    the reason.
+    what it can.
+
+    **The reason is logged rather than returned** (#457). It used to return
+    `str(e)`, and mysql-connector's message names the account and the host:
+    `1045 (28000): Access denied for user 'kuantorflow'@'localhost' (using
+    password: YES)`. On PythonAnywhere that is the account name and its MySQL
+    server, handed to anybody who can POST -- and nothing here checks who is
+    asking. Behind the keyword gate that was tolerable; #199 turns "anybody
+    who can POST" into the open internet.
+
+    The diagnostic is **moved, not lost**: `app.logger` is where the person
+    who can act on it is already looking, and it is the same place the
+    spending guards in `web.py` report their own failures.
+
+    Deliberately **not** permission-checked. The honest use above belongs to
+    an ordinary learner, and a read-only ping that discloses nothing needs no
+    rule about who may ask it -- which is also why the button is not hidden
+    for anyone. Settings being read-only for anonymous visitors (#102) is
+    about *writing*, and this writes nothing.
     """
     try:
         conn = utils.get_db_connection()
         conn.close()
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+    except Exception:
+        app.logger.exception("The database connection test failed")
+        return jsonify({"ok": False, "error": DB_UNREACHABLE})
     return jsonify({"ok": True})
 
 
