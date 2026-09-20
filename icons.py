@@ -13,13 +13,17 @@ directly, for `/topics.json`.
 `TOPIC_ICON_DIR` reads `app.static_folder` at import, so this module cannot be
 imported before the Flask object exists -- it takes it from `web.py`, like
 every other module here.
+
+Both icon builders go through `web.static_url()` rather than `url_for` (#300),
+because a tile's picture is a static asset like any other and a topic icon
+replaced in place would otherwise keep serving the old one. Reached **through**
+the module (#436), so one patch on `web.static_url` covers both.
 """
 
 import re
 from pathlib import Path
 
-from flask import url_for
-
+import web
 from web import app
 
 
@@ -79,8 +83,7 @@ def game_icon(slug):
     for topics, the normal case.
     """
     if slug and slug in _icon_slugs(GAME_ICON_DIR):
-        return url_for("static",
-                       filename=f"img/games/{slug}{TOPIC_ICON_SUFFIX}")
+        return web.static_url(f"img/games/{slug}{TOPIC_ICON_SUFFIX}")
     return None
 
 
@@ -108,8 +111,7 @@ def topic_icon(name):
     """
     slug = topic_slug(name)
     if slug and slug in _topic_icon_slugs():
-        return url_for("static",
-                       filename=f"img/topics/{slug}{TOPIC_ICON_SUFFIX}")
+        return web.static_url(f"img/topics/{slug}{TOPIC_ICON_SUFFIX}")
     return None
 
 
