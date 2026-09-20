@@ -25,8 +25,9 @@ venv/Scripts/python app.py      # http://localhost:5000
 ```
 
 Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
-`ACCESS_KEYWORD` (the keyword gate), and optionally `GOOGLE_CLIENT_ID/SECRET`
-(sign-in). The local venv is Python 3.14.
+and optionally `GOOGLE_CLIENT_ID/SECRET` (sign-in). `ACCESS_KEYWORD` is gone
+(#199) — **the site is open**, and what bounds it now is a daily ceiling on
+every paid action rather than a shared password. The local venv is Python 3.14.
 
 ## Key modules & patterns
 
@@ -38,8 +39,8 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   `_save_and_log()`, and #406's topic builder), **`rounds.py`** (the games
   chassis, the ten rounds and the quiz), **`chat.py`** (Mykola: the agent
   import, the `_mykola_agent` singleton, the chat routes and the per-user chat
-  logs), and **`app.py`**, now 538 lines: the gate, sign-in, settings, account
-  deletion, and four side-effect imports. The dependency runs **one way**:
+  logs), and **`app.py`**: sign-in, settings, account deletion, `/robots.txt`
+  and four side-effect imports. It held the keyword gate too until #199. The dependency runs **one way**:
   `web.py` ← `icons.py` ← `cards.py` ← `rounds.py` ← `chat.py` ← `app.py`.
   **Nothing may import `app.py`**, or the route table comes along and the
   split is undone.
@@ -75,8 +76,12 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   failure is silent in both directions, and that file is the only thing that
   would notice. The names stay bound into `app.py` as well, for the tests that
   call `app_module.is_admin()` rather than patch it.
-- **`app.py`** — routes; a keyword **gate** (`before_request`) blocks every
-  page until the keyword is entered; optional Google OAuth — a sign-in upserts
+- **`app.py`** — routes; **no gate** since #199, so every page answers a
+  visitor who has typed nothing. The keyword was never an authorisation, only
+  a shared password, and what stands in its place is the per-action ceilings
+  described below: three pools per paid action (#456), a per-account ceiling
+  on each (#447), and an account required to write anything at all (#125).
+  Optional Google OAuth — a sign-in upserts
   a row in **`users`** (#148), keyed on Google's `sub` so an email change
   updates rather than forks it, and the session carries `id`, the name claims
   and `preferred_name`. A dead database still lets the user in, with
@@ -481,6 +486,33 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   half-built topic that ceiling exists to prevent. `ROW_COUNT()` read straight
   after the conditional update is what says whether *this* call took the last
   slot rather than somebody else.
+- **The gate is gone** (#199) — `require_keyword()`, `/enter`, `gate.html`,
+  `ACCESS_KEYWORD` and the gate's stylesheet block and artwork are all
+  deleted, and **nothing replaced them in kind**, because a shared password
+  was never an authorisation: it was one string, handed out by hand, that
+  every holder could pass on and nobody could revoke. What it actually bought
+  was a *rate* limit by obscurity, and that is what had to exist first — which
+  is why #199 shipped last, after #200 (upload needs an account), #388 (the
+  lookup's ceiling), #447 (per-account ceilings), #456 (three pools per paid
+  action) and #458 (`robots.txt`). **Limits first, gate second**, with no
+  window in between where the open internet has an uncapped line to the
+  Anthropic account.
+  Two things are now load-bearing that were previously the second of two.
+  **`SECRET_KEY`** is the whole of the protection on `is_admin()`, because
+  `email_verified` lives *inside* the signed cookie — #445 is what makes
+  removing the gate safe, and it is not optional. And **`robots.txt`** stops
+  describing an intention and starts doing the work, since a crawler can now
+  reach every path it names.
+  **Reset Auth (#98) survives as a different thing.** It used to forget two
+  things, the gate pass and the identity; what is left is the identity plus
+  what `/logout` does not do — the popup's JavaScript clears this browser's
+  own storage, which is where Mykola's conversation lives (#170). That is the
+  reason it is still a separate control rather than a second spelling of sign
+  out.
+  **The test suite's `client` fixture no longer enters anything**, and
+  `fresh_client` is now the same object. Both are kept: several hundred tests
+  name one or the other, and the distinction they encoded — *inside the gate*
+  versus *outside it* — is gone rather than inverted.
 - **`robots.txt`** (#458) — a **real file**, `static/robots.txt`, hand-written
   and reviewed in a diff for the reason `seed_words.py` is content rather than
   output: generated text cannot be read in a pull request, and this is five
@@ -495,10 +527,12 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   free choice: #194 means learners' uploaded notes become cards, so an indexed
   deck is somebody else's material republished at scale — and a cache is the
   one part of opening the site that a later commit cannot undo.
-  **Exempt from the keyword gate**, beside `/enter`, the static assets and the
-  OAuth callback, because a crawler will never have a keyword. That is the only
-  reason shipping it before #199 is worth anything. It exposes nothing — the
-  gate still refuses every path it names.
+  It shipped **before** #199 and was exempt from the keyword gate, which was
+  the only reason shipping it early was worth anything: a crawler will never
+  have a keyword. Since #199 there is no gate and no exemption, and a crawler
+  can reach every path it names — which is what turns the `Disallow` list from
+  a statement of intent into the thing actually keeping the deck out of search
+  results.
   **A request, not a control.** Access is decided by #382's namespace and
   #127's owner filter, in SQL; this only decides what turns up in a search.
 - **Three pools per paid action** (#456) — yours, everybody-anonymous's, and
@@ -534,7 +568,8 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   welcome-back recap and the notes upload had **no account ceiling at all**:
   signing in removed the limit rather than raising it. That was right while the
   keyword gate was on — a signed-in visitor was by construction somebody handed
-  a keyword who then chose to sign in — and #199 removes the premise. A Google
+  a keyword who then chose to sign in — and #199 has since removed the premise
+  along with the gate. A Google
   account is a cost barrier rather than a bot barrier, so the exemption was
   worth what an account costs to buy.
   **Each guard sits after every free refusal and immediately before the call it
@@ -722,7 +757,9 @@ that reads the session sits downstream of the signature.
 
 It used to fall back to the literal `dev-secret-change-me`, which is in this
 repository — so the signature was worth nothing, and a forged cookie walked
-past the keyword gate with `is_admin()` answering True. #274 hardened the same
+past the keyword gate that then stood, with `is_admin()` answering True. Since
+#199 took that gate off, this key is the **only** thing between a visitor and
+an admin session rather than the second of two. #274 hardened the same
 cookie's `Secure`, `SameSite` and `HttpOnly` flags; those protect it *in
 transit*, and none of them applies to a cookie written from scratch.
 

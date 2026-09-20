@@ -1,6 +1,7 @@
 {# Link preview (Open Graph) for Telegram, Viber, WhatsApp, Facebook...
-   Included on both the normal pages and the keyword gate, so previews
-   keep working while the gate is on (crawlers land on the gate page).
+   Was included on the keyword gate as well as the normal pages, so previews
+   kept working while a crawler could only ever land on the gate page. Since
+   #199 there is no gate, and this is included from `base.html` alone.
    Callers may set `preview_title`; it defaults to the site name. #}
 {% set preview_description = "Turn words and notes into bilingual flashcards "
     "and quizzes — English with Ukrainian and Russian translations. "

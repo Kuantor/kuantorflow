@@ -333,10 +333,15 @@
                 <div class="modal-actions">
                     {# Reset Auth (#98): an ACTION, not a setting — type=button
                        (never submits) and never disabled by the read-only
-                       freeze (#102), because anonymous gated visitors reset
-                       too. Left-aligned in the shared action row (#118). #}
+                       freeze (#102), because an anonymous visitor resets too.
+                       Left-aligned in the shared action row (#118).
+
+                       It used to forget the keyword as well; since #199 there
+                       is no keyword, and what is left is what `/logout` does
+                       not do — clearing this browser's own storage, where
+                       Mykola's conversation lives (#170). #}
                     <button type="button" id="reset-auth-btn" class="settings-reset"
-                            title="Sign out and forget the keyword on this device">Reset Auth</button>
+                            title="Sign out and clear this browser: chat history, saved state and your sign-in">Reset Auth</button>
                     {# Delete account (#165): only a signed-in visitor has one.
                        An ACTION like Reset Auth, so type=button, but it is
                        irreversible — hence its own confirmation below. #}
@@ -427,8 +432,9 @@
     {# Reset Auth confirmation (#98) — same pattern as card deletion. #}
     <div class="modal-overlay" id="reset-auth-modal" hidden>
         <div class="modal modal-dialog">
-            <p>Are you sure you want to reset authentication? You will be
-               signed out, and the site will ask for the keyword again.</p>
+            <p>Are you sure you want to reset? You will be signed out, and
+               this browser&rsquo;s stored chat history and saved state will
+               be cleared.</p>
             <form method="POST" action="{{ url_for('auth_reset') }}"
                   id="reset-auth-form" class="modal-actions">
                 <button type="submit" class="danger">Yes, reset</button>

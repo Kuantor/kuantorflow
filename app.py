@@ -81,7 +81,6 @@ import web
 from web import (
     app,
     _bool_env,
-    ACCESS_KEYWORD,
     _admin_emails,
     ADMIN_EMAILS,
     GOOGLE_CLIENT_ID,
@@ -221,32 +220,15 @@ def drop_identity_from_before_the_users_table():
     not be written — and is deliberately left alone. That one is tolerated by
     design (#148), and signing in again would most likely fail the same way.
 
-    Registered before require_keyword so it still runs on gated requests,
-    which return a redirect and stop the chain.
+    Was registered before the keyword gate so it still ran on a gated
+    request; since #199 there is no gate and it is simply the first thing
+    that happens on every request.
     """
     user = session.get("user")
     if user is not None and "id" not in user:
         app.logger.info("Dropping a pre-#148 session identity; it has no user id")
         session.pop("user", None)
 
-
-@app.before_request
-def require_keyword():
-    """Block every page behind the keyword gate until it's been entered."""
-    if session.get("access_granted"):
-        return None
-    # The gate page, static assets, and the Google OAuth handshake must load
-    # even before the keyword is entered (the OAuth callback carries no keyword
-    # session, and signing in exposes no gated content on its own).
-    #
-    # `robots.txt` too (#458), and for a different reason: it has to be
-    # readable by a crawler, which will never have a keyword. It exposes
-    # nothing -- a list of paths a crawler is asked not to visit, all of which
-    # the gate still refuses.
-    if request.endpoint in ("gate", "static", "robots_txt",
-                            "login_google", "auth_google_callback"):
-        return None
-    return redirect(url_for("gate"))
 
 @app.route("/robots.txt")
 def robots_txt():
@@ -260,14 +242,13 @@ def robots_txt():
     cannot quietly fall out of the list.
 
     A route rather than a static asset, because Flask serves `static/` at
-    `/static/...` and no crawler asks for `/static/robots.txt`. It also gives
-    the gate an endpoint name to exempt.
+    `/static/...` and no crawler asks for `/static/robots.txt`.
 
-    **Exempt from the keyword gate**, which is the only reason shipping this
-    before #199 is worth anything: while the gate is on, every other path
-    answers 302 to `/enter`, and a crawler will never have a keyword. It
-    exposes nothing -- a list of paths a crawler is asked not to visit, every
-    one of which the gate still refuses.
+    It shipped **before** #199 and was exempted from the keyword gate, which
+    is the only reason shipping it early was worth anything: a crawler will
+    never have a keyword. Since #199 there is no gate and no exemption, and
+    the file is doing the job it was written for -- a crawler can now reach
+    every path it names, which is what makes the Disallow list matter.
 
     `send_from_directory` rather than reading the file here: it answers
     conditional requests, sets the length and modified time, and a crawler
@@ -275,20 +256,6 @@ def robots_txt():
     """
     return send_from_directory(app.static_folder, "robots.txt",
                                mimetype="text/plain")
-
-@app.route("/enter", methods=["GET", "POST"])
-def gate():
-    """Keyword entry screen shown before any access to the site."""
-    if session.get("access_granted"):
-        return redirect(url_for("index"))
-    error = None
-    if request.method == "POST":
-        if (request.form.get("keyword") or "") == web.ACCESS_KEYWORD:
-            session["access_granted"] = True
-            return redirect(url_for("index"))
-        error = "Incorrect keyword. Please try again."
-    return render_template("gate.html", error=error)
-
 
 @app.route("/login/google")
 def login_google():
@@ -344,15 +311,25 @@ def logout():
 
 @app.route("/auth/reset", methods=["POST"])
 def auth_reset():
-    """Reset Auth (#98): drop the WHOLE session — the gate pass and the
-    Google identity — returning this browser to the initial unauthenticated
-    state, landing on the gate. Settings files are deliberately untouched:
-    signing back in restores the user's preferences. The app's browser-side
-    storage (widget state etc.) is cleared by the popup's JS before this
-    POST. Reachable only from inside the gate, which is fine — outside it
-    there is nothing to reset."""
+    """Reset Auth (#98): drop the WHOLE session, returning this browser to
+    the state a first-time visitor is in.
+
+    It used to forget two things, the gate pass and the Google identity.
+    Since #199 there is no keyword, so what is left is the identity — plus
+    the part `/logout` does not do, which is why this is still a separate
+    control rather than a second spelling of it: the popup's JavaScript
+    clears the app's **browser-side** storage before this POST, and that is
+    where Mykola's conversation lives (`localStorage`, keyed on
+    `_identity_token()`, #170). Signing out leaves the thread; resetting
+    hands the browser back to somebody else.
+
+    Settings files are deliberately untouched: signing back in restores the
+    user's preferences.
+
+    Lands on the index now rather than on the gate, because there is no gate
+    to land on."""
     session.clear()
-    return redirect(url_for("gate"))
+    return redirect(url_for("index"))
 
 
 @app.context_processor
@@ -492,10 +469,10 @@ def account_delete():
         return redirect(url_for("index"))
 
     applog.account_deleted(user_id, cards=result["cards"], kept=result["kept"])
-    # The identity only — not the whole session. The keyword gate is about the
-    # site, not the account, so a deleted user lands back inside it as an
-    # anonymous visitor rather than being asked for the keyword again (which
-    # is what Reset Auth is for, #98).
+    # The identity only — not the whole session. Deleting an account is not
+    # leaving the site, so the visitor stays where they are as an anonymous
+    # one; clearing everything, including the browser-side storage, is what
+    # Reset Auth is for (#98).
     session.pop("user", None)
     flash((f"Your account was deleted. {result['cards']} card(s) were "
            f"{'kept for other learners' if keep_cards else 'deleted'}.", None))
@@ -590,7 +567,7 @@ import rounds  # noqa: E402,F401
 
 if __name__ == "__main__":
     # Local development is http://localhost, where a browser accepts no cookie
-    # marked Secure — the gate pass would never stick (#274). Only this entry
+    # marked Secure — the signed-in identity would never stick (#274). Only this entry
     # point relaxes it, and the deployed WSGI process never runs it. An explicit
     # SESSION_COOKIE_SECURE in .env still wins, for anyone serving locally over
     # HTTPS or reproducing production behaviour.
