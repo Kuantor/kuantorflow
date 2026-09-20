@@ -492,7 +492,8 @@ def index():
                 # A refusal past the ceiling therefore costs nothing either.
                 if not write_refusal:
                     write_refusal = web.account_refusal(
-                        utils.UPLOAD, web.UPLOAD_USER_DAILY,
+                        utils.UPLOAD, utils.UPLOAD_ALL,
+                        web.UPLOAD_USER_DAILY, web.UPLOAD_ALL_DAILY,
                         web.UPLOAD_USER_LIMIT_PROMPT)
                 if write_refusal:
                     pass          # refused: the file is not even read
@@ -1270,7 +1271,8 @@ def start_topic_fill():
     user_id = session.get("user", {}).get("id")
     try:
         allowed, scope, used = utils.claim_word_lookups(
-            user_id, len(words), web.LOOKUP_USER_DAILY, web.LOOKUP_ANON_DAILY)
+            user_id, len(words), web.LOOKUP_USER_DAILY,
+            web.LOOKUP_ANON_DAILY, all_limit=web.LOOKUP_ALL_DAILY)
     except Exception:
         # #237's rule for an unreachable counter: it cannot enforce a ceiling,
         # and the same outage has already made the deck unwritable.

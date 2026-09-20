@@ -188,8 +188,6 @@ def _agent_answer(question, history):
 
 SIGN_IN_PROMPT = ("You've used your free messages with Mykola. "
                   "Sign in with Google to keep chatting.")
-BUSY_PROMPT = ("Mykola has answered a lot of questions today. "
-               "Sign in with Google to keep chatting, or come back tomorrow.")
 
 
 def _anonymous_quota_refusal():
@@ -208,15 +206,10 @@ def _anonymous_quota_refusal():
         applog.anonymous_limit_hit("session", used, web.ANONYMOUS_MESSAGE_LIMIT)
         return jsonify({"error": SIGN_IN_PROMPT, "sign_in_required": True}), 402
 
-    try:
-        allowed, today = utils.claim_anonymous_message(web.ANONYMOUS_DAILY_LIMIT)
-    except Exception:
-        app.logger.exception("Could not count the anonymous message")
-        allowed, today = True, 0
-    if not allowed:
-        applog.anonymous_limit_hit("daily", today, web.ANONYMOUS_DAILY_LIMIT)
-        return jsonify({"error": BUSY_PROMPT, "sign_in_required": True}), 402
-
+    # The anonymous *daily* row moved into `web.chat_refusal()` with #456,
+    # which claims it beside everybody's in one call -- claiming here too
+    # would spend two slots for one message. What is left here is the session
+    # nudge, which is a cookie rather than a row and therefore free to check.
     session["anon_messages"] = used + 1
     return None
 
@@ -273,10 +266,10 @@ def _mykola_chat_inputs():
     # Here rather than in the routes because all three of them — the widget's
     # POST, ai_agent's /api/chat and the SSE stream — come through this
     # function, so a message is claimed once however it was asked.
-    spent = web.account_refusal(utils.CHAT, web.CHAT_USER_DAILY,
-                                web.CHAT_USER_LIMIT_PROMPT)
+    spent = web.chat_refusal()
     if spent:
-        return None, (jsonify({"error": spent, "sign_in_required": False}), 402)
+        return None, (jsonify({"error": spent["message"],
+                               "sign_in_required": spent["sign_in"]}), 402)
 
     return {"question": question, "history": history, "chat_id": chat_id}, None
 
@@ -910,7 +903,8 @@ def mykola_recap():
     # A refusal is `{"recap": None}`, which is what every other thing that can
     # go wrong here answers — the recap is an optional nicety, so the widget
     # keeps its normal greeting rather than showing an error.
-    if web.account_refusal(utils.RECAP, web.RECAP_USER_DAILY,
+    if web.account_refusal(utils.RECAP, utils.RECAP_ALL,
+                           web.RECAP_USER_DAILY, web.RECAP_ALL_DAILY,
                            web.RECAP_USER_LIMIT_PROMPT):
         return jsonify({"recap": None})
 

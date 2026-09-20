@@ -223,7 +223,18 @@ MAX_MYKOLA_REQUEST_BYTES = 1024 * 1024
 #     across worker processes.
 # 0 (or unset) disables either limit. Signed-in users are never limited.
 ANONYMOUS_MESSAGE_LIMIT = _int_env("ANONYMOUS_MESSAGE_LIMIT", 10)
-ANONYMOUS_DAILY_LIMIT = _int_env("ANONYMOUS_DAILY_LIMIT", 200)
+# Deliberately **smaller than `CHAT_ALL_DAILY`**, and that gap is the whole
+# mechanism (#456): the anonymous ceiling bounds how much of everybody's
+# pool anonymous traffic can take, so an account always has the rest. Set
+# the two equal and anonymous visitors can empty the shared pool on their
+# own, which is the failure this ticket was filed for wearing a new hat.
+ANONYMOUS_DAILY_LIMIT = _int_env("ANONYMOUS_DAILY_LIMIT", 15)
+# Everybody's chat, per day -- the single number that bounds this app's bill
+# (#456). `ai_agent` answers with `claude-opus-5` where every call this repo
+# makes itself uses Haiku, so one message costs roughly thirty times one
+# generated text. At 40 that is a few dollars on the worst day anybody could
+# arrange; the old ceilings allowed several hundred a month from one account.
+CHAT_ALL_DAILY = _int_env("CHAT_ALL_DAILY", 40)
 
 LOG_DIR = Path(__file__).parent / "mykola_logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -618,7 +629,11 @@ def _generation_available():
 # this code, since a console script has no session and no request.
 LOOKUP_ANON_LIMIT = _int_env("LOOKUP_ANON_LIMIT", 3)
 LOOKUP_USER_DAILY = _int_env("LOOKUP_USER_DAILY", 50)
-LOOKUP_ANON_DAILY = _int_env("LOOKUP_ANON_DAILY", 300)
+LOOKUP_ANON_DAILY = _int_env("LOOKUP_ANON_DAILY", 150)
+# Everybody's lookups, per day (#456). There was no such ceiling: the total
+# was "accounts times fifty", and an account costs whatever a Gmail address
+# costs. Haiku and two calls per lookup, so this is the cheap pool.
+LOOKUP_ALL_DAILY = _int_env("LOOKUP_ALL_DAILY", 250)
 
 # How many words this browser session has looked up, for the anonymous nudge.
 LOOKED_UP_COUNT_KEY = "looked_up_words"
@@ -663,7 +678,8 @@ def _lookup_refusal():
 
     try:
         allowed, scope, used = utils.claim_word_lookup(
-            user_id, LOOKUP_USER_DAILY, LOOKUP_ANON_DAILY)
+            user_id, LOOKUP_USER_DAILY, LOOKUP_ANON_DAILY,
+            all_limit=LOOKUP_ALL_DAILY)
     except Exception:
         # Best-effort in the same direction as #164's and #237's counters: an
         # unreachable database cannot enforce a ceiling, and a lookup is still
@@ -707,7 +723,12 @@ def _lookup_refusal():
 # 0 (or unset) disables any of them.
 GENERATION_ANON_LIMIT = _int_env("GENERATION_ANON_LIMIT", 1)
 GENERATION_USER_DAILY = _int_env("GENERATION_USER_DAILY", 10)
-GENERATION_DAILY_LIMIT = _int_env("GENERATION_DAILY_LIMIT", 100)
+GENERATION_DAILY_LIMIT = _int_env("GENERATION_DAILY_LIMIT", 60)
+# Anonymous texts, per day, on their own row (#456). Without it the shared
+# ceiling counted everybody, so anonymous traffic exhausting it refused a
+# signed-in learner who had spent none of their own ten -- which is the
+# failure this ticket was filed for, and the one #388 never had.
+GENERATION_ANON_DAILY = _int_env("GENERATION_ANON_DAILY", 20)
 
 # How many texts this browser session has been given, for the anonymous nudge.
 GENERATED_COUNT_KEY = "generated_texts"
@@ -750,7 +771,8 @@ def _generation_refusal():
 
     try:
         allowed, scope, used = utils.claim_text_generation(
-            user_id, GENERATION_USER_DAILY, GENERATION_DAILY_LIMIT)
+            user_id, GENERATION_USER_DAILY, GENERATION_DAILY_LIMIT,
+            anon_limit=GENERATION_ANON_DAILY)
     except Exception:
         # Best-effort in the same direction as #164's counter: an unreachable
         # database cannot enforce a ceiling, and it has already made the deck
@@ -789,9 +811,11 @@ def _generation_refusal():
 # Sized above a real day's use rather than tightly: a limit a genuine learner
 # can reach is worse than none, because it lands on the one person who was
 # using the thing properly. 0 turns any of them off.
-CHAT_USER_DAILY = _int_env("CHAT_USER_DAILY", 150)
-RECAP_USER_DAILY = _int_env("RECAP_USER_DAILY", 20)
-UPLOAD_USER_DAILY = _int_env("UPLOAD_USER_DAILY", 20)
+CHAT_USER_DAILY = _int_env("CHAT_USER_DAILY", 40)
+RECAP_USER_DAILY = _int_env("RECAP_USER_DAILY", 5)
+RECAP_ALL_DAILY = _int_env("RECAP_ALL_DAILY", 10)
+UPLOAD_USER_DAILY = _int_env("UPLOAD_USER_DAILY", 10)
+UPLOAD_ALL_DAILY = _int_env("UPLOAD_ALL_DAILY", 40)
 
 # An account that has spent its own day has nothing to be offered -- signing in
 # is what it already did -- so these say "tomorrow" rather than prompting.
@@ -804,12 +828,18 @@ UPLOAD_USER_LIMIT_PROMPT = (
     "You have imported all your files for today. Come back tomorrow for more.")
 
 
-def account_refusal(action, limit, prompt):
-    """Why this account may not spend another `action` today, or None (#447).
+def account_refusal(action, all_action, limit, all_limit, prompt):
+    """Why this account may not spend another `action` today, or None.
 
-    Anonymous visitors get None: they have their own allowances, which are the
-    caller's to check and are a different question -- this is the ceiling that
-    signing in raises rather than removes.
+    Two pools since #456: the account's own, then everybody's. The second is
+    what bounds the bill -- without it the total is "however many accounts
+    somebody cares to create, times the per-account ceiling", and a Google
+    account is a cost barrier rather than a bot barrier (#447).
+
+    For the two callers here -- the recap and the notes upload -- there is no
+    anonymous pool, because neither is reachable without an account: the recap
+    returns early for an anonymous visitor and #200 refuses the upload at the
+    door. Chat has all three, and goes through `utils.claim_chat_message()`.
 
     **Claims as it asks**, like every other guard here, so "may I?" and "then I
     have" cannot drift apart between two workers. A caller that asks must
@@ -821,17 +851,77 @@ def account_refusal(action, limit, prompt):
     page around it.
     """
     user_id = session.get("user", {}).get("id")
-    if user_id is None or not limit or limit <= 0:
+    if user_id is None:
         return None
     try:
-        allowed, used = utils.claim_action(action, user_id, limit)
+        allowed, scope, used = utils.claim_pools([
+            ("user", action, user_id, limit),
+            ("daily", all_action, utils.ALL_ACCOUNTS, all_limit),
+        ])
     except Exception:
         app.logger.exception("Could not count %s", action)
         return None
     if allowed:
         return None
-    applog.anonymous_limit_hit(action, used, limit)
+    applog.anonymous_limit_hit(scope, used,
+                               limit if scope == "user" else all_limit)
     return prompt
+
+# What an exhausted chat pool says, and whether signing in would help.
+#
+# Three different answers, because three different things ran out (#456). An
+# anonymous visitor who has used the shared anonymous pool still has somewhere
+# to go, so that one offers a sign-in -- #164's shape, and the reason this is
+# not one message. An account that has spent its own day has already signed in.
+# And when *everybody's* pool is gone, signing in does not help either: an
+# account's messages claim the shared row too.
+CHAT_ANON_BUSY_PROMPT = (
+    "Mykola has answered a lot of questions today. "
+    "Sign in with Google to keep chatting, or come back tomorrow.")
+CHAT_BUSY_PROMPT = (
+    "Mykola has answered a lot of questions today. Please try again tomorrow.")
+
+
+def chat_refusal():
+    """Why this visitor may not send another Mykola message, or None (#456).
+
+    Returns `{"message": ..., "sign_in": bool}` -- `_generation_refusal()`'s
+    shape, so the widget can offer a sign-in where one would actually help and
+    say "tomorrow" where it would not.
+
+    All three pools in one claim: whoever is asking meets their own ceiling --
+    their account's, or the anonymous one -- and then everybody's.
+
+    **This is the expensive path.** `ai_agent` answers with `claude-opus-5`
+    where every call this repo makes itself uses Haiku, so one message costs
+    roughly thirty times one generated text. `CHAT_ALL_DAILY` is therefore the
+    single number bounding this app's bill, and the reason #456's ceilings are
+    as low as they are.
+
+    The **session** nudge is not here: it is a cookie rather than a row, and
+    `chat._anonymous_quota_refusal()` checks it first so a refused message
+    never reaches the database at all.
+
+    A dead database allows and logs, like every other guard here.
+    """
+    user_id = session.get("user", {}).get("id")
+    try:
+        allowed, scope, used = utils.claim_chat_message(
+            user_id, CHAT_USER_DAILY, ANONYMOUS_DAILY_LIMIT, CHAT_ALL_DAILY)
+    except Exception:
+        app.logger.exception("Could not count the chat message")
+        return None
+    if allowed:
+        return None
+
+    answers = {
+        "user": (CHAT_USER_LIMIT_PROMPT, False, CHAT_USER_DAILY),
+        "anonymous": (CHAT_ANON_BUSY_PROMPT, True, ANONYMOUS_DAILY_LIMIT),
+        "daily": (CHAT_BUSY_PROMPT, False, CHAT_ALL_DAILY),
+    }
+    message, sign_in, limit = answers[scope]
+    applog.anonymous_limit_hit(scope, used, limit)
+    return {"message": message, "sign_in": sign_in}
 
 # --- streaming ---------------------------------------------------------------
 # The Server-Sent Events frame format, here because two features stream: the
