@@ -1,0 +1,23 @@
+# What crawlers are asked to leave alone (kuantorflow#458).
+#
+# The landing page is findable; the deck is not. That half is not a free
+# choice: learners upload their own notes and those become cards (#194), so an
+# indexed deck is somebody else's material republished at scale -- and a search
+# engine's cache is the one part of opening a site that cannot be undone by a
+# later commit.
+#
+# This is a request, not a control. Well-behaved crawlers obey it and nothing
+# else does. Who may read what is decided in SQL, by #382's namespace and
+# #127's owner filter.
+#
+# Every path below is checked against the app's URL map by
+# automation/tests/test_robots_txt.py, so a renamed route cannot quietly fall
+# out of this list while the file goes on looking correct.
+
+User-agent: *
+Disallow: /flashcards/
+Disallow: /deck/
+Disallow: /quiz
+Disallow: /games/
+Disallow: /topics.json
+Allow: /
