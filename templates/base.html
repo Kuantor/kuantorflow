@@ -4,12 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}KuantorFlow{% endblock %}</title>
-    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='img/icon.jpg') }}">
+    <link rel="icon" type="image/jpeg" href="{{ static_url('img/icon.jpg') }}">
 
     {% set preview_title = self.title() %}
     {% include "_preview_meta.html" %}
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ static_url('css/style.css') }}">
 </head>
 {# #268: the spoken-word speed, as a percentage, where speech.js can read it.
    On the document rather than fetched, because it is already in `settings`
@@ -31,7 +31,7 @@
     <div class="modal-overlay" id="about-modal" hidden>
         <div class="modal">
             <button type="button" class="modal-close" aria-label="Close">&times;</button>
-            <img src="{{ url_for('static', filename='img/main_image.jpg') }}" alt="About KuantorFlow">
+            <img src="{{ static_url('img/main_image.jpg') }}" alt="About KuantorFlow">
         </div>
     </div>
 
@@ -441,7 +441,7 @@
     <div class="welcome-overlay" id="welcome-overlay" hidden>
         <div class="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
             <section class="welcome-step" id="welcome-step-1">
-                <img class="welcome-main-image" src="{{ url_for('static', filename='img/main_image.jpg') }}" alt="Welcome to KuantorFlow">
+                <img class="welcome-main-image" src="{{ static_url('img/main_image.jpg') }}" alt="Welcome to KuantorFlow">
                 <div class="welcome-actions next-only">
                     <button type="button" id="welcome-next" class="welcome-next">Next &gt;</button>
                 </div>
@@ -451,7 +451,7 @@
                 <h2 id="welcome-title">Meet Mykola — AI Agent for English Learning</h2>
                 <div class="welcome-mykola-layout">
                     <img class="welcome-mykola-image"
-                         src="{{ mykola_media('mykola_poster.jpg') if mykola_enabled else url_for('static', filename='img/mykola_avatar.jpg') }}"
+                         src="{{ mykola_media('mykola_poster.jpg') if mykola_enabled else static_url('img/mykola_avatar.jpg') }}"
                          alt="Mykola">
                     <div class="welcome-mykola-text">
                         <p>
@@ -906,13 +906,13 @@
     {% if mykola_enabled %}
     <!-- Mykola AI chat widget (bottom-right). Logic lives in the ai_agent repo. -->
     <button type="button" id="mykola-launcher" aria-label="Chat with Mykola">
-        <img src="{{ url_for('static', filename='img/mykola_avatar.jpg') }}" alt="Mykola">
+        <img src="{{ static_url('img/mykola_avatar.jpg') }}" alt="Mykola">
         <span>Ask&nbsp;Mykola</span>
     </button>
 
     <div id="mykola-panel" hidden>
         <div class="mykola-header">
-            <img src="{{ url_for('static', filename='img/mykola_avatar.jpg') }}"
+            <img src="{{ static_url('img/mykola_avatar.jpg') }}"
                  id="mykola-avatar" class="mykola-avatar" alt="See Mykola's animation"
                  title="See Mykola conduct">
             <div>
@@ -1943,16 +1943,16 @@
        [data-say] button exists, and the next caller — a pronounce button in
        the review popup, on quiz results, or #272's listening game — then needs
        markup and nothing else. #}
-    <script src="{{ url_for('static', filename='js/speech.js') }}" defer></script>
+    <script src="{{ static_url('js/speech.js') }}" defer></script>
     {# Look up & update (#191/#372), beside the popups it drives. `defer` is
        safe because nothing reads it at parse time -- both call sites use it
        inside a click handler, which is the ordering #272 got wrong when a
        probe read `window.kfSpeech` while speech.js was still deferred. #}
-    <script src="{{ url_for('static', filename='js/lookup_update.js') }}" defer></script>
+    <script src="{{ static_url('js/lookup_update.js') }}" defer></script>
     {# #390: clears a card's dictionary credit the moment its explanation is
        edited, in whichever dialog. Loaded here rather than per page because
        every dialog that edits a card is one of these two today and the rule is
        about the field, not about the page. #}
-    <script src="{{ url_for('static', filename='js/explanation_credit.js') }}" defer></script>
+    <script src="{{ static_url('js/explanation_credit.js') }}" defer></script>
 </body>
 </html>
