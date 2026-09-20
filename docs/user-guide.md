@@ -34,7 +34,7 @@ KuantorFlow asks a translator and an English dictionary at once, and builds **on
 
 If a word is already in your deck you are warned before it is looked up again. The same word and part of speech is only ever kept once, anywhere in the deck.
 
-A lookup asks paid services, so it is not unlimited: signed out you get three words per visit, and then an invitation to sign in. Signed in you have fifty a day, which is more than a study session needs and is there to stop a runaway loop rather than to ration you.
+A lookup asks paid services, so it is not unlimited: signed out you get three words per visit, and then an invitation to sign in. Signed in you have fifty a day, which is more than a study session needs and is there to stop a runaway loop rather than to ration you. There is also a shared daily allowance for everyone at once — see *Daily limits* below, which lists all of them and explains which is which when you are turned down.
 
 ### The review popup
 
@@ -51,6 +51,8 @@ Saying yes really adds it: KuantorFlow keeps the card you had and saves the new 
 ### Uploading notes
 
 If your vocabulary already lives in a file, hand it over: `.txt`, `.docx` and `.mht` are all read, including OneNote pages pasted from Reverso Context. The file is parsed into proposed cards and shown in the same review popup, side by side with its own text, so you can see where each card came from before you keep it.
+
+Uploading needs an account, and there are ten files a day. Reading a file is itself a paid step — working out which lines are words and which are translations sometimes asks a language model — so the limit is checked **before** the file is opened. That is why a refusal arrives at once rather than after a wait.
 
 ### Building a whole topic from an idea
 
@@ -229,7 +231,7 @@ The one activity that **writes** rather than tests. Pick topics, optionally say 
 
 The passage comes with a title of its own, and the words you are studying appear **in bold** — in the title as well as the text. Underneath is the honest account: which of them the text actually used, and which it did not. They are found by searching the finished text, not by asking the model to mark its own work, so the list is checked rather than claimed.
 
-A text is kept for the session, so re-reading it, going back to it or refreshing the page costs nothing; writing a new one is a button you press deliberately. Signed out you get one text, and then an invitation to sign in; signed in, ten a day.
+A text is kept for the session, so re-reading it, going back to it or refreshing the page costs nothing; writing a new one is a button you press deliberately. Signed out you get one text, and then an invitation to sign in; signed in, ten a day. Shared daily allowances apply as well — see *Daily limits*.
 
 You can take the text with you. The **copy button** in the bottom-right corner of the passage copies it with the bold words intact, so pasting it into a document or an email keeps them; pasting into a plain box gives you the words. **Print the text** puts the title and the passage on a sheet of their own — no menus, no lists, no forms — and Ctrl+P does the same. Printing to PDF is your browser's usual "Save as PDF" destination in that dialog.
 
@@ -253,9 +255,19 @@ If the word is already in your deck he will say so and tell you which topic it i
 
 He cannot see the translations on your cards, by design. If you ask whether a card's Ukrainian or Russian translation is right, he will say he cannot see that translation from where he sits, and point you at the card itself. He will not claim to have saved something he has not, and he will tell you when he cannot do a thing rather than agreeing and quietly failing.
 
+### How many messages you can send
+
+Talking to Mykola costs money every time, and more than anything else here — he answers with a much larger model than the rest of the site uses, so one message costs roughly what thirty generated texts cost.
+
+Signed out you get ten messages in a visit, and there is a shared daily allowance across everyone signed out. Signed in you have forty a day of your own, and there is a further allowance shared by everybody. Signing in **raises** the limit rather than removing it.
+
+If he tells you he has answered a lot of questions today and asks you to try again tomorrow, that is the shared allowance rather than yours — you have done nothing wrong, and signing in will not get past that one. *Daily limits* below has all four features and explains which refusal is which.
+
 ### Recaps
 
 If you have been away for a few hours he starts a fresh conversation and opens it with a short **recap** of where you left off, rather than pretending to remember everything or forgetting it all. How long that silence has to be is yours to set.
+
+A recap is a paid answer like any other, so there are five a day. Past that the conversation simply opens with his ordinary greeting — nothing is broken, and nothing is lost.
 
 ## Settings
 
@@ -275,6 +287,35 @@ If you have been away for a few hours he starts a fresh conversation and opens i
 | Type his answer out | His reply is typed out as it arrives instead of landing in chunks. On by default. |
 
 Settings belong to your account and follow you between devices. Signed out, you can see them but not change them.
+
+## Daily limits
+
+### Why you might be asked to come back tomorrow
+
+Five things on this site cost money every time you use them: looking a word up, generating a text, talking to Mykola, the welcome-back recap he writes, and importing a file of notes. They call paid language services, and KuantorFlow pays for them.
+
+So each of them has a limit. The limits are there to stop a runaway loop — a script, a stuck button, somebody leaning on *regenerate* — rather than to ration you. A normal study session does not come near them.
+
+There are three of each, and it is worth knowing which one you have met, because they mean different things.
+
+| | Looking a word up | Generating a text | Talking to Mykola | A recap | Importing notes |
+|---|---|---|---|---|---|
+| Signed out, per visit | 3 | 1 | 10 | needs an account | needs an account |
+| Signed out, per day, shared by everyone signed out | 150 | 20 | 15 | — | — |
+| **Your account, per day** | 50 | 10 | 40 | 5 | 10 |
+| Everyone together, per day | 250 | 60 | 40 | 10 | 40 |
+
+**Signing in raises a limit rather than removing it.** That is true of all four, and it is deliberate: an account is not a licence to spend without end, it is a bigger allowance and a way for the site to tell you apart from a script.
+
+**Mykola's numbers are the small ones, and that is not arbitrary.** He answers with a much larger and more expensive model than anything else here — one message costs roughly what thirty generated texts cost. Forty messages a day is a comparable amount of money to sixty texts, not a lesser welcome.
+
+When you are turned down, the wording tells you which limit it was:
+
+- *"...Come back tomorrow for more."* — your own day is spent. You have the whole allowance again tomorrow.
+- *"Sign in with Google to keep chatting, or come back tomorrow."* — the shared allowance for signed-out visitors is spent. Signing in gives you your own, so this one has a way forward today.
+- *"KuantorFlow has ... a lot today. Please try again tomorrow."* — everybody's allowance is spent. **You have done nothing wrong**, and signing in will not help, because an account draws on this pool too. It is the one limit that is genuinely about the site rather than about you.
+
+An administrator can change any of these, and setting one to zero turns it off.
 
 ## The idea behind it
 
