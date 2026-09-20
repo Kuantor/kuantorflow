@@ -32,7 +32,7 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, g, session
+from flask import Flask, g, session, url_for
 from authlib.integrations.flask_client import OAuth
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -922,6 +922,70 @@ def chat_refusal():
     message, sign_in, limit = answers[scope]
     applog.anonymous_limit_hit(scope, used, limit)
     return {"message": message, "sign_in": sign_in}
+
+# --- versioned static URLs (#300) --------------------------------------------
+# A browser keys its cache on the URL, so a deploy that rewrites `style.css`
+# changes nothing a browser already holds. What that looks like is the reason
+# this is here: not a broken page but a **plausible** one -- every rule that
+# arrived with the new file missing at once, a button that still looks like a
+# button, sections that do not fold. Nobody reports it, because nobody knows
+# what it was meant to look like.
+#
+# Here rather than in a feature module because `icons.py` asks for it and so
+# does every template in every other module, and the context processor has to
+# be registered once for the whole app -- which is `web.py`'s admission rule
+# exactly.
+
+_STATIC_VERSIONS = {}
+
+
+def _static_version(filename):
+    """The version tag for one static file, or None when there is no file.
+
+    The file's **mtime**, in hex to keep the URL short. `git pull` only
+    rewrites files it actually changed, so a deploy invalidates precisely what
+    it touched -- which is what a content hash would buy, without reading every
+    asset. The exception is a fresh clone, which touches everything and costs
+    one extra fetch of each asset, once.
+
+    Computed once per process and remembered, including the **None**: a
+    PythonAnywhere deploy reloads the web app, so process lifetime is exactly
+    the right cache window, and a file that appears while the app is running is
+    not seen until a reload -- which is when static assets appear anyway. That
+    is `_topic_icon_slugs()`'s argument, and it is the same one.
+    """
+    if filename not in _STATIC_VERSIONS:
+        try:
+            mtime = (Path(app.static_folder) / filename).stat().st_mtime
+            _STATIC_VERSIONS[filename] = format(int(mtime), "x")
+        except OSError:
+            _STATIC_VERSIONS[filename] = None
+    return _STATIC_VERSIONS[filename]
+
+
+def static_url(filename, **values):
+    """`url_for('static', ...)` with a version the browser can key a cache on.
+
+    **A missing file yields the plain URL rather than raising.** A cache-buster
+    must never be the reason a page fails to render: the worst a version-less
+    URL does is serve a stale copy, which is the situation this replaces, while
+    an exception takes the whole page down.
+
+    `**values` is passed through, so `_external=True` still works -- which
+    `_preview_meta.html` needs for the Open Graph image.
+    """
+    url = url_for("static", filename=filename, **values)
+    version = _static_version(filename)
+    if not version:
+        return url
+    return url + ("&" if "?" in url else "?") + "v=" + version
+
+
+@app.context_processor
+def inject_static_url():
+    """Templates call `static_url('css/style.css')` instead of `url_for`."""
+    return {"static_url": static_url}
+
 
 # --- streaming ---------------------------------------------------------------
 # The Server-Sent Events frame format, here because two features stream: the

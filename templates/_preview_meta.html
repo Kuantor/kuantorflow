@@ -11,8 +11,8 @@
 <meta property="og:title" content="{{ preview_title | default('KuantorFlow', true) }}">
 <meta property="og:description" content="{{ preview_description }}">
 <meta property="og:url" content="{{ request.base_url }}">
-<meta property="og:image" content="{{ url_for('static', filename='img/preview.jpg', _external=True) }}">
+<meta property="og:image" content="{{ static_url('img/preview.jpg', _external=True) }}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{ preview_title | default('KuantorFlow', true) }}">
 <meta name="twitter:description" content="{{ preview_description }}">
-<meta name="twitter:image" content="{{ url_for('static', filename='img/preview.jpg', _external=True) }}">
+<meta name="twitter:image" content="{{ static_url('img/preview.jpg', _external=True) }}">

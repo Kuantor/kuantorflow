@@ -91,8 +91,8 @@
            section this device folded is closed before anything is painted.
            Deferred, the panel would open in full and collapse a moment later —
            a flicker on every visit, on the tallest thing on the page. #}
-        <script src="{{ url_for('static', filename='js/browse_folds.js') }}"></script>
-        <script src="{{ url_for('static', filename='js/lookup_tip.js') }}" defer></script>
+        <script src="{{ static_url('js/browse_folds.js') }}"></script>
+        <script src="{{ static_url('js/lookup_tip.js') }}" defer></script>
         {# The typed topic box was here until #290. Every topic worth opening is
            a tile — with a picture (#223), a count, and a section that folds
            (#288) — so typing a name you can already see was the slower way to
