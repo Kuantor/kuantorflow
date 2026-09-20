@@ -6,13 +6,15 @@ Mykola reads this guide himself, so anything described here is something you can
 
 ## Getting in
 
-### The keyword
+### No password to get in
 
-The site opens with a **keyword**. Type the one you were given and it lets you through; that pass is remembered until you clear it. This is what keeps the site and its deck private.
+The site is open. There is nothing to type before you can use it — open the page and the deck, the games and Mykola are all there. The site used to ask for a keyword; it no longer does.
+
+What is open is *reading and practising*. Adding anything of your own still needs an account, and the paid parts of the site — looking a word up, generating a text, talking to Mykola — have daily limits, which are smaller for a visitor who has not signed in. Those are described under **Daily limits** below.
 
 ### Signing in
 
-Past the gate you can read and practise everything anonymously. **Signing in with Google** adds three things: you can add cards, your settings are your own rather than the shared defaults, and Mykola knows what to call you.
+You can read and practise everything anonymously. **Signing in with Google** adds three things: you can add cards, your settings are your own rather than the shared defaults, and Mykola knows what to call you. It also raises every daily limit.
 
 Without an account you can still browse, quiz and play. What you cannot do is write — no adding, editing, moving or deleting cards. The controls stay on the page and tell you why they are greyed rather than quietly disappearing, so nothing looks broken.
 
@@ -20,7 +22,7 @@ Without an account you can still browse, quiz and play. What you cannot do is wr
 
 The header carries **Home**, **About** and **Settings**, and Settings is also where two heavier buttons live.
 
-*Reset Auth* clears the keyword and your sign-in together, and is how you hand the browser back to somebody else.
+*Reset Auth* signs you out **and** clears what this browser has stored — your conversation with Mykola and any saved state. That is the difference between it and simply signing out, and it is how you hand the browser back to somebody else.
 
 *Delete account* removes your account, and asks first whether your cards should go with you or stay in the shared deck for other learners. It is not reversible.
 

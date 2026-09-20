@@ -57,7 +57,7 @@ separate [`ai_agent`](https://github.com/Kuantor/ai_agent) repository.
    `AI_AGENT_PATH` env var; defaults to a sibling folder `../ai_agent`) and
    imports `MykolaAgent` from it. If the repo or its dependencies aren't present,
    `MYKOLA_AVAILABLE` is `False` and the widget simply doesn't render.
-2. The `/mykola/chat` route (behind the keyword gate, like everything else)
+2. The `/mykola/chat` route
    receives `{question, history}`, calls `MykolaAgent.answer(...)`, and returns
    `{response, sources, history}` as JSON. All the RAG + Claude logic runs
    inside `ai_agent`; KuantorFlow only wires up the route and the UI.
@@ -96,7 +96,7 @@ Implementation details:
 - Markup and behavior are in `templates/base.html`.
 - Styling is in `static/css/style.css` under the "Welcome popup" section.
 - No extra Flask route is required; it is template-driven and compatible with
-  the existing layout and gate flow.
+  the existing layout.
 
 ---
 
@@ -235,10 +235,11 @@ read-only (#102):
 - **Reset Auth** (#98) — an action button under the settings (an *action*,
   not a setting: it stays enabled for anonymous visitors despite the #102
   read-only freeze). After a confirmation dialog it clears the whole
-  session — the gate pass and the Google sign-in — plus the app's own
-  browser storage (chat-widget state, consent and welcome flags), landing
-  back on the gate. Settings files are untouched: signing back in restores
-  your preferences.
+  session — the Google sign-in — plus the app's own browser storage
+  (chat-widget state, consent and welcome flags, and Mykola's conversation),
+  landing back on the index. That browser storage is what separates it from
+  plain sign-out. Settings files are untouched: signing back in restores your
+  preferences. It used to forget the keyword too; since #199 there is none.
 
 ### Signed-in identities (#148)
 
@@ -262,8 +263,9 @@ already tolerate a dead database.
 
 ### Only an account may change the database (#125)
 
-Browsing, the card deck, quizzes and word lookups are open to everyone past
-the keyword gate. **Writing** is not: adding a card — from the review popup,
+Browsing, the card deck, quizzes and word lookups are open to everyone
+(#199 removed the keyword gate), subject to the daily ceilings on the paid
+actions. **Writing** is not: adding a card — from the review popup,
 the automatic-add path, or by asking Mykola in chat — needs a signed-in
 account. An attempt answers with *"Please sign in with Google to make any
 changes of the database."* and a working sign-in link, and the looked-up cards

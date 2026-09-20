@@ -67,8 +67,10 @@ def _secret_key():
     It used to fall back to the literal "dev-secret-change-me", which is in
     this repository. A Flask session cookie is **signed, not encrypted**, so
     that string was the whole of the protection: with it, anyone can mint a
-    cookie the app accepts -- measured, past the keyword gate and with
-    `is_admin()` answering True. #274 hardened this cookie's `Secure`,
+    cookie the app accepts -- measured, past the keyword gate that then
+    stood and with `is_admin()` answering True. #199 has since removed the
+    gate, which makes this key the *only* thing standing between a visitor
+    and an admin session rather than the second of two. #274 hardened this cookie's `Secure`,
     `SameSite` and `HttpOnly` flags, which protect it in transit; none of them
     is relevant to a cookie written from scratch.
 
@@ -119,9 +121,9 @@ def _bool_env(name, default):
     return raw.strip().lower() not in ("0", "false", "no", "off", "")
 
 
-# The session cookie is this app's entire authentication state: the keyword gate
-# pass and, since #40, the signed-in Google identity that #158's admin check and
-# #127's ownership filter both read. Flask leaves every protective flag at its
+# The session cookie is this app's entire authentication state: since #40 the
+# signed-in Google identity that #158's admin check and #127's ownership filter
+# both read, and, until #199 took the keyword gate off, that gate's pass too. Flask leaves every protective flag at its
 # default, which means Secure is **off** — so that identity would travel in
 # clear text if a request ever arrived over plain HTTP (#274). HttpOnly is
 # Flask's default already and is stated here so all three are one decision in
@@ -137,8 +139,8 @@ def _bool_env(name, default):
 # Secure defaults to **on**, which is what the WSGI process on PythonAnywhere
 # gets. `python app.py` turns it off at the bottom of this file, because local
 # development is http://localhost and a browser accepts no Secure cookie there:
-# the gate would set its pass, fail to store it, and ask for the keyword again
-# forever. The default is this way round deliberately — a forgotten override
+# a sign-in would set the identity, fail to store it, and land back on an
+# anonymous page forever. The default is this way round deliberately — a forgotten override
 # then breaks locally and visibly, rather than quietly unprotecting the cookie
 # on the deployed site, where nothing would look wrong.
 app.config.update(
@@ -150,10 +152,6 @@ app.config.update(
 # PythonAnywhere serves the app behind a proxy; trust its X-Forwarded-*
 # headers so absolute URLs (og:image etc.) use https and the real host.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-
-# Keyword that gates access to the whole site (set ACCESS_KEYWORD in .env).
-ACCESS_KEYWORD = os.environ.get("ACCESS_KEYWORD", "password")
-
 
 def _admin_emails(raw=None):
     """The configured administrator addresses, lowercased (issue #158).
