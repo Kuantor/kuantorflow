@@ -38,19 +38,31 @@ def get_db_connection():
 
 ALL_ACCOUNTS = 0
 
-# The action names `action_usage` rows carry (#447). A name ending in a scope
-# -- `:anon`, `:all` -- is a **shared** pool on the `ALL_ACCOUNTS` row; a bare
-# name is one account's own. Written out rather than built from a string,
+# The action names `action_usage` rows carry (#447, #456). A name ending in a
+# scope -- `:anon`, `:all` -- is a **shared** pool on the `ALL_ACCOUNTS` row; a
+# bare name is one account's own. Written out rather than built from a string,
 # because a typo in an action name does not fail: it silently opens a fresh
 # ceiling that nothing has ever counted against.
+#
+# **Three pools per paid action** (#456): yours, everybody-anonymous's, and
+# everybody's. Before that they disagreed -- generation had a row counting
+# everybody and none counting anonymous traffic, lookup and chat had the exact
+# opposite -- so anonymous traffic could exhaust what a signed-in learner drew
+# on for texts, while nothing at all bounded the total bill for chat or
+# lookups. Neither column should have had a gap in it.
 CHAT = "chat"
 CHAT_ANON = "chat:anon"
+CHAT_ALL = "chat:all"
 LOOKUP = "lookup"
 LOOKUP_ANON = "lookup:anon"
-RECAP = "recap"
-UPLOAD = "upload"
+LOOKUP_ALL = "lookup:all"
 GENERATE = "generate"
+GENERATE_ANON = "generate:anon"
 GENERATE_ALL = "generate:all"
+RECAP = "recap"
+RECAP_ALL = "recap:all"
+UPLOAD = "upload"
+UPLOAD_ALL = "upload:all"
 
 
 def _claim(cursor, action, user_id, limit, amount=1):
@@ -131,12 +143,57 @@ def action_used_today(action, user_id):
         conn.close()
 
 
-def claim_anonymous_message(daily_limit):
-    """Count one anonymous Mykola message against the day's ceiling (#164).
+def claim_pools(pools, amount=1):
+    """Take `amount` from each pool in order. Returns `(allowed, scope, used)`.
 
-    Returns `(allowed, used)`. Anonymous traffic only: a signed-in visitor
-    never reaches this, which #447 is the ticket for.
+    `pools` is `[(scope, action, user_id, limit), ...]`, and **the order is the
+    one #237 argued for**: the caller's own row first, the shared ones after.
+    That way a learner can spend one of their own on a day the whole site is
+    exhausted, rather than burning a site-wide slot for somebody already over
+    their personal limit. Neither matters at a third of a cent -- but it is
+    decided rather than accidental.
+
+    A pool with no limit, or a limit of 0 or less, is skipped: that is how a
+    deployment turns any single ceiling off without touching the others.
+
+    **Refusing stops there and takes nothing further.** A pool already claimed
+    when a later one refuses keeps its slot -- the alternative is a rollback
+    across statements, and the cost of getting that wrong is a counter that
+    drifts below the truth, which is worse than one that drifts above. It costs
+    the visitor nothing either way: they are refused, and tomorrow the rows are
+    new.
     """
+    for scope, action, user_id, limit in pools:
+        if user_id is None or not limit or limit <= 0:
+            continue
+        claimed, used = claim_action(action, user_id, limit, amount=amount)
+        if not claimed:
+            return False, scope, used
+    return True, None, 0
+
+
+def _pools(action, anon_action, all_action, user_id,
+           user_limit, anon_limit, all_limit):
+    """The three pools of one paid action, for whoever is asking (#456).
+
+    A signed-in visitor meets **their own** ceiling and then everybody's; an
+    anonymous one meets the **anonymous** ceiling and then everybody's. So
+    anonymous traffic can exhaust the anonymous pool and the shared one, and a
+    learner still has their own allowance -- which is what #388 got right for
+    lookups and #237 got wrong for texts.
+
+    The `:all` pool is what bounds the bill. Without it the total is "however
+    many accounts somebody cares to create, times the per-account ceiling",
+    and a Google account is a cost barrier rather than a bot barrier (#447).
+    """
+    if user_id is not None:
+        own = ("user", action, user_id, user_limit)
+    else:
+        own = ("anonymous", anon_action, ALL_ACCOUNTS, anon_limit)
+    return [own, ("daily", all_action, ALL_ACCOUNTS, all_limit)]
+
+def claim_anonymous_message(daily_limit):
+    """Kept for the name #164 gave it; now one of chat's three pools (#456)."""
     return claim_action(CHAT_ANON, ALL_ACCOUNTS, daily_limit)
 
 
@@ -145,13 +202,57 @@ def lookups_used_today(user_id):
 
     Read-only, and the counterpart to `claim_word_lookup()`'s write: #406's
     approve screen states the cost *before* the claim, so it needs the number
-    without taking a slot to find it out.
-
-    Anonymous visitors read the shared row, which counts anonymous lookups only
-    -- the same row their claim would advance (#388).
+    without taking a slot to find it out. Anonymous visitors read the shared
+    anonymous row -- the same one their claim would advance.
     """
-    action, row, _ = _lookup_scope(user_id)
-    return action_used_today(action, row)
+    action = LOOKUP if user_id is not None else LOOKUP_ANON
+    return action_used_today(action, user_id if user_id is not None
+                             else ALL_ACCOUNTS)
+
+
+def claim_word_lookups(user_id, count, user_limit, anon_limit, all_limit=0):
+    """Take `count` lookups at once, or none (#406).
+
+    All or nothing across every pool: a partial claim is the half-built topic
+    the ceiling decision exists to avoid.
+    """
+    if count <= 0:
+        return True, None, 0
+    return claim_pools(_pools(LOOKUP, LOOKUP_ANON, LOOKUP_ALL, user_id,
+                              user_limit, anon_limit, all_limit),
+                       amount=count)
+
+
+def claim_word_lookup(user_id, user_limit, anon_limit, all_limit=0):
+    """Count one word lookup against every ceiling that applies (#388, #456)."""
+    return claim_pools(_pools(LOOKUP, LOOKUP_ANON, LOOKUP_ALL, user_id,
+                              user_limit, anon_limit, all_limit))
+
+
+def claim_text_generation(user_id, user_limit, all_limit, anon_limit=0):
+    """Count one generated text (#237, #456).
+
+    **The asymmetry #456 was filed for lived here.** The site-wide row counted
+    everybody and there was no anonymous row at all, so anonymous traffic
+    exhausting the shared ceiling refused a signed-in learner who had spent
+    none of their own -- measured, twelve anonymous texts and the thirteenth
+    request from an account was refused with `scope: daily`. Lookups had never
+    had that failure, and now neither does this.
+    """
+    return claim_pools(_pools(GENERATE, GENERATE_ANON, GENERATE_ALL, user_id,
+                              user_limit, anon_limit, all_limit))
+
+
+def claim_chat_message(user_id, user_limit, anon_limit, all_limit):
+    """Count one Mykola message (#164, #447, #456).
+
+    **The expensive one.** `ai_agent` answers with `claude-opus-5`, where the
+    app's own calls all use Haiku, so one message costs roughly thirty times
+    one generated text. That ratio is why #456's ceilings are what they are:
+    the shared row here is the single number bounding this app's bill.
+    """
+    return claim_pools(_pools(CHAT, CHAT_ANON, CHAT_ALL, user_id,
+                              user_limit, anon_limit, all_limit))
 
 
 def existing_words(owner_id=None):
@@ -179,89 +280,6 @@ def existing_words(owner_id=None):
         return {(row[0] or "").strip().lower() for row in rows if row[0]}
     finally:
         conn.close()
-
-
-def _lookup_scope(user_id):
-    """Which lookup ceiling applies, as `(action, row, scope)` (#388).
-
-    **One row per call, not two, and that is the difference from #237.** A
-    generated text is claimed against the account *and* a site-wide row that
-    counts everybody, so its two claims have an order and the order had to be
-    argued about. Here the shared row counts **anonymous lookups only**: a
-    signed-in learner meets their own daily ceiling and nothing else, an
-    anonymous visitor meets the shared one and nothing else. Nobody's lookups
-    are counted twice, and the failure #199 names for #164's shared ceiling --
-    one person in a loop spending the day's budget while every genuine visitor
-    is told to come back tomorrow -- cannot reach the people who signed up.
-
-    Since #447 that is legible in the data: the shared row's action is
-    `lookup:anon` rather than a bare name on a sentinel id.
-    """
-    if user_id is not None:
-        return LOOKUP, user_id, "user"
-    return LOOKUP_ANON, ALL_ACCOUNTS, "anonymous"
-
-
-def claim_word_lookups(user_id, count, user_limit, anon_limit):
-    """Take `count` lookups at once, or none (#406).
-
-    All or nothing: a partial claim is the half-built topic the ceiling
-    decision exists to avoid. Returns `(allowed, scope, used)` like its
-    single-word sibling.
-    """
-    if count <= 0:
-        return True, None, 0
-    action, row, scope = _lookup_scope(user_id)
-    limit = user_limit if user_id is not None else anon_limit
-    claimed, used = claim_action(action, row, limit, amount=count)
-    return (True, None, used) if claimed else (False, scope, used)
-
-
-def claim_word_lookup(user_id, user_limit, anon_limit):
-    """Count one word lookup against the ceiling that applies (issue #388).
-
-    Returns `(allowed, scope, used)` -- `scope` is None when the lookup may go
-    ahead, or "user" / "anonymous" naming the ceiling that refused it. `used`
-    is the count on the row that decided.
-
-    A limit of 0 or less means "no ceiling", which is how a deployment turns
-    either half off.
-    """
-    action, row, scope = _lookup_scope(user_id)
-    limit = user_limit if user_id is not None else anon_limit
-    claimed, used = claim_action(action, row, limit)
-    return (True, None, used) if claimed else (False, scope, used)
-
-
-def claim_text_generation(user_id, user_limit, daily_limit):
-    """Count one generated text against both ceilings that apply (#237).
-
-    Returns `(allowed, scope, used)`, `scope` naming the ceiling that refused.
-
-    **Two rows, and the order is deliberate.** The account row is claimed
-    first, so a learner can spend one of their ten on a day the whole site is
-    exhausted; the reverse burns a site-wide slot for somebody who was already
-    over their own limit, which is the worse of the two. Neither matters at a
-    third of a cent -- but it is decided rather than accidental.
-
-    The site-wide row counts **everybody**, unlike #388's, which counts
-    anonymous lookups only. Since #447 the action name says so -- `generate:all`
-    -- rather than leaving it to a docstring. That asymmetry is a known gap
-    recorded on #199: anonymous traffic can exhaust the pool a signed-in
-    learner draws from, which #388 deliberately made impossible for lookups.
-    """
-    for scope, action, row, limit in (
-            ("user", GENERATE, user_id, user_limit),
-            ("daily", GENERATE_ALL, ALL_ACCOUNTS, daily_limit)):
-        if row is None:
-            continue
-        claimed, used = claim_action(action, row, limit)
-        if not claimed:
-            return False, scope, used
-    row = user_id if user_id is not None else ALL_ACCOUNTS
-    action = GENERATE if user_id is not None else GENERATE_ALL
-    return True, None, action_used_today(action, row)
-
 
 
 def upsert_user(google_sub, email, display_name=None, given_name=None,

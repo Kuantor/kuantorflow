@@ -501,6 +501,33 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   gate still refuses every path it names.
   **A request, not a control.** Access is decided by #382's namespace and
   #127's owner filter, in SQL; this only decides what turns up in a search.
+- **Three pools per paid action** (#456) — yours, everybody-anonymous's, and
+  everybody's, claimed in that order by `utils.claim_pools()`. Before it the
+  three features disagreed and **generation was inverted from the other two**:
+  the only one with a row counting everybody and the only one without a row
+  counting anonymous traffic, so anonymous texts exhausted what a signed-in
+  learner drew on — measured, twelve anonymous texts and the thirteenth
+  request from an account that had spent nothing was refused. Lookup and chat
+  had the opposite gap: no ceiling at all on the total bill.
+  **The gap between the anonymous pool and everybody's is the whole
+  protection.** Anonymous visitors claim their own row *and* the shared one, so
+  they do spend it — what stops them emptying it is that their own ceiling is
+  smaller, and once reached the shared row stops advancing with them. Set the
+  two equal and the bug is back in a new hat, which is why every
+  `*_ANON_DAILY` here is well below its `*_ALL_DAILY`.
+  **The numbers are cost-weighted, not uniform.** `ai_agent` answers with
+  `claude-opus-5`; every call this repo makes itself uses Haiku. One chat
+  message therefore costs roughly **thirty times** one generated text, so the
+  chat ceilings are the tight ones and `GENERATION_DAILY_LIMIT` can be
+  comfortable. `CHAT_ALL_DAILY` is the single number bounding this app's bill.
+  At the current defaults, every pool emptied every day comes to roughly
+  $8/day, and **about 70% of that is the two Opus paths** — so the highest-
+  leverage change available is not a ceiling at all, it is Mykola's model.
+  `account_refusal()` covers the two account-only actions (the recap and the
+  notes upload — neither is reachable without signing in); `chat_refusal()`
+  covers all three chat pools and returns `_generation_refusal()`'s shape, so
+  an exhausted **anonymous** pool still offers a sign-in while an exhausted
+  account or site-wide pool says tomorrow.
 - **Per-account ceilings** (#447) — `CHAT_USER_DAILY` (150),
   `RECAP_USER_DAILY` (20) and `UPLOAD_USER_DAILY` (20), all `_int_env` and 0 to
   disable, claimed through `web.account_refusal()`. Mykola's chat, the
