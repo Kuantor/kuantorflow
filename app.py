@@ -238,10 +238,43 @@ def require_keyword():
     # The gate page, static assets, and the Google OAuth handshake must load
     # even before the keyword is entered (the OAuth callback carries no keyword
     # session, and signing in exposes no gated content on its own).
-    if request.endpoint in ("gate", "static", "login_google", "auth_google_callback"):
+    #
+    # `robots.txt` too (#458), and for a different reason: it has to be
+    # readable by a crawler, which will never have a keyword. It exposes
+    # nothing -- a list of paths a crawler is asked not to visit, all of which
+    # the gate still refuses.
+    if request.endpoint in ("gate", "static", "robots_txt",
+                            "login_google", "auth_google_callback"):
         return None
     return redirect(url_for("gate"))
 
+@app.route("/robots.txt")
+def robots_txt():
+    """Serve `static/robots.txt` at the root, where crawlers look for it (#458).
+
+    **A real file, hand-written and reviewed in a diff**, for the reason
+    `seed_words.py` is: generated content cannot be read in a pull request, and
+    this is five lines that change once a year. The file is the source of
+    truth; `automation/tests/test_robots_txt.py` parses it and checks every
+    path it names still matches a route in the URL map, so a renamed route
+    cannot quietly fall out of the list.
+
+    A route rather than a static asset, because Flask serves `static/` at
+    `/static/...` and no crawler asks for `/static/robots.txt`. It also gives
+    the gate an endpoint name to exempt.
+
+    **Exempt from the keyword gate**, which is the only reason shipping this
+    before #199 is worth anything: while the gate is on, every other path
+    answers 302 to `/enter`, and a crawler will never have a keyword. It
+    exposes nothing -- a list of paths a crawler is asked not to visit, every
+    one of which the gate still refuses.
+
+    `send_from_directory` rather than reading the file here: it answers
+    conditional requests, sets the length and modified time, and a crawler
+    re-asking for this file daily is exactly who benefits.
+    """
+    return send_from_directory(app.static_folder, "robots.txt",
+                               mimetype="text/plain")
 
 @app.route("/enter", methods=["GET", "POST"])
 def gate():

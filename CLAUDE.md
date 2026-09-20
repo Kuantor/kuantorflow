@@ -481,6 +481,26 @@ Needs a gitignored `.env` (see `.env.example`): `SECRET_KEY`, `DB_*` (MySQL),
   half-built topic that ceiling exists to prevent. `ROW_COUNT()` read straight
   after the conditional update is what says whether *this* call took the last
   slot rather than somebody else.
+- **`robots.txt`** (#458) — a **real file**, `static/robots.txt`, hand-written
+  and reviewed in a diff for the reason `seed_words.py` is content rather than
+  output: generated text cannot be read in a pull request, and this is five
+  lines that change once a year. A route serves it at `/robots.txt`, because
+  Flask serves `static/` at `/static/…` and no crawler asks for that.
+  **The file is the source of truth and the test derives from it** — 
+  `automation/tests/test_robots_txt.py` parses its `Disallow:` lines and checks
+  each against the URL map, so a renamed route cannot quietly fall out of the
+  list while the file goes on looking correct. A second copy in Python would
+  only ever prove the two copies agree.
+  **The landing page is indexed and the deck is not.** The deck half is not a
+  free choice: #194 means learners' uploaded notes become cards, so an indexed
+  deck is somebody else's material republished at scale — and a cache is the
+  one part of opening the site that a later commit cannot undo.
+  **Exempt from the keyword gate**, beside `/enter`, the static assets and the
+  OAuth callback, because a crawler will never have a keyword. That is the only
+  reason shipping it before #199 is worth anything. It exposes nothing — the
+  gate still refuses every path it names.
+  **A request, not a control.** Access is decided by #382's namespace and
+  #127's owner filter, in SQL; this only decides what turns up in a search.
 - **Per-account ceilings** (#447) — `CHAT_USER_DAILY` (150),
   `RECAP_USER_DAILY` (20) and `UPLOAD_USER_DAILY` (20), all `_int_env` and 0 to
   disable, claimed through `web.account_refusal()`. Mykola's chat, the
