@@ -16,8 +16,21 @@
        rule for every future case: hide a link the learner cannot act on, show
        one they can. No visible language is not fixable from this page; a thin
        topic is fixable by adding another topic. #}
-    <p class="crumbs">
-        <a href="{{ url_for('index') }}">&larr; Home</a>
+    <p class="crumbs crumbs--activities">
+        {# `crumbs--activities` scopes #452's phone rule to this row and no
+           other. **Eighteen** templates render a `.crumbs` row -- every game
+           page, the picker, the quiz, the deck (through `cards.html`), the
+           worksheet -- and the stylesheet comment claiming three was stale.
+           On all the others it holds one or two links and is the way back
+           out, so a rule written on `.crumbs` itself would strand a learner
+           mid-game with no exit.
+
+           `crumbs-home` marks what **stays** rather than what goes, which is
+           the other half of the same care: the greyed stubs are `<span>`s
+           (#261), so a rule phrased as "hide every `a` but the first" would
+           leave them behind on the strip, and the row's length is not fixed
+           anyway -- *Take quiz* comes and goes with the visible languages. #}
+        <a class="crumbs-home" href="{{ url_for('index') }}">&larr; Home</a>
         {# Card deck used to be here (#78). It moved to the banner below the
            heading (#453) rather than appearing twice -- and that is what lets
            #452 narrow this row on a phone to the back arrow alone, which was
