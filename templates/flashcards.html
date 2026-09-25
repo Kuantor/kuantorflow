@@ -18,10 +18,11 @@
        topic is fixable by adding another topic. #}
     <p class="crumbs">
         <a href="{{ url_for('index') }}">&larr; Home</a>
-        {# Card-deck activity with flip animation (#78). Not in the panel on
-           the front page — it is a way of *reading* the deck rather than being
-           tested by it — but it belongs here, on the topic it reads. #}
-        <a href="{{ url_for('card_deck', topic=topic) }}">Card deck</a>
+        {# Card deck used to be here (#78). It moved to the banner below the
+           heading (#453) rather than appearing twice -- and that is what lets
+           #452 narrow this row on a phone to the back arrow alone, which was
+           its original proposal before the deck's only other entrance was
+           taken into account. #}
         {% if settings.show_ukrainian or settings.show_russian %}
         <a href="{{ activity_play_url(quiz_activity, topic) }}">Take quiz</a>
         {% endif %}
@@ -89,6 +90,46 @@
         })();
     </script>
     {% endif %}
+
+    {# Card deck as a wide banner (#453), the shape and size of the text
+       generator's on the front page. It **moved** here out of the activity row
+       above rather than being duplicated: one route to a place, which is
+       #451's reasoning for the header applied to a panel.
+
+       Two things differ from that banner, and both are why this is written out
+       rather than reusing it through a filter.
+
+       **The link carries the topic.** The reader's banner goes to the picker,
+       because it sits on the front page and no topic is chosen yet. This one
+       is standing in a topic, so it opens that deck in one tap; a picker here
+       would be a step backwards, which is the same argument the activity row
+       above already makes for itself.
+
+       **`card_deck` is a route, not an activity.** It has no entry in
+       `games.ACTIVITIES`, so `game_icon` would answer None and the banner
+       would render with no picture and no complaint. The file is named
+       directly instead. A slug would have bought #261's greying machinery,
+       and the deck is never a stub -- it is a way of *reading* the deck rather
+       than being tested by it, which is why it was never on the front page.
+
+       No heading above it, unlike the reader's panel: the page is already
+       titled with this topic, and a second one saying "Card deck" over a
+       button labelled "Card deck" is a line nobody reads twice.
+
+       Rendered whether or not the deck has cards, deliberately. This page's
+       own rule is that a thin topic is explained where the learner lands
+       rather than hidden from -- stated on the activity row above, and the
+       one exception there is *Take quiz*, which hides because no visible
+       language is not fixable from here. An empty deck is. #}
+    <div class="panel panel--fit">
+        <a class="reader-banner reader-banner--image"
+           href="{{ url_for('card_deck', topic=topic) }}">
+            <img class="reader-banner-img"
+                 src="{{ static_url('img/games/card_deck.webp') }}"
+                 alt="" loading="lazy" decoding="async">
+            <span class="reader-banner-label">Card deck</span>
+        </a>
+    </div>
 
     {% if not cards %}
         <div class="panel">
