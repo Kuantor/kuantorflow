@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Help | KuantorFlow{% endblock %}
+
+{#
+   The learner's guide, served as a page (#460).
+
+   **There is no help text in this file, and there must never be.** Every word
+   on this page comes from `docs/user-guide.md`, rendered in
+   `app._rendered_guide()`, and that is the same file Mykola indexes
+   (`chat.MYKOLA_KNOWLEDGE`, #310). Both read the one declaration in
+   `web.USER_GUIDE`. A sentence written here instead would be a second copy of
+   the guide, and #310 exists because a second copy drifted until the companion
+   answered "why can't I add cards?" from a description written before #125.
+   This template holds structure only: where the contents list goes, and what
+   to say when the renderer is missing.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+        {% if has_pdf %}
+        <a href="{{ url_for('help_pdf') }}" download>Download as PDF</a>
+        {% endif %}
+    </p>
+
+    {% if guide %}
+    <article class="panel help-guide">
+        {{ guide.head }}
+        <nav class="help-contents" aria-label="Contents">
+            {{ guide.toc }}
+        </nav>
+        {{ guide.body }}
+    </article>
+    {% else %}
+    {# The renderer is imported inside the route, so a deploy that missed the
+       `pip install` loses this page and nothing else. Said plainly rather than
+       rendered as an empty panel, and the PDF is the way through. #}
+    <div class="panel">
+        <p>The help page can&rsquo;t be shown right now.
+        {% if has_pdf %}The same guide is available as a
+            <a href="{{ url_for('help_pdf') }}" download>PDF to download</a>.{% endif %}</p>
+    </div>
+    {% endif %}
+{% endblock %}

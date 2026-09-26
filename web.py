@@ -1004,6 +1004,19 @@ def inject_static_url():
     return {"static_url": static_url}
 
 
+# --- the learner's guide (#310, #460) ----------------------------------------
+# One file, two surfaces. Mykola indexes it (`chat.MYKOLA_KNOWLEDGE`, #310) and
+# the Help page renders it (#460), and this is the only place either of them
+# learns where it is. Here rather than in either module because both ask --
+# `web.py`'s admission rule exactly -- and because two declarations of "which
+# file is the guide" is the drift #310 was written to end: ai_agent kept its own
+# description of this app until it answered "why can't I add cards?" from one
+# written before #125. A page and a companion reading two different files would
+# disagree the same way, each of them confidently.
+USER_GUIDE = Path(__file__).parent / "docs" / "user-guide.md"
+USER_GUIDE_PDF = USER_GUIDE.with_suffix(".pdf")
+
+
 # --- streaming ---------------------------------------------------------------
 # The Server-Sent Events frame format, here because two features stream: the
 # chat and #406's topic fill. Eight lines of protocol rather than anything

@@ -25,6 +25,7 @@ from flask import (
     url_for,
 )
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
+from markupsafe import Markup
 
 import applog
 import games
@@ -256,6 +257,79 @@ def robots_txt():
     """
     return send_from_directory(app.static_folder, "robots.txt",
                                mimetype="text/plain")
+
+# The rendered guide, remembered per process and keyed on the file's mtime, so
+# an edit shows on the next request rather than the next reload.
+_GUIDE_CACHE = {}
+
+
+def _rendered_guide():
+    """`docs/user-guide.md` as HTML, split around a contents list (#460).
+
+    **Rendered at request time, not at build time**, which is the ticket's
+    recommendation and the reason is this repo's recurring failure: two copies
+    of one truth. A generated HTML file committed beside the guide goes stale
+    the day somebody edits the Markdown and forgets the script -- the page
+    showing last month while Mykola answers from this month. With nothing
+    generated there is nothing to forget.
+
+    `markdown` is imported **here and not at the top of the module**. It is the
+    one dependency #460 adds, and a PythonAnywhere deploy that pulls the code
+    but misses the `pip install` would otherwise fail at import and take down
+    every page on the site rather than this one. Missing, the page offers the
+    PDF instead and says so; the rest of the site does not notice.
+
+    The contents list is the eight `##` sections only. Every `###` still gets
+    an anchor, so any feature can be linked to -- but thirty-three of them in a
+    list above the text would push the guide below the fold on a phone, which
+    is what #452 had just finished removing from the topic page.
+
+    The guide is committed content, reviewed in a diff like any other file
+    here, which is what makes marking the output safe. It is never anything a
+    visitor wrote.
+    """
+    path = web.USER_GUIDE
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return None
+    cached = _GUIDE_CACHE.get(str(path))
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        import markdown
+    except ImportError:
+        app.logger.warning("markdown is not installed; /help offers the PDF")
+        return None
+    renderer = markdown.Markdown(extensions=["toc", "tables"],
+                                 extension_configs={"toc": {"toc_depth": "2-2"}})
+    html = renderer.convert(path.read_text(encoding="utf-8"))
+    # Title and introduction above the contents, the sections below it.
+    split = html.find("<h2")
+    if split < 0:
+        split = len(html)
+    guide = {"head": Markup(html[:split]), "toc": Markup(renderer.toc),
+             "body": Markup(html[split:])}
+    _GUIDE_CACHE[str(path)] = (mtime, guide)
+    return guide
+
+
+@app.route("/help")
+def help_page():
+    """The learner's guide as a page (#460). A page rather than a modal, unlike
+    *About*: a guide is scrolled, returned to and kept open in a tab."""
+    return render_template("help.html", guide=_rendered_guide(),
+                           has_pdf=web.USER_GUIDE_PDF.is_file())
+
+
+@app.route("/help/user-guide.pdf")
+def help_pdf():
+    """The same guide as a download. Served from `docs/` rather than copied
+    into `static/`, because a copy is a second file to keep in step."""
+    return send_from_directory(web.USER_GUIDE_PDF.parent,
+                               web.USER_GUIDE_PDF.name,
+                               mimetype="application/pdf")
+
 
 @app.route("/login/google")
 def login_google():

@@ -2684,3 +2684,54 @@ button:disabled:hover { background: #9db4c7; }
     cursor: pointer;
 }
 .lookup-tip__close:hover { opacity: 1; }
+
+/* The Help page (#460): `docs/user-guide.md`, rendered. Every selector here
+   is scoped to `.help-guide` because the markup comes from a Markdown
+   renderer and uses bare `h2`, `table` and `ul` -- styling those globally
+   would restyle every panel on the site. */
+.help-guide { line-height: 1.6; }
+.help-guide h1 { margin: 0 0 0.8rem; font-size: 1.5rem; color: var(--blue-dark); }
+/* `.panel h2` sets `margin-top: 0` for a panel's single heading; the guide
+   has eight in one panel and they need air between them. */
+.help-guide h2 {
+    margin: 2rem 0 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid #e4e9ee;
+    font-size: 1.25rem;
+}
+.help-guide h3 { margin: 1.4rem 0 0.4rem; font-size: 1.05rem; color: var(--blue-dark); }
+/* A jump to an anchor lands with the heading clear of the top edge rather
+   than pressed against it. */
+.help-guide [id] { scroll-margin-top: 1rem; }
+.help-contents {
+    margin: 1rem 0 0.5rem;
+    padding: 0.7rem 1rem;
+    border-radius: 10px;
+    background: #f3f7fa;
+}
+.help-contents ul { margin: 0; padding-left: 1.2rem; }
+.help-contents li { margin: 0.15rem 0; }
+.help-contents a { color: var(--blue-dark); text-decoration: none; }
+.help-contents a:hover { text-decoration: underline; }
+/* Tables scroll inside themselves. The limits table is five columns, which
+   does not fit a 375pt phone, and a table that overflows makes the whole
+   *page* scroll sideways -- the thing #431's follow-up spent a day removing
+   from the Settings panel. `display: block` is what lets a table take an
+   overflow of its own. */
+.help-guide table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin: 0.8rem 0;
+    font-size: 0.92rem;
+}
+.help-guide th,
+.help-guide td {
+    padding: 0.35rem 0.6rem;
+    border: 1px solid #dde4ea;
+    text-align: left;
+    vertical-align: top;
+}
+.help-guide th { background: #f3f7fa; }
+.help-guide code { font-size: 0.9em; }

@@ -433,6 +433,22 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   guide change**, and the guide's `###` headings are its retrieval units: one
   heading per feature, since a section covering four activities scores too low
   on a question about any one of them to be found.
+  **The Help page renders the same file** (#460) — one file, two surfaces.
+  `web.USER_GUIDE` is the one declaration of where the guide is, and both
+  `chat.MYKOLA_KNOWLEDGE` and `/help` read it, so the page and the companion
+  cannot quietly read different files. `help.html` holds **no help text** —
+  structure only — for the reason #310 exists. The Markdown is rendered **at
+  request time** (`app._rendered_guide()`, cached per process on the file's
+  mtime) rather than committed as generated HTML, which would go stale the day
+  somebody edited the guide and forgot a script. `markdown` is imported
+  *inside* that function, so a deploy that misses its `pip install` loses
+  `/help` alone, which falls back to the PDF, instead of failing at import and
+  taking every page with it. **`docs/user-guide.pdf` is still a committed
+  artefact**, offered as a download: regenerate it with
+  `reports/scripts/md_to_pdf.py` whenever the guide changes. It had gone a
+  month stale — still telling learners to type the keyword — before #460, and
+  `automation/tests/test_help_page.py` now fails when any guide heading is
+  missing from it.
 - **`schema.sql` + `apply_schema.py`** — `schema.sql` holds `CREATE TABLE` only
   and describes a **fresh** database; every change to an **existing** one is a
   `Step` in `apply_schema.py`'s `MIGRATIONS` (#180). Adding a column is
