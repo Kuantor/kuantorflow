@@ -5,8 +5,19 @@ Action logs (issue #30) — a plain-text trail of what the app did, in `logs/`:
                            moved and deleted, and the account-level actions
                            beside them — topics appearing, blocks, settings
                            changes, an account removing itself
-    logs/dict.log          which translation / dictionary sites were used
+    logs/dict.log          which translation / dictionary sites were used,
+                           and nothing else (#448)
     logs/parsed_files.log  .txt / .docx / .mht notes uploads
+    logs/games.log         one line per round of the nine word games (#448)
+    logs/gen_texts.log     #237's generated texts, and the refusals of them
+    logs/mykola.log        the companion's own events, including the chat
+                           ceilings being reached
+
+Each file is named after what it records, and #448 is what made that true.
+`dict.log` had become "anything that went and asked somebody else", so a
+reader looking for dictionary lookups found paid model calls and chat
+refusals mixed in; and the nine games wrote nothing at all, so "what do
+people actually play?" could not be answered from any file.
 
 `cards.log` is the **action** log rather than strictly a card log: it has carried
 `USER-BLOCK`, `ACCOUNT-DELETE`, `PREFERRED-NAME` and `TOPIC` lines for a while,
@@ -44,6 +55,8 @@ CARDS = "cards"
 DICT = "dict"
 PARSED_FILES = "parsed_files"
 MYKOLA = "mykola"
+GAMES = "games"
+GEN_TEXTS = "gen_texts"
 
 _configured = {}  # logger name -> the directory it is currently writing to
 
@@ -151,7 +164,7 @@ def invented_vetted(offered, rejected, words=(), attempts=1):
     the number to watch. One is the design; a number that creeps up means the
     vet is rejecting so much that the generator is struggling to fill a round.
     """
-    _write(CARDS, "INVENTED-VETTED", offered=offered, rejected=rejected,
+    _write(GAMES, "INVENTED-VETTED", offered=offered, rejected=rejected,
            words=",".join(sorted(words)) or None, attempts=attempts)
 
 
@@ -164,7 +177,11 @@ def word_vet_failed(count, error):
     the difference between "the vet is working" and "the vet has been off for
     a week".
     """
-    _write(CARDS, "WORD-VET-FAILED", words=count, error=str(error)[:200])
+    # In `dict.log` since #448, and deliberately **not** `games.log` beside
+    # INVENTED-VETTED: `parsers.wiktionary_pages()` serves #406's topic
+    # builder as well as *Real or fake*, so a failed batch is not a game event
+    # -- it is a dictionary that did not answer, which is what this log is for.
+    _write(DICT, "WORD-VET-FAILED", words=count, error=str(error)[:200])
 
 
 def topic_proposed(idea, title, words, wanted=0, model=None, user=None):
@@ -547,11 +564,32 @@ def definitions_fetched(word, provider, count, elapsed_ms,
            ms=elapsed_ms, fallback_from=fallback_from, error=error)
 
 
-def anonymous_limit_hit(kind, used, limit):
-    """An anonymous visitor was refused a message (#164). `kind` is "session"
-    (their own allowance) or "daily" (everyone's ceiling). Worth logging: it
-    is the only way to see whether the numbers are set sensibly."""
-    _write(DICT, "LIMIT", kind=kind, used=used, limit=limit)
+def anonymous_limit_hit(kind, used, limit, log=DICT, action=None):
+    """A spending ceiling refused somebody (#164, #388, #237, #447, #456).
+    `kind` is which pool ran out -- "session", "user", "anonymous", "daily".
+    Worth logging: it is the only way to see whether the numbers are sensible.
+
+    **Written to the log of the thing that was refused** (#448). Every refusal
+    used to land in `dict.log`, whatever it refused: a chat message, a
+    generated text, a recap and a notes upload all sat among the dictionary
+    lookups. The caller now says which log -- lookups stay here, generation
+    goes to `gen_texts.log`, the chat and the recap to `mykola.log`, the
+    upload to `parsed_files.log`.
+
+    `action` names the feature where `kind` alone cannot: #447's account
+    ceilings report `kind=user` for both the recap and the upload, and those
+    two lines were indistinguishable. The function keeps its name for its
+    callers, though half of them are no longer about anonymous visitors.
+
+    **Written as `feature=`, never `action=`.** `_write()`'s own second
+    parameter is called `action` -- it is the LIMIT word itself -- so passing
+    `action=` through it raises `TypeError` *at the call*, before the body
+    whose whole job is to swallow errors has started. That shipped for one
+    commit during #448 and broke every refusal it touched: a log line took
+    down the request, which is the one thing this module promises never to
+    do. `topic_created()` records the same trap for `name=`.
+    """
+    _write(log, "LIMIT", feature=action, kind=kind, used=used, limit=limit)
 
 
 def lookup_finished(word, cards, elapsed_ms):
@@ -595,7 +633,7 @@ def terms_split(lines, terms, model=None, error=None):
 
 
 def text_generated(model=None, supplied=0, used=0, length=None, elapsed_ms=None,
-                   error=None):
+                   error=None, user=None):
     """A text was written from the learner's own words (#237).
 
     It calls a paid API, so it leaves a line — `terms_split()` above is the
@@ -607,12 +645,49 @@ def text_generated(model=None, supplied=0, used=0, length=None, elapsed_ms=None,
     went into the prompt, and how many of them the text turned out to contain.
     A gap between them is information, not an error — see textgen.generate().
 
-    In `dict.log` rather than `cards.log`: nothing is written to the deck here,
-    and this is the log that already answers "what did the app go and ask
-    somebody else for", which is where the lookups and the quota refusals live.
+    **In `gen_texts.log` since #448**, having been in `dict.log` on the
+    argument that that file answered "what did the app go and ask somebody
+    else for". It is named `dict`, and a reader looking for dictionary lookups
+    had no reason to expect a paid model call among them.
+
+    **`user=` since #448 too.** This was the only outward-going logger here
+    without one, so a hundred GENERATE lines could not be told from a hundred
+    anonymous ones -- the first question anybody asks when the bill arrives,
+    and #199 has made that question real. `textgen.py` has no request context
+    by design, so the actor is handed down by the route, the way
+    `lookup_started()` has it handed down for the parser.
     """
-    _write(DICT, "GENERATE", model=model, supplied=supplied, used=used,
-           words=length, ms=elapsed_ms, error=error)
+    _write(GEN_TEXTS, "GENERATE", model=model, supplied=supplied, used=used,
+           words=length, ms=elapsed_ms, error=error, user=_user(user))
+
+
+def round_played(game, topics, asked, correct=None, stage="graded",
+                 user=None):
+    """One round of a word game (#448). Nothing wrote one before: `rounds.py`
+    held ten activities and a single `applog` call, and that one was about the
+    Wiktionary vet rather than the round, so "what do people actually play?"
+    could not be answered from any file.
+
+    **One line per round, not per answer.** Per-answer recall belongs to
+    #338's table, which is a store to read back from; a log is for counting
+    and reading in order, and a line per question would drown the round it
+    belongs to.
+
+    `stage` says **when** the line was written, because the games do not all
+    have the same moment. Eight grade a submission and log when they do
+    (`stage=graded`, with `correct`). *Fill the gap* never submits -- the
+    score is the learner's own ticking, held in the page -- so its only server
+    event is dealing the round (`stage=dealt`), and `correct` is **absent
+    rather than zero**: nobody measured it, and a zero would be a claim. A
+    count of rounds is one line per round either way; a count of scores must
+    filter on `stage=graded`.
+
+    `topics` is how many were selected, not their names: an eighteen-topic
+    selection would make the line unreadable, and which topics exist is
+    `cards.log`'s question.
+    """
+    _write(GAMES, "ROUND", game=game, stage=stage, topics=topics,
+           asked=asked, correct=correct, user=_user(user))
 
 
 class Timer:

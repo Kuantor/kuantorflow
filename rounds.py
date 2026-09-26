@@ -365,7 +365,8 @@ def _read_a_text_round(activity, topics):
         chosen = textgen.words_for_text(cards, length)
         if not chosen:
             return page(held=None, refusal=None)
-        result = textgen.generate(chosen, instruction, length)
+        result = textgen.generate(chosen, instruction, length,
+                                  user=web._current_email())
         session[GENERATED_TEXT_KEY] = {
             "title": result["title"],
             "text": result["text"], "words": result["words"],
@@ -490,6 +491,28 @@ def _graded_answers(cards, judge):
     return graded
 
 
+def _round_played(activity, topics, results, stage="graded"):
+    """Leave one `games.log` line for a finished round (#448).
+
+    **Not inside `_graded_answers()`**, though that is the obvious seam, and
+    the ticket said why: *Odd one out* and *Real or fake* never reach it --
+    one posts indexes rather than card ids, the other invented words with no
+    row behind them -- so a line hung there would silently miss two of the
+    nine. It is called beside each results render instead, which is the one
+    thing every graded round has, and the test suite plays a round of every
+    activity to prove none was missed.
+
+    `correct` is counted off the results the page is about to show, so the
+    logged score is the displayed score by construction. For *Fill the gap*,
+    dealt rather than graded, there is nothing to count and it is left out.
+    """
+    correct = (sum(1 for r in results if r.get("correct"))
+               if stage == "graded" else None)
+    applog.round_played(activity.slug, len(topics), len(results),
+                        correct=correct, stage=stage,
+                        user=web._current_email())
+
+
 def _scrambled_round(activity, topics):
     """A round of #133: the middle letters shuffled, the learner rebuilds it.
 
@@ -525,6 +548,7 @@ def _scrambled_round(activity, topics):
                 "user_answer": given,
                 "correct": correct,
             })
+        _round_played(activity, topics, results)
         return render_template(
             "game_scrambled.html", activity=activity, topics=topics,
             questions=None, results=results, words=words,
@@ -629,6 +653,7 @@ def _real_or_fake_round(activity, topics):
             said = request.form.get(key) == "real"
             results.append({"word": word, "real": really, "said_real": said,
                             "correct": said == really})
+        _round_played(activity, topics, results)
         return render_template(
             "game_real_or_fake.html", activity=activity, topics=topics,
             items=None, results=results, words=words, dropped=0,
@@ -774,6 +799,9 @@ def _fill_the_gap_round(activity, topics):
             "translation_label": label,
         })
 
+    # Logged at the deal (#448), because this is the only moment the server
+    # sees: the round never submits, and the score lives in the page.
+    _round_played(activity, topics, questions, stage="dealt")
     return render_template(
         "game_fill_the_gap.html", activity=activity, topics=topics,
         cards=questions, wanted=wanted, dropped=dropped, hint=hint)
@@ -851,6 +879,7 @@ def _multiple_choice_round(activity, topics):
                 "user_answer": given,
                 "correct": correct,
             })
+        _round_played(activity, topics, results)
         return render_template(
             "game_multiple_choice.html", questions=None, results=results,
             score=sum(1 for r in results if r["correct"]),
@@ -950,6 +979,7 @@ def _listen_and_type_round(activity, topics):
                 # the results say which word was meant.
                 "correct": correct,
             })
+        _round_played(activity, topics, results)
         return render_template(
             "game_listen_and_type.html", activity=activity, topics=topics,
             questions=None, results=results, words=words, dropped=0,
@@ -1031,6 +1061,7 @@ def _odd_one_out_round(activity, topics):
                 "intruder_topic": request.form.get(f"from_{index}", ""),
                 "correct": bool(answer) and given == answer,
             })
+        _round_played(activity, topics, results)
         return render_template(
             "game_odd_one_out.html", activity=activity, topics=topics,
             questions=None, results=results, words=words, dropped=0,
@@ -1093,6 +1124,7 @@ def _spell_it_round(activity, topics):
                 # against.
                 "correct": correct,
             })
+        _round_played(activity, topics, results)
         return render_template(
             "game_spell_it.html", activity=activity, topics=topics,
             questions=None, results=results, words=words, hint=hint,
@@ -1190,6 +1222,7 @@ def _rebuild_the_sentence_round(activity, topics):
                 # between chips cannot fail a correct sentence.
                 "correct": correct,
             })
+        _round_played(activity, topics, results)
         return render_template(
             "game_rebuild_the_sentence.html", activity=activity, topics=topics,
             questions=None, results=results, words=words, dropped=0,
@@ -1480,6 +1513,7 @@ def _run_quiz(topics, heading, self_url, back, words):
                 "correct": correct,
             })
         score = sum(1 for r in results if r["correct"])
+        _round_played(games.ACTIVITIES["quiz"], topics, results)
     else:
         # A round is `words` questions drawn uniformly from every card in the
         # selection — so a topic with 36 cards contributes more of them than

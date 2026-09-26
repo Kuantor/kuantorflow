@@ -671,7 +671,8 @@ def _lookup_refusal():
     if user_id is None:
         used = session.get(LOOKED_UP_COUNT_KEY, 0)
         if LOOKUP_ANON_LIMIT and used >= LOOKUP_ANON_LIMIT:
-            applog.anonymous_limit_hit("lookup", used, LOOKUP_ANON_LIMIT)
+            applog.anonymous_limit_hit("lookup", used, LOOKUP_ANON_LIMIT,
+                                       action="lookup")
             return {"message": LOOKUP_SIGN_IN_PROMPT, "sign_in": True}
 
     try:
@@ -689,7 +690,8 @@ def _lookup_refusal():
     if not allowed:
         applog.anonymous_limit_hit(
             scope, used,
-            LOOKUP_USER_DAILY if scope == "user" else LOOKUP_ANON_DAILY)
+            LOOKUP_USER_DAILY if scope == "user" else LOOKUP_ANON_DAILY,
+            action="lookup")
         return {
             "message": (LOOKUP_USER_LIMIT_PROMPT if scope == "user"
                         else LOOKUP_BUSY_PROMPT),
@@ -764,7 +766,8 @@ def _generation_refusal():
     if user_id is None:
         used = session.get(GENERATED_COUNT_KEY, 0)
         if GENERATION_ANON_LIMIT and used >= GENERATION_ANON_LIMIT:
-            applog.anonymous_limit_hit("generate", used, GENERATION_ANON_LIMIT)
+            applog.anonymous_limit_hit("generate", used, GENERATION_ANON_LIMIT,
+                                       log=applog.GEN_TEXTS, action="generate")
             return {"message": GENERATION_SIGN_IN_PROMPT, "sign_in": True}
 
     try:
@@ -780,7 +783,8 @@ def _generation_refusal():
 
     if not allowed:
         applog.anonymous_limit_hit(scope, used, GENERATION_USER_DAILY
-                                   if scope == "user" else GENERATION_DAILY_LIMIT)
+                                   if scope == "user" else GENERATION_DAILY_LIMIT,
+                                   log=applog.GEN_TEXTS, action="generate")
         return {
             "message": (GENERATION_USER_LIMIT_PROMPT if scope == "user"
                         else GENERATION_BUSY_PROMPT),
@@ -861,9 +865,23 @@ def account_refusal(action, all_action, limit, all_limit, prompt):
         return None
     if allowed:
         return None
+    # To the log of the feature refused (#448): the recap is Mykola's, the
+    # upload is a parsed file. `action` is what tells the two apart -- both
+    # report `kind=user`, and before #448 the lines were identical.
     applog.anonymous_limit_hit(scope, used,
-                               limit if scope == "user" else all_limit)
+                               limit if scope == "user" else all_limit,
+                               log=_ACCOUNT_ACTION_LOGS.get(action, applog.DICT),
+                               action=action)
     return prompt
+
+# Which log an account ceiling's refusal belongs in (#448). Keyed on the
+# action names `utils.py` writes out, which is the whole point of writing them
+# out: a misspelt key here would quietly fall back to `dict.log` rather than
+# fail, so the test suite asserts every account action is mapped.
+_ACCOUNT_ACTION_LOGS = {
+    utils.RECAP: applog.MYKOLA,
+    utils.UPLOAD: applog.PARSED_FILES,
+}
 
 # What an exhausted chat pool says, and whether signing in would help.
 #
@@ -918,7 +936,8 @@ def chat_refusal():
         "daily": (CHAT_BUSY_PROMPT, False, CHAT_ALL_DAILY),
     }
     message, sign_in, limit = answers[scope]
-    applog.anonymous_limit_hit(scope, used, limit)
+    applog.anonymous_limit_hit(scope, used, limit,
+                               log=applog.MYKOLA, action="chat")
     return {"message": message, "sign_in": sign_in}
 
 # --- versioned static URLs (#300) --------------------------------------------

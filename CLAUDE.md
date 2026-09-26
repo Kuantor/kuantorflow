@@ -259,9 +259,25 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   write path asks the predicate *and* leans on `_save_and_log()`, which
   refuses on its own.
 - **`applog.py`** — the action logs in `logs/` (`cards.log`, `dict.log`,
-  `parsed_files.log`, #30). Card writes go through `cards._save_and_log()`;
+  `parsed_files.log`, #30; `games.log` and `gen_texts.log`, #448; `mykola.log`
+  for the companion). Card writes go through `cards._save_and_log()`;
   **a new save or delete path must log too**. Helpers never raise, so logging
-  can't break a request. `KF_LOGS_DIR` redirects the directory (the test
+  can't break a request — **with one hole the `try` cannot close**: `_write()`'s
+  own second parameter is named `action`, so passing `action=` (or `name=`)
+  as a field raises `TypeError` *at the call*, before the body that swallows
+  errors runs. It shipped for one commit in #448 and took down every refusal
+  it touched; a field that names a feature is written `feature=`.
+  **Each file holds what it is named for** (#448). `dict.log` is dictionary
+  and translator traffic and nothing else — it had also collected paid model
+  calls and every spending refusal. A `LIMIT` line goes to the log of the thing
+  refused (`anonymous_limit_hit(..., log=, action=)`): lookups here, generation
+  to `gen_texts.log`, chat and the recap to `mykola.log`, the upload to
+  `parsed_files.log`. **Every game round writes one `ROUND` line** to
+  `games.log` through `rounds._round_played()` — called beside each results
+  render, **not** inside `_graded_answers()`, which *Odd one out* and *Real or
+  fake* never reach. *Fill the gap* never submits, so it logs `stage=dealt`
+  with no score rather than a zero; a new game is one entry in `GAME_ROUNDS`
+  and `automation/tests/test_games_and_gen_texts_logs.py` fails until it logs. `KF_LOGS_DIR` redirects the directory (the test
   suite points it at a temp dir). A writer with no request behind it —
   `set_user_blocked()`, `place_topic()`, `seed_topics.py` — logs *beside the
   write* instead, because `_save_and_log()` reads the session and `g`.

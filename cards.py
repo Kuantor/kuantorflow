@@ -1281,7 +1281,9 @@ def start_topic_fill():
 
     if not allowed:
         limit = web.LOOKUP_USER_DAILY if scope == "user" else web.LOOKUP_ANON_DAILY
-        applog.anonymous_limit_hit(scope, used, limit)
+        # #406's batch claims word lookups, so its refusal is a lookup
+        # refusal and stays in `dict.log` with the rest of them (#448).
+        applog.anonymous_limit_hit(scope, used, limit, action="lookup")
         flash((f"That would need {len(words)} lookups and you have "
                f"{max(limit - used, 0)} left today. Untick a few words, or "
                "come back tomorrow.", None))
