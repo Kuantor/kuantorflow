@@ -1338,6 +1338,26 @@ body.welcome-active {
     border-radius: 10px;
     padding: 0.6rem 0.9rem 0.8rem;
     margin: 0 0 1rem;
+    /* A `<fieldset>` carries `min-width: min-content` from the UA stylesheet,
+       which no other element does, and it will not shrink below that however
+       narrow its grid track is. So a wide unbreakable run inside one -- here
+       the `needs GOOGLE_TRANSLATE_API_KEY` note on an unconfigured provider,
+       one 170px token in a column of radios -- pushes the fieldset past its
+       column and the grid past the panel.
+
+       **This is older than #431, which only removed the slack that hid it.**
+       The dialog used to scroll as a whole, so the 12.8px of horizontal
+       padding the new inner scroller adds was still free: the fieldsets
+       needed 632px, 639.8px was available, and it fitted with 7.7px to spare.
+       Inside the scroller there is 614px and a horizontal scroll bar appeared
+       along the bottom of the panel.
+
+       Measured at 375, 480, 700, 900 and 1280: `min-width: 0` here takes the
+       overflow to zero at every one. `minmax(0, 1fr)` on the grid -- the
+       usual remedy, and the first thing tried -- fixes the *track* and not
+       the fieldset inside it, so it cleared 1280 and left 16px at 700 and
+       36px at 375. One mechanism, at the element that actually refuses. */
+    min-width: 0;
 }
 .settings-group legend {
     padding: 0 0.35rem;
@@ -2433,6 +2453,21 @@ button:disabled:hover { background: #9db4c7; }
    from this rule alone: measured at 1280px, the DeepL row is 20px tall with
    the note on the same baseline as its label. */
 .settings-inline-hint { margin-left: 0.35rem; font-size: 0.85em; }
+/* The environment-variable names in these hints are the widest unbreakable
+   runs in the whole dialog -- `GOOGLE_TRANSLATE_API_KEY` measures 170px in a
+   274px column on a 375pt phone -- so they set the min-content width of
+   everything above them and pushed a horizontal scroll bar along the bottom
+   of the panel once #431's inner scroller removed the slack.
+
+   **`anywhere`, not `break-word`, and the difference is the whole point.**
+   Both let a long word break; only `anywhere` counts that when the browser
+   computes min-content, which is what a grid track and a flex item actually
+   size against. Measured at 375: `break-word` left all 22px of overflow,
+   `anywhere` took it to zero.
+
+   #430/#459 intend to remove these notes from the panel entirely, at which
+   point this rule protects nothing and can go with them. */
+.settings-inline-hint code { overflow-wrap: anywhere; }
 
 /* #353 — a translator this deployment has no key for. Greyed and still
    readable, the way #261 greys an unfinished game tile: the option exists,
