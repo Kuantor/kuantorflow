@@ -5,6 +5,10 @@ beautifulsoup4==4.12.3
 lxml==6.1.1
 requests==2.32.3
 
+# The Help page renders docs/user-guide.md at request time (#460). Imported
+# inside the route, so a deploy that misses this install loses /help alone.
+Markdown==3.11
+
 # Optional "Sign in with Google" (OAuth 2.0 / OpenID Connect). If unset,
 # the feature disables itself — see GOOGLE_CLIENT_ID in app.py.
 Authlib==1.7.2

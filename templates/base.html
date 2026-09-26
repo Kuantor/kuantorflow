@@ -25,6 +25,9 @@
             <a href="{{ url_for('index') }}">Home</a>
             <a href="#" id="settings-link">Settings</a>
             <a href="#" id="about-link">About</a>
+            {# A real href, not `#`: About is a picture in an overlay, Help is a
+               page a learner scrolls and may keep open in a tab (#460). #}
+            <a href="{{ url_for('help_page') }}"{% if request.endpoint == 'help_page' %} aria-current="page"{% endif %}>Help</a>
         </nav>
     </header>
 

@@ -693,7 +693,9 @@ def _save_preferred_name_from_chat(name):
 # in silence.
 
 
-MYKOLA_KNOWLEDGE = [Path(__file__).parent / "docs" / "user-guide.md"]
+# The one declaration lives in `web.py` since #460, because the Help page
+# renders the same file -- see `web.USER_GUIDE` for why that matters.
+MYKOLA_KNOWLEDGE = [web.USER_GUIDE]
 
 
 def get_mykola():

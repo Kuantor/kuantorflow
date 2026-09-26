@@ -20,11 +20,15 @@ Without an account you can still browse, quiz and play. What you cannot do is wr
 
 ### Reset Auth and deleting your account
 
-The header carries **Home**, **About** and **Settings**, and Settings is also where two heavier buttons live.
+The header carries **Home**, **About**, **Help** and **Settings**, and Settings is also where two heavier buttons live.
 
 *Reset Auth* signs you out **and** clears what this browser has stored — your conversation with Mykola and any saved state. That is the difference between it and simply signing out, and it is how you hand the browser back to somebody else.
 
 *Delete account* removes your account, and asks first whether your cards should go with you or stay in the shared deck for other learners. It is not reversible.
+
+### Help: this guide on the site
+
+**Help** in the header opens this guide as a page on the site, with the sections listed at the top so you can jump to the one you need. The same guide is also there as a PDF to download, if you would rather keep a copy. Mykola reads this same guide, so the Help page and what he tells you always agree.
 
 ## Building your deck
 
