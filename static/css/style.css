@@ -1265,11 +1265,42 @@ body.welcome-active {
 .signin-required-go:hover { background: var(--blue-dark); }
 
 /* Settings popup (issues #13 / #20; two-column layout #118) */
+/* A flex column since #431: header, scrolling middle, pinned footer. The
+   dialog itself no longer scrolls -- `overflow-y: auto` moved to
+   `.settings-scroll` inside it, which is what keeps the close cross and the
+   two buttons on screen. This is the pattern `.modal-dialog:has(>
+   .modal-scroll)` already sets up for three other dialogs; Settings needs its
+   own chain rather than that rule, because its scroller is a grandchild
+   (inside the form) and `:has(> ...)` matches a direct child only. */
 .settings-dialog {
     width: min(92vw, 700px);
     max-width: none;
     max-height: 90vh;      /* nothing may ever fall below the popup (#118) */
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+/* `min-height: 0` is needed **twice**, and forgetting the one on the form
+   produces exactly the symptom #431 exists to fix. A flex item defaults to
+   `min-height: auto` and refuses to shrink below its content, so the form
+   would grow to its natural height, push the footer past the dialog's 90vh,
+   and leave the scroller with nothing to scroll -- the dialog scrolling again,
+   by another route. */
+#settings-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+/* The second one, and the cap that must not be inherited. `.modal-scroll` is
+   a fixed `max-height: 65vh` written for the card lists; this dialog is 90vh,
+   so taking that number as it stands renders the panel **shorter** than it is
+   today. It needs no cap at all -- the dialog's 90vh plus `flex: 1 1 auto`
+   hands it whatever is left. The stylesheet has recorded this trap once
+   already, in `.edit-fields`' 58vh. */
+.settings-scroll {
+    max-height: none;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 .settings-grid {
     display: grid;
@@ -1307,6 +1338,26 @@ body.welcome-active {
     border-radius: 10px;
     padding: 0.6rem 0.9rem 0.8rem;
     margin: 0 0 1rem;
+    /* A `<fieldset>` carries `min-width: min-content` from the UA stylesheet,
+       which no other element does, and it will not shrink below that however
+       narrow its grid track is. So a wide unbreakable run inside one -- here
+       the `needs GOOGLE_TRANSLATE_API_KEY` note on an unconfigured provider,
+       one 170px token in a column of radios -- pushes the fieldset past its
+       column and the grid past the panel.
+
+       **This is older than #431, which only removed the slack that hid it.**
+       The dialog used to scroll as a whole, so the 12.8px of horizontal
+       padding the new inner scroller adds was still free: the fieldsets
+       needed 632px, 639.8px was available, and it fitted with 7.7px to spare.
+       Inside the scroller there is 614px and a horizontal scroll bar appeared
+       along the bottom of the panel.
+
+       Measured at 375, 480, 700, 900 and 1280: `min-width: 0` here takes the
+       overflow to zero at every one. `minmax(0, 1fr)` on the grid -- the
+       usual remedy, and the first thing tried -- fixes the *track* and not
+       the fieldset inside it, so it cleared 1280 and left 16px at 700 and
+       36px at 375. One mechanism, at the element that actually refuses. */
+    min-width: 0;
 }
 .settings-group legend {
     padding: 0 0.35rem;
@@ -1357,47 +1408,60 @@ body.welcome-active {
 button:disabled { background: #9db4c7; cursor: default; }
 button:disabled:hover { background: #9db4c7; }
 .settings-scope { margin: 0 0 0.5rem; font-size: 0.78rem; color: var(--muted); }
-/* Reset Auth (#98): left-aligned in the shared action row (#118). */
+/* Reset Auth (#98). The `margin: 0 auto 0 0` that used to push Cancel and
+   Save to the far end of a shared row went with #431 -- they are in a
+   different container now, and an auto margin here would only shove Delete
+   account across the width of the dialog. Smaller than Save, deliberately. */
 .settings-reset {
-    margin: 0 auto 0 0;    /* pushes Cancel/Save to the right */
-    padding: 0.45rem 1.1rem;
+    margin: 0;
+    padding: 0.35rem 0.85rem;
     background: #fff;
     color: var(--bad-border);
     border: 1px solid var(--bad-border);
     border-radius: 8px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 .settings-reset:hover { background: var(--bad-bg); }
 .settings-error { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--bad-border); }
 
-/* The Settings action row on a phone (#238). Four buttons do not fit across
-   360px, and .modal-actions is `justify-content: flex-end` — so the overflow
-   spilled past the row's *start* edge, where nothing can scroll to it and
-   Reset Auth was simply unreachable.
+/* The pinned bar (#431). Opaque and bordered because content scrolls beneath
+   it: without a background of its own a field would show through as it passed,
+   which is the thing that makes a sticky-looking footer read as a bug.
+   `flex: 0 0 auto` so it keeps its height while the middle gives. */
+.settings-footer {
+    flex: 0 0 auto;
+    padding-top: 0.8rem;
+    margin-top: 0.2rem;
+    border-top: 1px solid #e4e9ee;
+    background: #fff;
+}
+/* The two account actions, under the caption that names the account (#431).
+   Left-aligned and lighter than Save -- visual hierarchy rather than the real
+   protection, which is that both open a confirmation first (#98, #165). */
+.settings-account-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0 0 0.9rem;
+}
 
-   A grid rather than `flex-wrap: wrap`: wrapping breaks wherever the widths
-   happen to run out, so renaming one label can move the break and leave Save
-   sitting beside Delete account. Here each button is placed.
+/* #238's phone grid was here, and #431 removed the problem rather than the
+   symptom. Four buttons did not fit across 360px, and `.modal-actions` is
+   `justify-content: flex-end`, so the overflow spilled past the row's *start*
+   edge where nothing could scroll to it -- Reset Auth was simply unreachable.
+   #238 answered with an explicit two-by-two grid, placing each button so a
+   renamed label could not move the break.
 
-   Scoped to #settings-modal on purpose. The card-deletion and Reset Auth
-   confirmations share .modal-actions, have two buttons, and are not broken —
-   a blanket rule would push their Cancel onto a row of its own.
+   The bar now holds **two** buttons, which fit across 360px with room to
+   spare, so the grid has nothing left to solve; Reset Auth and Delete account
+   are up in the scrolling region under the account caption. Removed rather
+   than left in place: a grid assigning `grid-row` to a `.settings-reset` that
+   is no longer inside `.modal-actions` is a rule matching nothing, and the
+   next person to read it would look for a four-button row that does not
+   exist.
 
-   Rows are assigned rather than inferred so the layout holds in both states:
-   signed in there are four buttons, anonymous there are three (Reset Auth,
-   Close, and a disabled Save) and row one simply carries one. */
-@media (max-width: 600px) {
-    #settings-modal .modal-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.6rem;
-    }
-    #settings-modal .settings-reset {
-        grid-row: 1;
-        margin: 0;    /* the auto margin that right-aligns Save has no job here */
-    }
-    #settings-modal #settings-cancel,
-    #settings-modal #settings-save { grid-row: 2; }
+   The verification #238 wanted still applies to what replaced it -- checked
+   at 375x812, both buttons on one row, footer pinned. */
 }
 
 @media (max-width: 600px) {
@@ -2389,6 +2453,21 @@ button:disabled:hover { background: #9db4c7; }
    from this rule alone: measured at 1280px, the DeepL row is 20px tall with
    the note on the same baseline as its label. */
 .settings-inline-hint { margin-left: 0.35rem; font-size: 0.85em; }
+/* The environment-variable names in these hints are the widest unbreakable
+   runs in the whole dialog -- `GOOGLE_TRANSLATE_API_KEY` measures 170px in a
+   274px column on a 375pt phone -- so they set the min-content width of
+   everything above them and pushed a horizontal scroll bar along the bottom
+   of the panel once #431's inner scroller removed the slack.
+
+   **`anywhere`, not `break-word`, and the difference is the whole point.**
+   Both let a long word break; only `anywhere` counts that when the browser
+   computes min-content, which is what a grid track and a flex item actually
+   size against. Measured at 375: `break-word` left all 22px of overflow,
+   `anywhere` took it to zero.
+
+   #430/#459 intend to remove these notes from the panel entirely, at which
+   point this rule protects nothing and can go with them. */
+.settings-inline-hint code { overflow-wrap: anywhere; }
 
 /* #353 — a translator this deployment has no key for. Greyed and still
    readable, the way #261 greys an unfinished game tile: the option exists,
