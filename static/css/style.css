@@ -1265,11 +1265,42 @@ body.welcome-active {
 .signin-required-go:hover { background: var(--blue-dark); }
 
 /* Settings popup (issues #13 / #20; two-column layout #118) */
+/* A flex column since #431: header, scrolling middle, pinned footer. The
+   dialog itself no longer scrolls -- `overflow-y: auto` moved to
+   `.settings-scroll` inside it, which is what keeps the close cross and the
+   two buttons on screen. This is the pattern `.modal-dialog:has(>
+   .modal-scroll)` already sets up for three other dialogs; Settings needs its
+   own chain rather than that rule, because its scroller is a grandchild
+   (inside the form) and `:has(> ...)` matches a direct child only. */
 .settings-dialog {
     width: min(92vw, 700px);
     max-width: none;
     max-height: 90vh;      /* nothing may ever fall below the popup (#118) */
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+/* `min-height: 0` is needed **twice**, and forgetting the one on the form
+   produces exactly the symptom #431 exists to fix. A flex item defaults to
+   `min-height: auto` and refuses to shrink below its content, so the form
+   would grow to its natural height, push the footer past the dialog's 90vh,
+   and leave the scroller with nothing to scroll -- the dialog scrolling again,
+   by another route. */
+#settings-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+/* The second one, and the cap that must not be inherited. `.modal-scroll` is
+   a fixed `max-height: 65vh` written for the card lists; this dialog is 90vh,
+   so taking that number as it stands renders the panel **shorter** than it is
+   today. It needs no cap at all -- the dialog's 90vh plus `flex: 1 1 auto`
+   hands it whatever is left. The stylesheet has recorded this trap once
+   already, in `.edit-fields`' 58vh. */
+.settings-scroll {
+    max-height: none;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 .settings-grid {
     display: grid;
@@ -1357,47 +1388,60 @@ body.welcome-active {
 button:disabled { background: #9db4c7; cursor: default; }
 button:disabled:hover { background: #9db4c7; }
 .settings-scope { margin: 0 0 0.5rem; font-size: 0.78rem; color: var(--muted); }
-/* Reset Auth (#98): left-aligned in the shared action row (#118). */
+/* Reset Auth (#98). The `margin: 0 auto 0 0` that used to push Cancel and
+   Save to the far end of a shared row went with #431 -- they are in a
+   different container now, and an auto margin here would only shove Delete
+   account across the width of the dialog. Smaller than Save, deliberately. */
 .settings-reset {
-    margin: 0 auto 0 0;    /* pushes Cancel/Save to the right */
-    padding: 0.45rem 1.1rem;
+    margin: 0;
+    padding: 0.35rem 0.85rem;
     background: #fff;
     color: var(--bad-border);
     border: 1px solid var(--bad-border);
     border-radius: 8px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 .settings-reset:hover { background: var(--bad-bg); }
 .settings-error { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--bad-border); }
 
-/* The Settings action row on a phone (#238). Four buttons do not fit across
-   360px, and .modal-actions is `justify-content: flex-end` — so the overflow
-   spilled past the row's *start* edge, where nothing can scroll to it and
-   Reset Auth was simply unreachable.
+/* The pinned bar (#431). Opaque and bordered because content scrolls beneath
+   it: without a background of its own a field would show through as it passed,
+   which is the thing that makes a sticky-looking footer read as a bug.
+   `flex: 0 0 auto` so it keeps its height while the middle gives. */
+.settings-footer {
+    flex: 0 0 auto;
+    padding-top: 0.8rem;
+    margin-top: 0.2rem;
+    border-top: 1px solid #e4e9ee;
+    background: #fff;
+}
+/* The two account actions, under the caption that names the account (#431).
+   Left-aligned and lighter than Save -- visual hierarchy rather than the real
+   protection, which is that both open a confirmation first (#98, #165). */
+.settings-account-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0 0 0.9rem;
+}
 
-   A grid rather than `flex-wrap: wrap`: wrapping breaks wherever the widths
-   happen to run out, so renaming one label can move the break and leave Save
-   sitting beside Delete account. Here each button is placed.
+/* #238's phone grid was here, and #431 removed the problem rather than the
+   symptom. Four buttons did not fit across 360px, and `.modal-actions` is
+   `justify-content: flex-end`, so the overflow spilled past the row's *start*
+   edge where nothing could scroll to it -- Reset Auth was simply unreachable.
+   #238 answered with an explicit two-by-two grid, placing each button so a
+   renamed label could not move the break.
 
-   Scoped to #settings-modal on purpose. The card-deletion and Reset Auth
-   confirmations share .modal-actions, have two buttons, and are not broken —
-   a blanket rule would push their Cancel onto a row of its own.
+   The bar now holds **two** buttons, which fit across 360px with room to
+   spare, so the grid has nothing left to solve; Reset Auth and Delete account
+   are up in the scrolling region under the account caption. Removed rather
+   than left in place: a grid assigning `grid-row` to a `.settings-reset` that
+   is no longer inside `.modal-actions` is a rule matching nothing, and the
+   next person to read it would look for a four-button row that does not
+   exist.
 
-   Rows are assigned rather than inferred so the layout holds in both states:
-   signed in there are four buttons, anonymous there are three (Reset Auth,
-   Close, and a disabled Save) and row one simply carries one. */
-@media (max-width: 600px) {
-    #settings-modal .modal-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.6rem;
-    }
-    #settings-modal .settings-reset {
-        grid-row: 1;
-        margin: 0;    /* the auto margin that right-aligns Save has no job here */
-    }
-    #settings-modal #settings-cancel,
-    #settings-modal #settings-save { grid-row: 2; }
+   The verification #238 wanted still applies to what replaced it -- checked
+   at 375x812, both buttons on one row, footer pinned. */
 }
 
 @media (max-width: 600px) {

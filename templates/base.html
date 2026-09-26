@@ -45,322 +45,361 @@
             <button type="button" class="modal-close" aria-label="Close">&times;</button>
             <h2 id="settings-title">Settings</h2>
             <form id="settings-form">
-                <label class="settings-check">
-                    <input type="checkbox" name="cards_automatically"
-                           {% if settings.cards_automatically %}checked{% endif %}
-                           {% if settings_read_only %}disabled{% endif %}>
-                    Add cards automatically
-                </label>
-                <p class="settings-hint">When on, &ldquo;Look up &amp; save&rdquo; writes the cards straight
-                   to the database instead of opening the review popup first.</p>
-
-                {# Individual cards (#127). A view filter, so it needs an
-                   account to filter by — an anonymous visitor shares the
-                   default config and would hide the whole site from every
-                   other anonymous visitor with no way back (#102). #}
-                <label class="settings-check">
-                    <input type="checkbox" name="individual_cards"
-                           {% if settings.individual_cards %}checked{% endif %}
-                           {% if settings_read_only or not current_user %}disabled{% endif %}>
-                    Use only individual cards
-                </label>
-                <p class="settings-hint">When on, you see only the cards you added
-                   yourself &mdash; everyone else&rsquo;s are hidden from the topic list,
-                   the card deck and the quiz. Nothing is deleted, and your cards
-                   stay visible to others.{% if not current_user %}
-                   Needs a signed-in account.{% endif %}</p>
-
-                {# Alphabetical topics (#363). Next to the filter above
-                   because the two answer the same question — what the topic
-                   list shows, and in what order. #}
-                <label class="settings-check">
-                    <input type="checkbox" name="alphabetical_topics"
-                           {% if settings.alphabetical_topics %}checked{% endif %}
-                           {% if settings_read_only %}disabled{% endif %}>
-                    Sort topics alphabetically
-                </label>
-                <p class="settings-hint">On by default: inside every section the
-                   topics are ordered by name. Turn it off for the order the deck
-                   was built in &mdash; the B2&ndash;C1 topics then run from the
-                   ones a learner meets first towards the ones they meet last,
-                   rather than from A to Z. Sections keep their own order either
-                   way.</p>
-
-                {# Two-column grid (#118): providers on the first row,
-                   language controls side by side on the second. #}
-                <div class="settings-grid">
-                <fieldset class="settings-group">
-                    <legend>Translation (ENG &rarr; UKR/RUS)</legend>
-                    {# #353. Rendered from `parsers.TRANSLATORS` rather than
-                       hard-coded, so a fifth provider is one entry in that
-                       declaration and not one entry plus this markup — the
-                       rule `games.ACTIVITIES` follows for the activities.
-
-                       Every provider is listed and the ones this deployment
-                       has no key for are **disabled**, not hidden. #261 made
-                       the same call for an unfinished game: a greyed tile that
-                       says why beats an absent one, because absent reads as
-                       "this app cannot do that" rather than "this copy is not
-                       set up for it". The note names the variable, since the
-                       person who can act on it is the one reading.
-
-                       The two scraped backends are absent because they are
-                       gone from the declaration — see #348 for why they
-                       stopped working and #353 for why they are not coming
-                       back. #}
-                    {% for option in all_translators %}
-                        {% set usable = option in translators %}
-                        <label class="{% if not usable %}settings-option-off{% endif %}">
-                            <input type="radio" name="translator" value="{{ option.slug }}"
-                                   {% if settings.translator == option.slug %}checked{% endif %}
-                                   {% if settings_read_only or not usable %}disabled{% endif %}>
-                            {{ option.label }}
-                            {% if not usable %}
-                                <span class="hint settings-inline-hint">needs <code>{{ option.key_env }}</code></span>
-                            {% elif not option.groups_by_pos %}
-                                <span class="hint settings-inline-hint">one card per word</span>
-                            {% endif %}
-                        </label>
-                    {% endfor %}
-                    {% if not translators %}
-                        <p class="hint">None of these is configured, so a new
-                           card comes with its English explanation and examples
-                           only. Set one of the keys above to turn translations
-                           back on.</p>
-                    {% endif %}
-                </fieldset>
-
-                <fieldset class="settings-group">
-                    <legend>Explanatory dictionary (ENG &rarr; ENG)</legend>
-                    {# #365, and the same block as the translators above it,
-                       for the same reason: rendered from
-                       `parsers.DICTIONARIES` so a third dictionary is one
-                       entry rather than one entry plus this markup, and an
-                       option this deployment cannot use is greyed with the
-                       variable it needs rather than hidden (#261).
-
-                       Merriam-Webster is the one that needed saying. It has
-                       been offered here exactly like Oxford while answering
-                       403 to PythonAnywhere's IPs since #110 measured it in
-                       July -- so choosing it on the deployed site produced
-                       cards with no English explanation, and nothing on this
-                       panel said why. #}
-                    {% for option in all_dictionaries %}
-                        {% set usable = option in dictionaries %}
-                        <label class="{% if not usable %}settings-option-off{% endif %}">
-                            <input type="radio" name="explanatory_dictionary" value="{{ option.slug }}"
-                                   {% if settings.explanatory_dictionary == option.slug %}checked{% endif %}
-                                   {% if settings_read_only or not usable %}disabled{% endif %}>
-                            {{ option.label }}
-                            {% if not usable %}
-                                <span class="hint settings-inline-hint">needs <code>{{ option.key_env }}</code></span>
-                            {% endif %}
-                        </label>
-                    {% endfor %}
-                </fieldset>
-
-                {# Language visibility (#46/#79/#111): hides translations from
-                   view everywhere — cards keep storing both languages. #}
-                <fieldset class="settings-group">
-                    <legend>Visible translations</legend>
-                    <label>
-                        <input type="checkbox" name="show_ukrainian"
-                               {% if settings.show_ukrainian %}checked{% endif %}
-                               {% if settings_read_only %}disabled{% endif %}>
-                        Show Ukrainian translation
-                    </label>
-                    <label>
-                        <input type="checkbox" name="show_russian"
-                               {% if settings.show_russian %}checked{% endif %}
-                               {% if settings_read_only %}disabled{% endif %}>
-                        Show Russian translation
-                    </label>
-                </fieldset>
-
-                {# Quiz language (#113): the language the quiz opens in. With
-                   only one visible language there is nothing to choose — the
-                   toggle is disabled (kept in sync with the checkboxes above
-                   by updateQuizLangState in the script below). #}
-                {% set both_visible = settings.show_ukrainian and settings.show_russian %}
-                <fieldset class="settings-group">
-                    <legend>Quiz language</legend>
-                    <label>
-                        <input type="radio" name="quiz_lang" value="ukrainian"
-                               {% if settings.quiz_lang == 'ukrainian' %}checked{% endif %}
-                               {% if not both_visible or settings_read_only %}disabled{% endif %}>
-                        Ukrainian
-                    </label>
-                    <label>
-                        <input type="radio" name="quiz_lang" value="russian"
-                               {% if settings.quiz_lang == 'russian' %}checked{% endif %}
-                               {% if not both_visible or settings_read_only %}disabled{% endif %}>
-                        Russian
-                    </label>
-                    <p class="settings-hint settings-group-hint" id="quiz-lang-hint"
-                       {% if both_visible %}hidden{% endif %}>Only one language is
-                       visible — the quiz uses it automatically.</p>
-                </fieldset>
-
-                {# How many cards a round of Fill the gap deals (#235).
-                   A number box rather than a slider: the range is wide (5-50)
-                   and a learner picking a round length has a number in mind,
-                   where the restart interval below is a vaguer "after a
-                   while". Out-of-range values fall back to the default in
-                   sanitize(), so the box cannot store nonsense. #}
-                <fieldset class="settings-group">
-                    <legend>Fill the gap round</legend>
-                    <label class="settings-number">
-                        Cards per round
-                        <input type="number" name="gapped_deck_size"
-                               min="{{ gapped_deck_range[0] }}"
-                               max="{{ gapped_deck_range[1] }}" step="1"
-                               value="{{ settings.gapped_deck_size }}"
-                               inputmode="numeric"
-                               {% if settings_read_only %}disabled{% endif %}>
-                    </label>
-                    <p class="settings-hint settings-group-hint">Between
-                       {{ gapped_deck_range[0] }} and {{ gapped_deck_range[1] }}.
-                       A selection with fewer playable cards deals what it has.</p>
-                </fieldset>
-
-                {# How fast a word is spoken (#268). A learner at B2 often
-                   wants a word slower, and the browser gives it away free.
-                   Stored as a percentage because RANGES holds whole numbers —
-                   speech.js divides by 100 at the point of use. #}
-                <fieldset class="settings-group settings-group--wide">
-                    <legend>How fast words are spoken</legend>
-                    <div class="settings-slider-row">
-                        <input type="range" name="speech_rate"
-                               min="{{ speech_rate_range[0] }}"
-                               max="{{ speech_rate_range[1] }}" step="10"
-                               value="{{ settings.speech_rate }}"
-                               aria-describedby="speech-rate-value"
-                               {% if settings_read_only %}disabled{% endif %}>
-                        <output id="speech-rate-value"
-                                for="speech_rate">{{ settings.speech_rate }}%</output>
-                    </div>
-                    <p class="settings-hint settings-group-hint">Applies
-                       wherever a word is spoken — the card deck, the flashcard
-                       list and <em>Listen and type</em>. The voice itself comes
-                       from your browser, not from KuantorFlow.</p>
-                </fieldset>
-
-                {# Automatic chat restart (ai_agent#54): after this long
-                   without a message, Mykola reviews the last exchanges and
-                   starts a fresh conversation. The checkbox is the stored
-                   value 0 — it greys the slider out (updateRestartState). #}
-                {% set restart_hours = settings.restart_chat_interval %}
-                <fieldset class="settings-group settings-group--wide">
-                    <legend>Restart Mykola&rsquo;s chat after a break</legend>
-                    <div class="settings-slider-row">
-                        <input type="range" name="restart_chat_interval"
-                               min="1" max="24" step="1"
-                               value="{{ restart_hours or 2 }}"
-                               aria-describedby="restart-interval-value"
-                               {% if not restart_hours or settings_read_only %}disabled{% endif %}>
-                        <output id="restart-interval-value"
-                                for="restart_chat_interval">{{ restart_hours or 2 }} h</output>
-                    </div>
+                {# The scroll moved off the dialog and onto this wrapper (#431), which
+                   is what pins the footer below and the close cross above -- the cross
+                   is `position: absolute` against `.modal`, so it only ever rode along
+                   because that box was the one scrolling (#120). One change, both.
+                
+                   `.modal-scroll` carries #370's two measured paddings: the right keeps
+                   the scroll bar off the content, the left leaves 2px for a focus ring,
+                   which `overflow-y: auto` would otherwise slice off flat down a column
+                   of fields. Settings is nothing but focusable controls. Its 65vh cap
+                   is overridden in the stylesheet rather than inherited -- this dialog
+                   is 90vh, and taking the cap as it stands would make the panel
+                   *shorter* than it is today. #}
+                <div class="modal-scroll settings-scroll">
                     <label class="settings-check">
-                        <input type="checkbox" name="restart_never"
-                               {% if not restart_hours %}checked{% endif %}
+                        <input type="checkbox" name="cards_automatically"
+                               {% if settings.cards_automatically %}checked{% endif %}
                                {% if settings_read_only %}disabled{% endif %}>
-                        Never restart chat automatically
+                        Add cards automatically
                     </label>
-                    <p class="settings-hint settings-group-hint">Come back after
-                       this long without writing and Mykola reviews your last
-                       three messages, then opens a fresh conversation.</p>
-                </fieldset>
-                </div>{# /settings-grid #}
+                    <p class="settings-hint">When on, &ldquo;Look up &amp; save&rdquo; writes the cards straight
+                       to the database instead of opening the review popup first.</p>
 
-                {# Fast thinking (ai_agent#50). Unlike the typewriter below,
-                   this one really does change the answer — so the hint has to
-                   say what turning it off buys, not only what it costs. #}
-                <label class="settings-check">
-                    <input type="checkbox" name="mykola_fast_thinking"
-                           {% if settings.mykola_fast_thinking %}checked{% endif %}
-                           {% if settings_read_only %}disabled{% endif %}>
-                    Enable Mykola&rsquo;s fast thinking
-                </label>
-                <p class="settings-hint">On by default: Mykola deliberates less
-                   before answering and keeps his replies short &mdash; measured
-                   at about a second to his first word instead of three, and two
-                   seconds to his last instead of seven. The trade is real, so
-                   <em>turn it off</em> when you want the fuller answer &mdash;
-                   the explanation around it, and the extra examples &mdash;
-                   and are willing to wait a few seconds longer for it.</p>
+                    {# Individual cards (#127). A view filter, so it needs an
+                       account to filter by — an anonymous visitor shares the
+                       default config and would hide the whole site from every
+                       other anonymous visitor with no way back (#102). #}
+                    <label class="settings-check">
+                        <input type="checkbox" name="individual_cards"
+                               {% if settings.individual_cards %}checked{% endif %}
+                               {% if settings_read_only or not current_user %}disabled{% endif %}>
+                        Use only individual cards
+                    </label>
+                    <p class="settings-hint">When on, you see only the cards you added
+                       yourself &mdash; everyone else&rsquo;s are hidden from the topic list,
+                       the card deck and the quiz. Nothing is deleted, and your cards
+                       stay visible to others.{% if not current_user %}
+                       Needs a signed-in account.{% endif %}</p>
 
-                {# Typewriter (ai_agent#50). Presentation only — the answer
-                   arrives at the same speed either way, and the animation is
-                   never allowed to outlive the text it is drawing. #}
-                <label class="settings-check">
-                    <input type="checkbox" name="mykola_typewriter"
-                           {% if settings.mykola_typewriter %}checked{% endif %}
-                           {% if settings_read_only %}disabled{% endif %}>
-                    Show Mykola&rsquo;s typewriting animation
-                </label>
-                <p class="settings-hint">When on, his reply is typed out as it is
-                   written, at whatever pace keeps up with it. Turn it off to see
-                   each piece the moment it arrives. Either way the whole answer
-                   is finished at the same time, and a system setting asking for
-                   reduced motion turns it off on its own.</p>
+                    {# Alphabetical topics (#363). Next to the filter above
+                       because the two answer the same question — what the topic
+                       list shows, and in what order. #}
+                    <label class="settings-check">
+                        <input type="checkbox" name="alphabetical_topics"
+                               {% if settings.alphabetical_topics %}checked{% endif %}
+                               {% if settings_read_only %}disabled{% endif %}>
+                        Sort topics alphabetically
+                    </label>
+                    <p class="settings-hint">On by default: inside every section the
+                       topics are ordered by name. Turn it off for the order the deck
+                       was built in &mdash; the B2&ndash;C1 topics then run from the
+                       ones a learner meets first towards the ones they meet last,
+                       rather than from A to Z. Sections keep their own order either
+                       way.</p>
 
-                {# A blocked account keeps its own settings (#126) — the block
-                   is about changing shared things, not personal preferences.
-                   This is where they are told how to ask for access back. #}
-                {% if is_blocked %}
-                <p class="settings-blocked">{{ blocked_notice }}</p>
-                {% endif %}
+                    {# Two-column grid (#118): providers on the first row,
+                       language controls side by side on the second. #}
+                    <div class="settings-grid">
+                    <fieldset class="settings-group">
+                        <legend>Translation (ENG &rarr; UKR/RUS)</legend>
+                        {# #353. Rendered from `parsers.TRANSLATORS` rather than
+                           hard-coded, so a fifth provider is one entry in that
+                           declaration and not one entry plus this markup — the
+                           rule `games.ACTIVITIES` follows for the activities.
 
-                {# Test DB Connection (#184), moved here from the main page's
-                   own Database section. An ACTION, so type=button — and it
-                   answers in place rather than reloading, because the popup
-                   opens on every page and a reload would throw away whatever
-                   the visitor was in the middle of. #}
-                <p class="settings-diagnostics">
-                    <button type="button" id="test-db-btn" class="settings-action"
-                            title="Check that the site can reach the database">Test DB Connection</button>
-                    <span id="test-db-result" role="status" aria-live="polite" hidden></span>
-                </p>
+                           Every provider is listed and the ones this deployment
+                           has no key for are **disabled**, not hidden. #261 made
+                           the same call for an unfinished game: a greyed tile that
+                           says why beats an absent one, because absent reads as
+                           "this app cannot do that" rather than "this copy is not
+                           set up for it". The note names the variable, since the
+                           person who can act on it is the one reading.
 
-                <p class="settings-scope">
-                    {% if current_user %}Saved for {{ current_user.email }}.
-                    {% elif google_auth_enabled %}Settings are read-only for anonymous visitors &mdash;
-                        <a class="settings-signin" href="{{ url_for('login_google') }}">sign in with Google</a> to customise them.
-                    {% else %}Settings are read-only for anonymous visitors.{% endif %}
-                </p>
-                <p id="settings-error" class="settings-error" hidden>Saving failed &mdash; please try again.</p>
-                <div class="modal-actions">
-                    {# Reset Auth (#98): an ACTION, not a setting — type=button
-                       (never submits) and never disabled by the read-only
-                       freeze (#102), because an anonymous visitor resets too.
-                       Left-aligned in the shared action row (#118).
+                           The two scraped backends are absent because they are
+                           gone from the declaration — see #348 for why they
+                           stopped working and #353 for why they are not coming
+                           back. #}
+                        {% for option in all_translators %}
+                            {% set usable = option in translators %}
+                            <label class="{% if not usable %}settings-option-off{% endif %}">
+                                <input type="radio" name="translator" value="{{ option.slug }}"
+                                       {% if settings.translator == option.slug %}checked{% endif %}
+                                       {% if settings_read_only or not usable %}disabled{% endif %}>
+                                {{ option.label }}
+                                {% if not usable %}
+                                    <span class="hint settings-inline-hint">needs <code>{{ option.key_env }}</code></span>
+                                {% elif not option.groups_by_pos %}
+                                    <span class="hint settings-inline-hint">one card per word</span>
+                                {% endif %}
+                            </label>
+                        {% endfor %}
+                        {% if not translators %}
+                            <p class="hint">None of these is configured, so a new
+                               card comes with its English explanation and examples
+                               only. Set one of the keys above to turn translations
+                               back on.</p>
+                        {% endif %}
+                    </fieldset>
 
-                       It used to forget the keyword as well; since #199 there
-                       is no keyword, and what is left is what `/logout` does
-                       not do — clearing this browser's own storage, where
-                       Mykola's conversation lives (#170). #}
-                    <button type="button" id="reset-auth-btn" class="settings-reset"
-                            title="Sign out and clear this browser: chat history, saved state and your sign-in">Reset Auth</button>
-                    {# Delete account (#165): only a signed-in visitor has one.
-                       An ACTION like Reset Auth, so type=button, but it is
-                       irreversible — hence its own confirmation below. #}
-                    {% if current_user and current_user.id %}
-                    {# Greyed for the admin (#165): losing the account that
-                       keeps the site running is a footgun with no upside.
-                       aria-disabled, not disabled, so it stays hoverable and
-                       its tooltip works everywhere — same pattern as the card
-                       delete cross (#162). #}
-                    <button type="button" id="delete-account-btn" class="settings-reset"
-                            {% if account_delete_refusal %}aria-disabled="true"
-                            title="{{ account_delete_refusal }}"
-                            data-refusal="{{ account_delete_refusal }}"
-                            {% else %}title="Permanently delete your account"{% endif %}
-                            >Delete account</button>
+                    <fieldset class="settings-group">
+                        <legend>Explanatory dictionary (ENG &rarr; ENG)</legend>
+                        {# #365, and the same block as the translators above it,
+                           for the same reason: rendered from
+                           `parsers.DICTIONARIES` so a third dictionary is one
+                           entry rather than one entry plus this markup, and an
+                           option this deployment cannot use is greyed with the
+                           variable it needs rather than hidden (#261).
+
+                           Merriam-Webster is the one that needed saying. It has
+                           been offered here exactly like Oxford while answering
+                           403 to PythonAnywhere's IPs since #110 measured it in
+                           July -- so choosing it on the deployed site produced
+                           cards with no English explanation, and nothing on this
+                           panel said why. #}
+                        {% for option in all_dictionaries %}
+                            {% set usable = option in dictionaries %}
+                            <label class="{% if not usable %}settings-option-off{% endif %}">
+                                <input type="radio" name="explanatory_dictionary" value="{{ option.slug }}"
+                                       {% if settings.explanatory_dictionary == option.slug %}checked{% endif %}
+                                       {% if settings_read_only or not usable %}disabled{% endif %}>
+                                {{ option.label }}
+                                {% if not usable %}
+                                    <span class="hint settings-inline-hint">needs <code>{{ option.key_env }}</code></span>
+                                {% endif %}
+                            </label>
+                        {% endfor %}
+                    </fieldset>
+
+                    {# Language visibility (#46/#79/#111): hides translations from
+                       view everywhere — cards keep storing both languages. #}
+                    <fieldset class="settings-group">
+                        <legend>Visible translations</legend>
+                        <label>
+                            <input type="checkbox" name="show_ukrainian"
+                                   {% if settings.show_ukrainian %}checked{% endif %}
+                                   {% if settings_read_only %}disabled{% endif %}>
+                            Show Ukrainian translation
+                        </label>
+                        <label>
+                            <input type="checkbox" name="show_russian"
+                                   {% if settings.show_russian %}checked{% endif %}
+                                   {% if settings_read_only %}disabled{% endif %}>
+                            Show Russian translation
+                        </label>
+                    </fieldset>
+
+                    {# Quiz language (#113): the language the quiz opens in. With
+                       only one visible language there is nothing to choose — the
+                       toggle is disabled (kept in sync with the checkboxes above
+                       by updateQuizLangState in the script below). #}
+                    {% set both_visible = settings.show_ukrainian and settings.show_russian %}
+                    <fieldset class="settings-group">
+                        <legend>Quiz language</legend>
+                        <label>
+                            <input type="radio" name="quiz_lang" value="ukrainian"
+                                   {% if settings.quiz_lang == 'ukrainian' %}checked{% endif %}
+                                   {% if not both_visible or settings_read_only %}disabled{% endif %}>
+                            Ukrainian
+                        </label>
+                        <label>
+                            <input type="radio" name="quiz_lang" value="russian"
+                                   {% if settings.quiz_lang == 'russian' %}checked{% endif %}
+                                   {% if not both_visible or settings_read_only %}disabled{% endif %}>
+                            Russian
+                        </label>
+                        <p class="settings-hint settings-group-hint" id="quiz-lang-hint"
+                           {% if both_visible %}hidden{% endif %}>Only one language is
+                           visible — the quiz uses it automatically.</p>
+                    </fieldset>
+
+                    {# How many cards a round of Fill the gap deals (#235).
+                       A number box rather than a slider: the range is wide (5-50)
+                       and a learner picking a round length has a number in mind,
+                       where the restart interval below is a vaguer "after a
+                       while". Out-of-range values fall back to the default in
+                       sanitize(), so the box cannot store nonsense. #}
+                    <fieldset class="settings-group">
+                        <legend>Fill the gap round</legend>
+                        <label class="settings-number">
+                            Cards per round
+                            <input type="number" name="gapped_deck_size"
+                                   min="{{ gapped_deck_range[0] }}"
+                                   max="{{ gapped_deck_range[1] }}" step="1"
+                                   value="{{ settings.gapped_deck_size }}"
+                                   inputmode="numeric"
+                                   {% if settings_read_only %}disabled{% endif %}>
+                        </label>
+                        <p class="settings-hint settings-group-hint">Between
+                           {{ gapped_deck_range[0] }} and {{ gapped_deck_range[1] }}.
+                           A selection with fewer playable cards deals what it has.</p>
+                    </fieldset>
+
+                    {# How fast a word is spoken (#268). A learner at B2 often
+                       wants a word slower, and the browser gives it away free.
+                       Stored as a percentage because RANGES holds whole numbers —
+                       speech.js divides by 100 at the point of use. #}
+                    <fieldset class="settings-group settings-group--wide">
+                        <legend>How fast words are spoken</legend>
+                        <div class="settings-slider-row">
+                            <input type="range" name="speech_rate"
+                                   min="{{ speech_rate_range[0] }}"
+                                   max="{{ speech_rate_range[1] }}" step="10"
+                                   value="{{ settings.speech_rate }}"
+                                   aria-describedby="speech-rate-value"
+                                   {% if settings_read_only %}disabled{% endif %}>
+                            <output id="speech-rate-value"
+                                    for="speech_rate">{{ settings.speech_rate }}%</output>
+                        </div>
+                        <p class="settings-hint settings-group-hint">Applies
+                           wherever a word is spoken — the card deck, the flashcard
+                           list and <em>Listen and type</em>. The voice itself comes
+                           from your browser, not from KuantorFlow.</p>
+                    </fieldset>
+
+                    {# Automatic chat restart (ai_agent#54): after this long
+                       without a message, Mykola reviews the last exchanges and
+                       starts a fresh conversation. The checkbox is the stored
+                       value 0 — it greys the slider out (updateRestartState). #}
+                    {% set restart_hours = settings.restart_chat_interval %}
+                    <fieldset class="settings-group settings-group--wide">
+                        <legend>Restart Mykola&rsquo;s chat after a break</legend>
+                        <div class="settings-slider-row">
+                            <input type="range" name="restart_chat_interval"
+                                   min="1" max="24" step="1"
+                                   value="{{ restart_hours or 2 }}"
+                                   aria-describedby="restart-interval-value"
+                                   {% if not restart_hours or settings_read_only %}disabled{% endif %}>
+                            <output id="restart-interval-value"
+                                    for="restart_chat_interval">{{ restart_hours or 2 }} h</output>
+                        </div>
+                        <label class="settings-check">
+                            <input type="checkbox" name="restart_never"
+                                   {% if not restart_hours %}checked{% endif %}
+                                   {% if settings_read_only %}disabled{% endif %}>
+                            Never restart chat automatically
+                        </label>
+                        <p class="settings-hint settings-group-hint">Come back after
+                           this long without writing and Mykola reviews your last
+                           three messages, then opens a fresh conversation.</p>
+                    </fieldset>
+                    </div>{# /settings-grid #}
+
+                    {# Fast thinking (ai_agent#50). Unlike the typewriter below,
+                       this one really does change the answer — so the hint has to
+                       say what turning it off buys, not only what it costs. #}
+                    <label class="settings-check">
+                        <input type="checkbox" name="mykola_fast_thinking"
+                               {% if settings.mykola_fast_thinking %}checked{% endif %}
+                               {% if settings_read_only %}disabled{% endif %}>
+                        Enable Mykola&rsquo;s fast thinking
+                    </label>
+                    <p class="settings-hint">On by default: Mykola deliberates less
+                       before answering and keeps his replies short &mdash; measured
+                       at about a second to his first word instead of three, and two
+                       seconds to his last instead of seven. The trade is real, so
+                       <em>turn it off</em> when you want the fuller answer &mdash;
+                       the explanation around it, and the extra examples &mdash;
+                       and are willing to wait a few seconds longer for it.</p>
+
+                    {# Typewriter (ai_agent#50). Presentation only — the answer
+                       arrives at the same speed either way, and the animation is
+                       never allowed to outlive the text it is drawing. #}
+                    <label class="settings-check">
+                        <input type="checkbox" name="mykola_typewriter"
+                               {% if settings.mykola_typewriter %}checked{% endif %}
+                               {% if settings_read_only %}disabled{% endif %}>
+                        Show Mykola&rsquo;s typewriting animation
+                    </label>
+                    <p class="settings-hint">When on, his reply is typed out as it is
+                       written, at whatever pace keeps up with it. Turn it off to see
+                       each piece the moment it arrives. Either way the whole answer
+                       is finished at the same time, and a system setting asking for
+                       reduced motion turns it off on its own.</p>
+
+                    {# A blocked account keeps its own settings (#126) — the block
+                       is about changing shared things, not personal preferences.
+                       This is where they are told how to ask for access back. #}
+                    {% if is_blocked %}
+                    <p class="settings-blocked">{{ blocked_notice }}</p>
                     {% endif %}
-                    <button type="button" class="secondary" id="settings-cancel">{% if settings_read_only %}Close{% else %}Cancel{% endif %}</button>
-                    <button type="submit" id="settings-save"
-                            {% if settings_read_only %}disabled title="Sign in with Google to change settings"{% endif %}>Save</button>
+
+                    {# Test DB Connection (#184), moved here from the main page's
+                       own Database section. An ACTION, so type=button — and it
+                       answers in place rather than reloading, because the popup
+                       opens on every page and a reload would throw away whatever
+                       the visitor was in the middle of. #}
+                    <p class="settings-diagnostics">
+                        <button type="button" id="test-db-btn" class="settings-action"
+                                title="Check that the site can reach the database">Test DB Connection</button>
+                        <span id="test-db-result" role="status" aria-live="polite" hidden></span>
+                    </p>
+
+                    <p class="settings-scope">
+                        {% if current_user %}Saved for {{ current_user.email }}.
+                        {% elif google_auth_enabled %}Settings are read-only for anonymous visitors &mdash;
+                            <a class="settings-signin" href="{{ url_for('login_google') }}">sign in with Google</a> to customise them.
+                        {% else %}Settings are read-only for anonymous visitors.{% endif %}
+                    </p>
+                    {# Reset Auth and Delete account live **here**, under the caption
+                       naming the account they act on, rather than in the bar below
+                       (#431). Grouped beneath it they read as actions on that identity
+                       instead of merely sitting near one -- and left-aligned they end
+                       up diagonally as far from Save as the dialog allows.
+                
+                       They stay in the **scrolling** part on purpose. A button pressed
+                       every time and a button pressed once in a lifetime should not be
+                       neighbours; pinning these would make them permanent neighbours of
+                       Save. Both already open a confirmation first (#98, #165), so
+                       nothing is destroyed by a stray click either way -- what improves
+                       is that they stop sitting next to the button people mean. #}
+                    <p class="settings-account-actions">
+                        {# Reset Auth (#98): an ACTION, not a setting — type=button
+                           (never submits) and never disabled by the read-only
+                           freeze (#102), because an anonymous visitor resets too.
+                           Left-aligned in the shared action row (#118).
+    
+                           It used to forget the keyword as well; since #199 there
+                           is no keyword, and what is left is what `/logout` does
+                           not do — clearing this browser's own storage, where
+                           Mykola's conversation lives (#170). #}
+                        <button type="button" id="reset-auth-btn" class="settings-reset"
+                                title="Sign out and clear this browser: chat history, saved state and your sign-in">Reset Auth</button>
+                        {# Delete account (#165): only a signed-in visitor has one.
+                           An ACTION like Reset Auth, so type=button, but it is
+                           irreversible — hence its own confirmation below. #}
+                        {% if current_user and current_user.id %}
+                        {# Greyed for the admin (#165): losing the account that
+                           keeps the site running is a footgun with no upside.
+                           aria-disabled, not disabled, so it stays hoverable and
+                           its tooltip works everywhere — same pattern as the card
+                           delete cross (#162). #}
+                        <button type="button" id="delete-account-btn" class="settings-reset"
+                                {% if account_delete_refusal %}aria-disabled="true"
+                                title="{{ account_delete_refusal }}"
+                                data-refusal="{{ account_delete_refusal }}"
+                                {% else %}title="Permanently delete your account"{% endif %}
+                                >Delete account</button>
+                        {% endif %}
+                    </p>
+                </div>
+                
+                {# Pinned: the two ways out of the dialog, always on screen whatever the
+                   scroll position (#431). Only these two -- Reset Auth and Delete
+                   account stay above, in the scroll.
+                
+                   `#settings-error` comes **with** them, and that is not tidiness: it
+                   used to sit directly above this row, so once the row was pinned the
+                   message would have rendered up in the scrolled-away region. Press
+                   Save, the save fails, and the button appears to do nothing. #}
+                <div class="settings-footer">
+                    <p id="settings-error" class="settings-error" hidden>Saving failed &mdash; please try again.</p>
+                    <div class="modal-actions">
+                        <button type="button" class="secondary" id="settings-cancel">{% if settings_read_only %}Close{% else %}Cancel{% endif %}</button>
+                        <button type="submit" id="settings-save"
+                                {% if settings_read_only %}disabled title="Sign in with Google to change settings"{% endif %}>Save</button>
+                    </div>
                 </div>
             </form>
         </div>
