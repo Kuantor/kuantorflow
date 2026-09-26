@@ -1462,7 +1462,6 @@ button:disabled:hover { background: #9db4c7; }
 
    The verification #238 wanted still applies to what replaced it -- checked
    at 375x812, both buttons on one row, footer pinned. */
-}
 
 @media (max-width: 600px) {
     .form-row { flex-direction: column; gap: 0; }
