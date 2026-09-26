@@ -203,7 +203,8 @@ def _anonymous_quota_refusal():
 
     used = session.get("anon_messages", 0)
     if web.ANONYMOUS_MESSAGE_LIMIT and used >= web.ANONYMOUS_MESSAGE_LIMIT:
-        applog.anonymous_limit_hit("session", used, web.ANONYMOUS_MESSAGE_LIMIT)
+        applog.anonymous_limit_hit("session", used, web.ANONYMOUS_MESSAGE_LIMIT,
+                                   log=applog.MYKOLA, action="chat")
         return jsonify({"error": SIGN_IN_PROMPT, "sign_in_required": True}), 402
 
     # The anonymous *daily* row moved into `web.chat_refusal()` with #456,

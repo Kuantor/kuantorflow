@@ -348,7 +348,7 @@ def mark(title, text, words):
     }
 
 
-def generate(words, instruction, length, ask=None):
+def generate(words, instruction, length, ask=None, user=None):
     """Write the text and find the words in it.
 
     Returns a dict the round can hold and the page can render:
@@ -387,9 +387,12 @@ def generate(words, instruction, length, ask=None):
 
     title, text = split_title(text)
     marked = mark(title, text, words)
+    # `user` is handed down by the route (#448): this module has no request
+    # context by design, and without it a GENERATE line could not say whether
+    # an account or an anonymous visitor spent the money.
     applog.text_generated(
         model=TEXT_MODEL, supplied=len(words), used=len(marked["used"]),
-        length=length, elapsed_ms=timer.ms, error=error)
+        length=length, elapsed_ms=timer.ms, error=error, user=user)
 
     return {
         "title": title,
