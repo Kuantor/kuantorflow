@@ -577,8 +577,16 @@ a.button-link { display: inline-block; text-decoration: none;
 .lang-switch span { background: var(--yellow); color: #4a3a00; font-weight: 600; }
 
 /* Breadcrumbs / small links above titles */
-/* Links menu shown as a blue rounded panel (#142) — shared by the flashcards,
-   card-deck and quiz pages. */
+/* Links menu shown as a blue rounded panel (#142).
+
+   **Eighteen templates render one of these**, not the three this comment
+   claimed until #452: the flashcards page, `cards.html` (which fills the card
+   deck's `deck_crumbs` block), the quiz, all ten game pages, the picker, the
+   stub and cannot-run pages, the worksheet and #406's two topic pages. On all
+   but the flashcards page it holds one or two links and is the way back out
+   of wherever the learner is, which is why a rule written here rather than on
+   a modifier can strand somebody mid-game. The stale count is recorded
+   because it is what #452's own "watch out" section repeated. */
 .crumbs {
     /* A wrapping group rather than running text (#253). With three links the
        literal "|" separators worked; with eight they do not, because a pipe is
@@ -609,6 +617,42 @@ a.button-link { display: inline-block; text-decoration: none;
     text-decoration: none;
 }
 .crumbs a:hover { color: var(--yellow); }
+
+/* On a phone the topic page's strip keeps the back arrow and nothing else
+   (#452). Twelve items at 576pt wrapped into five ragged rows and pushed the
+   topic heading almost to the fold, which is the page failing to say what it
+   is before it offers things to do with it.
+
+   **Scoped to `.crumbs--activities`, which only the topic page carries.** The
+   stylesheet used to say this class was shared by three pages; eighteen
+   templates render one -- every game, the picker, the quiz, the deck (through
+   `cards.html`), the worksheet -- and on all of those the row is one or two
+   links and is the way back *out*. A rule written on `.crumbs` would strand a
+   learner mid-game.
+
+   **The panel stays, its children go.** `display: none` on `.crumbs` itself
+   would take the arrow with it and leave a bare link where a blue strip was;
+   hiding the children keeps the strip a recognisable strip. The flex `gap`
+   collapses on its own, because a hidden child leaves the layout entirely.
+
+   **What stays is selected, not what goes.** The greyed stubs are `<span>`s
+   rather than links (#261), so "hide every `a` after the first" would leave
+   them stranded; and the row's length is not fixed -- *Take quiz* is
+   conditional on a visible translation language -- so nothing may count.
+
+   The cost, accepted deliberately: every hidden link carried the topic, and
+   `activity_play_url(activity, topic)` starts an activity *on this topic* in
+   one tap. From the main menu the learner lands on the picker and chooses the
+   topic again -- two extra interactions per game, across all nine and the
+   text generator. Traded for a heading visible without scrolling.
+
+   Card deck is not among the losses: #453 gave it a banner button below the
+   heading, which is what let it leave this row at all. Landing #452 first
+   would have taken the flip deck off phones entirely, and a flip-card deck is
+   arguably at its best there. */
+@media (max-width: 640px) {
+    .crumbs--activities > :not(.crumbs-home) { display: none; }
+}
 
 /* Topic chips */
 /* Section headings (#218). The rule runs from the end of the words to the far
