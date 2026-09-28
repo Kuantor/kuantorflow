@@ -6,6 +6,7 @@ import mysql.connector
 from dotenv import load_dotenv
 
 import applog
+import recall
 
 # Load settings from a .env file next to this module (gitignored).
 # Values already present in the environment take precedence.
@@ -650,6 +651,137 @@ def record_answers(user_id, game, answers):
         conn.commit()
         cursor.close()
         return len(rows)
+    finally:
+        conn.close()
+
+
+def _schedule_key(user_id, word, pos):
+    """How the schedule tells two words apart -- the way its primary key does.
+
+    `recall_schedule` is `utf8mb4_unicode_ci`, so `Tip` and `tip` are one key
+    to MySQL; grouping them apart here would compute two schedules and have
+    the second upsert overwrite the first. The log's NULL `pos` is ''.
+    """
+    return (user_id, (word or "").casefold(), (pos or "").casefold())
+
+
+def _histories(cursor, where="", params=()):
+    """`{key: (word, pos, [recall.Answer, ...])}` for the log rows matching
+    `where`, keeping the first spelling seen for each key."""
+    cursor.execute(
+        "SELECT user_id, word, pos, correct, game, answered_at "
+        "FROM recall_answers " + where + " ORDER BY answered_at, id", params)
+    found = {}
+    for user_id, word, pos, correct, game, answered_at in cursor.fetchall():
+        entry = found.setdefault(_schedule_key(user_id, word, pos),
+                                 (word, pos or "", []))
+        entry[2].append(recall.answer_from_row(answered_at, correct, game))
+    return found
+
+
+def _write_schedule(cursor, user_id, word, pos, schedule):
+    # The values are passed twice rather than read back with VALUES(), which
+    # MySQL deprecated in 8.0.20, or a row alias, which needs 8.0.19 -- and
+    # PythonAnywhere's server version has never been checked.
+    values = (schedule.reps, schedule.lapses, schedule.ease_permille,
+              schedule.interval_days, schedule.due_on)
+    cursor.execute(
+        "INSERT INTO recall_schedule "
+        "(user_id, word, pos, reps, lapses, ease, interval_days, due_on) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE reps = %s, lapses = %s, ease = %s, "
+        "interval_days = %s, due_on = %s",
+        (user_id, word, pos) + values + values)
+
+
+def refresh_schedule(user_id, words):
+    """Recompute this learner's schedule for `words` from the log (#479).
+
+    `words` is `[(word, pos), ...]` -- the words a round just answered. Each is
+    **replayed from its whole history** rather than advanced by one step: one
+    word's history is a few dozen rows, and replaying means the live path and
+    `scripts/rebuild_schedule.py` are the same arithmetic, so they cannot
+    drift. Returns the number of rows written; raises on failure, and the
+    caller decides that a stale schedule must not cost anyone a results page
+    (the rebuild repairs it).
+    """
+    wanted = {_schedule_key(user_id, word, pos) for word, pos in words}
+    if not user_id or not wanted:
+        return 0
+    spellings = sorted({key[1] for key in wanted})
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        histories = _histories(
+            cursor,
+            "WHERE user_id = %s AND word IN ("
+            + ", ".join(["%s"] * len(spellings)) + ")",
+            [user_id] + spellings)
+        written = 0
+        for key, (word, pos, answers) in histories.items():
+            if key not in wanted:
+                continue
+            _write_schedule(cursor, user_id, word, pos, recall.replay(answers))
+            written += 1
+        conn.commit()
+        cursor.close()
+        return written
+    finally:
+        conn.close()
+
+
+def rebuild_schedules(user_id=None, dry_run=False):
+    """Recompute `recall_schedule` from the whole log (#479).
+
+    For every learner, or one. Returns `{user_id: (added, changed, same,
+    removed)}`: a row the log implies and the table lacks, one it holds with
+    different values, one already right, and one with no history behind it at
+    all. `dry_run` computes the same answer and writes nothing.
+
+    This is what makes the schedule a cache: after a change to `recall.py`
+    this brings every row to what the new rules would always have said.
+    """
+    where, params = ("WHERE user_id = %s", (user_id,)) if user_id else ("", ())
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        histories = _histories(cursor, where, params)
+        cursor.execute(
+            "SELECT user_id, word, pos, reps, lapses, ease, interval_days, "
+            "due_on FROM recall_schedule " + where, params)
+        current = {_schedule_key(u, w, p): (w, p, (r, l, e, i, d))
+                   for u, w, p, r, l, e, i, d in cursor.fetchall()}
+        report = {}
+
+        def count(uid, slot):
+            tally = report.setdefault(uid, [0, 0, 0, 0])
+            tally[slot] += 1
+
+        for key, (word, pos, answers) in histories.items():
+            schedule = recall.replay(answers)
+            wanted = (schedule.reps, schedule.lapses, schedule.ease_permille,
+                      schedule.interval_days, schedule.due_on)
+            held = current.pop(key, None)
+            if held is None:
+                count(key[0], 0)
+            elif tuple(held[2]) != wanted:
+                count(key[0], 1)
+            else:
+                count(key[0], 2)
+                continue
+            if not dry_run:
+                _write_schedule(cursor, key[0], word, pos, schedule)
+        for key, (word, pos, _values) in current.items():
+            count(key[0], 3)
+            if not dry_run:
+                cursor.execute(
+                    "DELETE FROM recall_schedule "
+                    "WHERE user_id = %s AND word = %s AND pos = %s",
+                    (key[0], word, pos))
+        if not dry_run:
+            conn.commit()
+        cursor.close()
+        return {uid: tuple(tally) for uid, tally in report.items()}
     finally:
         conn.close()
 
