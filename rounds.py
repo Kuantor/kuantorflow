@@ -39,6 +39,7 @@ from flask import (
 import applog
 import games
 import parsers
+import recall
 import textgen
 import utils
 import web
@@ -497,6 +498,44 @@ def _graded_answers(activity, cards, judge):
     return graded
 
 
+def _draw_weight(on_card=None):
+    """The learner's schedule as a `games.sample()` weight, or None (#480).
+
+    None -- a uniform draw, exactly as before -- for an anonymous visitor, who
+    has no schedule; for a learner who has answered nothing yet; and when the
+    schedule cannot be read, because a round that will not deal is worse than
+    one dealt without preference.
+
+    `on_card` picks the card out of what a round samples, since several rounds
+    draw `(card, extra)` pairs rather than bare cards.
+
+    **Seven rounds use it**: the six graded games and *Fill the gap* -- every
+    round whose question is one card. *Odd one out* builds each question from
+    four words across two topics with its own generator, and *Real or fake*
+    draws bare words with no part of speech to key a schedule on, asking only
+    whether a word is English -- a due word answers that trivially.
+    """
+    user_id = web._current_user_id()
+    if not user_id:
+        return None
+    try:
+        due = utils.due_dates(user_id)
+    except Exception:
+        app.logger.exception("Could not read the recall schedule for the draw "
+                             "(#480); dealing uniformly")
+        return None
+    if not due:
+        return None
+    weight = recall.draw_weight(due, recall.today())
+    if on_card is None:
+        return weight
+    return lambda item: weight(on_card(item))
+
+
+def _first(item):
+    return item[0]
+
+
 def _record_recall(activity, graded):
     """Append a graded round to the learner's answer log (#338, phase 1).
 
@@ -616,12 +655,14 @@ def _scrambled_round(activity, topics):
             activity, topics, "No words here can be scrambled yet.",
             "A word needs at least four letters, with two different letters "
             "between the first and the last.")
+    # Drawn before the questions are built, so the weight sees the card's part
+    # of speech (#480) -- the question dicts carry only what the page needs.
     questions = [{"id": card["id"], "word": card["word"], "scrambled": puzzle}
-                 for card, puzzle in usable]
+                 for card, puzzle in games.sample(
+                     usable, words, weight=_draw_weight(_first))]
     return render_template(
         "game_scrambled.html", activity=activity, topics=topics, words=words,
-        questions=games.sample(questions, words), results=None, score=None,
-        dropped=dropped)
+        questions=questions, results=None, score=None, dropped=dropped)
 
 
 # How many generate-and-check passes a round may make (#389). One is the design
@@ -843,7 +884,11 @@ def _fill_the_gap_round(activity, topics):
     # cost, and one card per word already fixes the reported repetition, since
     # the two `tip` cards are one word.
     questions = []
-    for card, sentence in usable[:wanted]:
+    # Through `games.sample()` rather than a slice of the shuffled list, so the
+    # learner's due words come first here too (#480). With no schedule the
+    # weight is None and this is the same uniform draw the slice was.
+    for card, sentence in games.sample(usable, wanted,
+                                       weight=_draw_weight(_first)):
         word = (card.get("word") or "").strip()
         questions.append({
             # Posted back with the tick (#484), and read back against the
@@ -1004,7 +1049,7 @@ def _multiple_choice_round(activity, topics):
     known = games.vocabulary(wider)
 
     questions = []
-    for card in games.sample(unique, words):
+    for card in games.sample(unique, words, weight=_draw_weight()):
         options = games.question_options(card["word"].strip(), pool,
                                          spare=spare, known=known)
         if options is None:
@@ -1099,13 +1144,17 @@ def _listen_and_type_round(activity, topics):
     # the stated reason -- and a duplicate is perfectly usable, it has just
     # already been asked. Adding it would make the sentence say 153 cards have
     # no headword a voice can read, which is false and alarming.
-    unique = [{"id": card["id"], "word": card["word"].strip()}
+    # `pos` rides along though the page never shows it: the draw's weight
+    # finds a word's schedule by word *and* part of speech (#480), and without
+    # it every scheduled verb here looked never answered.
+    unique = [{"id": card["id"], "word": card["word"].strip(),
+               "pos": card.get("pos")}
               for card in games.one_per_word(card for card, _ in usable)]
 
     return render_template(
         "game_listen_and_type.html", activity=activity, topics=topics,
-        questions=games.sample(unique, words), results=None, score=None,
-        words=words, dropped=dropped)
+        questions=games.sample(unique, words, weight=_draw_weight()),
+        results=None, score=None, words=words, dropped=dropped)
 
 
 def _topic_sections(sections):
@@ -1247,7 +1296,7 @@ def _spell_it_round(activity, topics):
             f"least {games.MIN_SPELLED[hint]} letters.")
 
     questions = []
-    for card, _ in games.sample(usable, words):
+    for card, _ in games.sample(usable, words, weight=_draw_weight(_first)):
         word = card["word"].strip()
         questions.append({
             "id": card["id"],
@@ -1337,7 +1386,8 @@ def _rebuild_the_sentence_round(activity, topics):
             f"{games.SENTENCE_MAX} words.")
 
     questions = []
-    for card, (sentence, chips) in games.sample(usable, words):
+    for card, (sentence, chips) in games.sample(usable, words,
+                                                weight=_draw_weight(_first)):
         questions.append({
             "id": card["id"],
             "word": card["word"],
@@ -1618,7 +1668,7 @@ def _run_quiz(topics, heading, self_url, back, words):
         # one with 20, which is what drawing from the words rather than from
         # the topics means. Fewer cards than asked for is simply a shorter
         # round.
-        cards = games.sample(cards, words)
+        cards = games.sample(cards, words, weight=_draw_weight())
 
     return render_template(
         "quiz.html", cards=cards, lang=lang, lang_name=QUIZ_LANGS[lang],

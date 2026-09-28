@@ -99,6 +99,50 @@ def learner_day(answered_at):
     return (local - DAY_ROLLOVER).date()
 
 
+def today():
+    """The learner's day right now -- what `due_on` is compared against."""
+    return learner_day(datetime.now(timezone.utc).replace(tzinfo=None))
+
+
+def word_key(word, pos):
+    """How the schedule tells two words apart: the way its primary key does.
+
+    `recall_schedule` is `utf8mb4_unicode_ci`, so `Tip` and `tip` are one key
+    to MySQL, and the log's NULL `pos` is stored as ''. The writer and the draw
+    both key through this, so a card finds its own schedule row.
+    """
+    return ((word or "").strip().casefold(), (pos or "").strip().casefold())
+
+
+# --- the draw (#480) -------------------------------------------------------
+#
+# How likely a word is to be dealt, relative to the others in the selection.
+# **Down-weighted, never excluded**: a topic where everything is known must
+# still play, and excluding is how a deck shrinks to nothing -- #338 said
+# "down-weights" from the start. A due word and a word never answered are
+# equal, because both are what the learner needs next; a word scheduled for a
+# later day is dealt a fifth as often. 0.2 is a starting point rather than a
+# measurement, and #481 is where it gets checked.
+DUE_WEIGHT = 1.0
+UNSEEN_WEIGHT = 1.0
+NOT_DUE_WEIGHT = 0.2
+
+
+def draw_weight(due_by_word, on_day):
+    """A `weight(card)` for `games.sample()`, from one learner's schedule.
+
+    `due_by_word` is `{word_key: due_on}`. "Not due yet" is what SM-2 means by
+    "known for now" -- which is why the schedule shipped before this: the draw
+    needs no threshold of its own for when a word is learned.
+    """
+    def weight(card):
+        due = due_by_word.get(word_key(card.get("word"), card.get("pos")))
+        if due is None:
+            return UNSEEN_WEIGHT
+        return DUE_WEIGHT if due <= on_day else NOT_DUE_WEIGHT
+    return weight
+
+
 @dataclass(frozen=True)
 class Answer:
     """One row of the log, as far as the schedule cares."""

@@ -660,9 +660,31 @@ def _schedule_key(user_id, word, pos):
 
     `recall_schedule` is `utf8mb4_unicode_ci`, so `Tip` and `tip` are one key
     to MySQL; grouping them apart here would compute two schedules and have
-    the second upsert overwrite the first. The log's NULL `pos` is ''.
+    the second upsert overwrite the first. The log's NULL `pos` is ''. The
+    word half is `recall.word_key()`, which the draw (#480) keys through too.
     """
-    return (user_id, (word or "").casefold(), (pos or "").casefold())
+    return (user_id,) + recall.word_key(word, pos)
+
+
+def due_dates(user_id):
+    """`{recall.word_key: due_on}` for one learner -- what the draw reads (#480).
+
+    One query per dealt round, over the `(user_id, due_on)` index. Empty for
+    a learner who has answered nothing yet, and for no learner at all.
+    """
+    if not user_id:
+        return {}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT word, pos, due_on FROM recall_schedule "
+                       "WHERE user_id = %s", (user_id,))
+        found = {recall.word_key(word, pos): due_on
+                 for word, pos, due_on in cursor.fetchall()}
+        cursor.close()
+        return found
+    finally:
+        conn.close()
 
 
 def _histories(cursor, where="", params=()):
