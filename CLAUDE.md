@@ -275,8 +275,9 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   `parsed_files.log`. **Every game round writes one `ROUND` line** to
   `games.log` through `rounds._round_played()` — called beside each results
   render, **not** inside `_graded_answers()`, which *Odd one out* and *Real or
-  fake* never reach. *Fill the gap* never submits, so it logs `stage=dealt`
-  with no score rather than a zero; a new game is one entry in `GAME_ROUNDS`
+  fake* never reach. *Fill the gap* logs `stage=dealt` with no score at the
+  deal, and — only if the learner presses *Finish* — a second line at
+  `stage=self-marked` counting the ticks (#484); a new game is one entry in `GAME_ROUNDS`
   and `automation/tests/test_games_and_gen_texts_logs.py` fails until it logs. `KF_LOGS_DIR` redirects the directory (the test
   suite points it at a temp dir). A writer with no request behind it —
   `set_user_blocked()`, `place_topic()`, `seed_topics.py` — logs *beside the
@@ -635,9 +636,14 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   **CASCADE** — the first in this schema — because this is a derived fact about
   one person and the user guide promises deleting the account erases it.
   **The write is in `rounds._graded_answers()`**, which is why it now takes the
-  `activity`: the six rounds that grade against a card reach it and nothing else
-  can — *Odd one out* posts indexes, *Real or fake* has no rows, *Fill the gap*
-  is self-marked. `_record_recall()` writes only for a signed-in learner, records
+  `activity`: the six rounds that grade against a card reach it, and so since
+  #484 does *Fill the gap*, whose judge is the learner's own tick — *Finish*
+  posts every card **turned over** (an unflipped card is not an answer), and the
+  round answers 204 because the page has already counted the score. Its rows
+  are ordinary rows; what makes them weaker evidence is `Activity.self_marked`,
+  the **one declaration** #479's schedule reads, rather than a column or a list
+  of slugs. Nothing else can reach the seam — *Odd one out* posts indexes,
+  *Real or fake* has no rows. `_record_recall()` writes only for a signed-in learner, records
   a blocked one too (private data, not shared content), and **swallows a
   failure** after logging it, because a history table must never cost a learner
   their results page. One `INSERT` per round, so every row shares one

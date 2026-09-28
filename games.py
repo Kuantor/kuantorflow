@@ -332,6 +332,13 @@ class Activity:
     # to do with it, which is why it is off by default: a quiz has no use for
     # "a letter of complaint to a hotel".
     asks_instruction: bool = False
+    # Whether the learner marks their own answers (#484). Such a round still
+    # writes to #338's `recall_answers` -- the rows are real history -- but a
+    # tick is the learner's verdict, not the site's, and #479's schedule must
+    # weigh it below an answer the site checked. The row records only the
+    # game, so this declaration is how the scheduler, the tests and the guide
+    # all learn which games those are: one field, not a list of slugs in each.
+    self_marked: bool = False
 
 
 # The quiz is the only entry today, and it is the loosest of the five: one card
@@ -402,6 +409,9 @@ ACTIVITIES = {
             tagline="Guess the missing word",
             needs="an example sentence that uses the word itself",
             hint_modes=GAP_HINTS,
+            # The learner flips the card and ticks "I remember it"; nothing
+            # compares a guess, because none is typed (#484).
+            self_marked=True,
         ),
         # --- wave two (#265), registered as stubs by #266 -----------------
         #

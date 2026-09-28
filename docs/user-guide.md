@@ -139,9 +139,13 @@ So a round will sometimes ask fewer questions than the number you set, and when 
 
 ### What the site remembers about your answers
 
-When you are signed in, KuantorFlow keeps a record of **every answer the site checked for you**: the word, which game asked it, whether you got it right, and when. It is kept so the site can learn which words you already know and which you are about to forget, and bring those back to you before you do — the idea behind spaced repetition. Nothing on the page uses it yet; it is being collected first, so that the choices can be made from real answers rather than guesses.
+When you are signed in, KuantorFlow keeps a record of **your answers in the games**: the word, which game asked it, whether you got it right, and when. It is kept so the site can learn which words you already know and which you are about to forget, and bring those back to you before you do — the idea behind spaced repetition. Nothing on the page uses it yet; it is being collected first, so that the choices can be made from real answers rather than guesses.
 
-It covers only the games that mark your answer themselves: the **Quiz**, **Multiple choice**, **Scrambled**, **Spell it**, **Rebuild the sentence** and **Listen and type**. *Fill the gap* is not recorded, because there you mark yourself; nor are *Odd one out* and *Real or fake*, whose questions are about topics and invented words rather than about one of your cards. If you practise without signing in, nothing is recorded at all.
+Most of it comes from the games that mark your answer themselves: the **Quiz**, **Multiple choice**, **Scrambled**, **Spell it**, **Rebuild the sentence** and **Listen and type**.
+
+**Fill the gap** is recorded too, but differently, because there you mark yourself. When you press **Finish game**, every card you turned over is kept — ticked as remembered or not — and a card you never flipped is left out, since you never saw its answer. Your own ticks will count for **less** than an answer the site checked when it decides which words to bring back: *I did not remember it* is taken at your word, while *I remember it* moves a word along more slowly than a correct answer would.
+
+*Odd one out* and *Real or fake* are not recorded, because their questions are about topics and invented words rather than about one of your cards. If you practise without signing in, nothing is recorded at all.
 
 The record is about you alone, and other learners cannot see it. **Deleting your account erases it** along with the account.
 
@@ -183,7 +187,7 @@ A game of unscrambling: the middle letters of a word are shuffled and you put it
 
 A game of guessing a word from its own dictionary example. The front of each card is a real example sentence with the word cut out of it; flip the card to see the word, with its English explanation — or its translation, when the card has no explanation.
 
-You mark yourself: tick **I remember it** on the ones you knew, and the count in the corner keeps score. **Finish game** is there from the first card, not only the last, so you can stop whenever you like and still see how you did. Nothing is recorded — the score goes when the page does.
+You mark yourself: tick **I remember it** on the ones you knew, and the count in the corner keeps score. **Finish game** is there from the first card, not only the last, so you can stop whenever you like and still see how you did. If you are signed in, finishing also records the cards you turned over, as described under *What the site remembers about your answers*.
 
 **If the gap is too hard, ask for a letter.** In the picker you can choose to see the **first letter** of the missing word, or the first *and* the last — `r___`, or `r___n`. The dashes **hint at the size** without giving it away — a longer word gets a longer run, but there are far fewer dashes than letters, so you cannot count them to find the answer. An expression is shown word by word, so *take for granted* becomes `t___e   f___   g____d`: you can see it is three words, and roughly how long each one is, but not exactly. A word of three letters or fewer keeps its last letter hidden even in the second mode, because showing both ends of a short word is most of the word.
 

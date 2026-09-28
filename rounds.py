@@ -479,12 +479,14 @@ def _graded_answers(activity, cards, judge):
 
     **It is where #338's log is written**, because the set of rounds that
     reach it is exactly the set that may write: the six that grade an answer
-    against a real card. The two that must never write -- *Odd one out*, whose
-    POST is indexed and carries no card id, and *Real or fake*, whose items are
-    invented words with no row behind them -- are precisely the two that cannot
-    call this, and *Fill the gap* is self-marked and never grades at all. So a
-    new graded game inherits the write by grading the normal way, and that is
-    why `activity` is a parameter: the row records which game asked.
+    against a real card, plus *Fill the gap* (#484), whose judge is the
+    learner's own tick and whose rows the schedule weighs lower because its
+    activity is `self_marked`. The two that must never write -- *Odd one out*,
+    whose POST is indexed and carries no card id, and *Real or fake*, whose
+    items are invented words with no row behind them -- are precisely the two
+    that cannot call this. So a new game inherits the write by grading the
+    normal way, and that is why `activity` is a parameter: the row records
+    which game asked.
     """
     by_id = {str(card["id"]): card for card in cards}
     graded = []
@@ -534,11 +536,12 @@ def _round_played(activity, topics, results, stage="graded"):
     activity to prove none was missed.
 
     `correct` is counted off the results the page is about to show, so the
-    logged score is the displayed score by construction. For *Fill the gap*,
-    dealt rather than graded, there is nothing to count and it is left out.
+    logged score is the displayed score by construction. *Fill the gap* logs
+    twice: at the deal, with nothing to count, and -- if the learner finishes
+    -- at `self-marked`, counting the ticks (#484).
     """
     correct = (sum(1 for r in results if r.get("correct"))
-               if stage == "graded" else None)
+               if stage in ("graded", "self-marked") else None)
     applog.round_played(activity.slug, len(topics), len(results),
                         correct=correct, stage=stage,
                         user=web._current_email())
@@ -774,10 +777,22 @@ def _fill_the_gap_round(activity, topics):
     all, and a card whose examples never use its own word is just as unplayable
     — so a topic can be perfectly full and still yield a short round.
 
-    Nothing here is written down. The score is the learner's own ticking, held
-    in the page and gone when they leave it (#233's rule about a game that
-    records a score does not apply to a game that records nothing).
+    **The score is the learner's own ticking** (`self_marked`), and since #484
+    it is written down: *Finish* posts the cards the learner turned over, each
+    ticked or not, and they reach #338's log through the same
+    `_graded_answers()` every other game uses, with the tick as the judge. The
+    rows say `game = 'fill_the_gap'`, which is how #479's schedule knows to
+    weigh them below an answer the site checked. The page still counts the
+    score itself, so the results appear whether or not the post arrives.
     """
+    # One card per word, before the eligibility rule so a duplicate never
+    # reaches `dropped` (#272's rule). Shuffled first, so which of a word's
+    # cards survives is not always the lowest id.
+    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
+
+    if request.method == "POST":
+        return _fill_the_gap_marked(activity, topics, cards)
+
     prefs = web.current_settings()
     wanted = prefs["gapped_deck_size"]
     field, label = _gap_translation(prefs)
@@ -785,10 +800,6 @@ def _fill_the_gap_round(activity, topics):
     # never opens the control sees the game they have always seen.
     hint = _round_hint(activity)
 
-    # One card per word, before the eligibility rule so a duplicate never
-    # reaches `dropped` (#272's rule). Shuffled first, so which of a word's
-    # cards survives is not always the lowest id.
-    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
     random.shuffle(cards)
     cards = games.one_per_word(cards)
 
@@ -819,6 +830,9 @@ def _fill_the_gap_round(activity, topics):
     for card, sentence in usable[:wanted]:
         word = (card.get("word") or "").strip()
         questions.append({
+            # Posted back with the tick (#484), and read back against the
+            # visible deck -- never trusted to name a card on its own.
+            "id": card["id"],
             "word": word,
             "pos": card.get("pos"),
             "sentence": sentence,
@@ -831,12 +845,45 @@ def _fill_the_gap_round(activity, topics):
             "translation_label": label,
         })
 
-    # Logged at the deal (#448), because this is the only moment the server
-    # sees: the round never submits, and the score lives in the page.
+    # Logged at the deal (#448), and again if the learner finishes (#484): a
+    # round abandoned half-way is still a round somebody was dealt.
     _round_played(activity, topics, questions, stage="dealt")
     return render_template(
         "game_fill_the_gap.html", activity=activity, topics=topics,
-        cards=questions, wanted=wanted, dropped=dropped, hint=hint)
+        cards=questions, wanted=wanted, dropped=dropped, hint=hint,
+        gap_remembered=GAP_REMEMBERED)
+
+
+# The value a ticked card posts. Anything else -- the empty string an untick
+# sends -- is "turned over and not remembered".
+GAP_REMEMBERED = "remembered"
+
+
+def _fill_the_gap_marked(activity, topics, cards):
+    """The learner pressed *Finish*: record what they marked (#484).
+
+    The page posts one `answer_<id>` for every card **turned over**, valued
+    `remembered` when ticked. A card never flipped is not posted, because it
+    is not an answer -- dealing ten, looking at six and stopping must not
+    record four words as forgotten. An untick is posted, since flipping a card
+    and not ticking it is the learner saying they did not remember.
+
+    Graded by `_graded_answers()` with the tick as the judge, which is the
+    point: the ids are read back against this learner's visible deck, the
+    rows go to #338's log with the round's shared instant, and every rule
+    about who is recorded is `_record_recall()`'s, not a second copy here.
+
+    Answers 204. The page has already shown the score -- it counted the ticks
+    itself, as it always did -- so there is nothing to render, and a failed
+    post costs the learner nothing they can see.
+    """
+    graded = _graded_answers(
+        activity, cards, lambda card, given: given == GAP_REMEMBERED)
+    if graded:
+        _round_played(activity, topics,
+                      [{"correct": correct} for _card, _given, correct in graded],
+                      stage="self-marked")
+    return "", 204
 
 
 # Distinct words a selection needs before it can supply its own wrong answers
