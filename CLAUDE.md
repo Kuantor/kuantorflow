@@ -451,6 +451,14 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   month stale — still telling learners to type the keyword — before #460, and
   `automation/tests/test_help_page.py` now fails when any guide heading is
   missing from it.
+  **The privacy notice lives there too** (#90, #56): `## Privacy: what the
+  site keeps` in the guide, linked from a small *Privacy* link in every page's
+  footer and from Mykola's sign-in popup. It states facts about the code — what
+  the activity logs record and for how long (`applog.ROTATE_DAYS` ×
+  `KEEP_ROTATIONS`), that anonymous chats are never written (#163), what
+  `delete_account()` removes and what it does not (the activity logs) — so **a
+  change to any of those is a change to that section**, and
+  `automation/tests/test_privacy_notice.py` pins the ones that can be derived.
 - **`schema.sql` + `apply_schema.py`** — `schema.sql` holds `CREATE TABLE` only
   and describes a **fresh** database; every change to an **existing** one is a
   `Step` in `apply_schema.py`'s `MIGRATIONS` (#180). Adding a column is

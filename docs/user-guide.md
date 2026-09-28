@@ -353,6 +353,72 @@ When you are turned down, the wording tells you which limit it was:
 
 An administrator can change any of these, and setting one to zero turns it off.
 
+## Privacy: what the site keeps
+
+This is the whole picture, in plain words: what KuantorFlow keeps about you, who can read it, what is sent to other services, and how to delete it.
+
+### What the site keeps about you
+
+**Without signing in**, almost nothing is tied to you. Your games, your chat with Mykola and your settings are not saved on the server under any name. Your conversation with Mykola is kept only in this browser, so it is still there when you come back, and *Reset Auth* clears it.
+
+**When you sign in with Google**, the site keeps:
+
+- **Your account:** the name, email address and Google account number that Google passes on when you sign in, and the name you asked Mykola to call you, if you did.
+- **Your settings**, in a small file of their own.
+- **The cards you add.** They join the shared deck, so other learners can see them, unless you put them in a private topic.
+- **Your answers in the games**, so the site can bring words back before you forget them. This is described under *What the site remembers about your answers*.
+- **Your conversations with Mykola**, described below.
+
+**Activity logs, for everybody.** Like most websites, KuantorFlow writes a short line for each thing that happens, so that problems can be found and fixed. For example: a card saved, a word looked up, a file uploaded (its name, not its contents), the idea you typed to build a topic, a round played and its score, a setting changed. If you are signed in, **the line includes your email address**. The logs never contain what you say to Mykola. They are started afresh every 30 days, and **each one is deleted automatically after about a year**.
+
+### Your conversations with Mykola
+
+**If you are signed in**, your conversations are saved on the server under your account. That is how Mykola can greet you and sum up where you left off when you come back after a break. This is the only place the text of your messages is stored.
+
+**If you are not signed in**, nothing you say to Mykola is saved on the server. The conversation lives only in your browser.
+
+Either way, Mykola's answers are written by **Claude**, an AI made by Anthropic, so what you type is sent to Anthropic to produce the reply (see *What is sent to other services*). Please do not tell Mykola anything you would not want written down: a password, an address, anything private about somebody else.
+
+### Who can read it
+
+**The person who runs the site can read everything stored on the server**, including saved conversations with Mykola. They read it to fix problems and to improve the app, not to watch anybody. **Nobody else can**, and **nothing is sold, shared for advertising or used to show you adverts**. There are no adverts.
+
+Other learners never see your answers, your conversations or your settings. They see only the cards you added to public topics.
+
+**Teachers cannot see your progress**, either: there is no teacher view.
+
+### What is sent to other services
+
+To do its work, the site passes some things to a few services:
+
+- **Anthropic (Claude)** receives:
+  - your messages to Mykola, and the first name he calls you by;
+  - the words you look up, to translate them;
+  - the words and the instruction you give when generating a text or building a topic;
+  - lines from notes you upload that need splitting.
+
+  Anthropic uses them to produce the answer.
+- **Google** handles signing in. It knows you signed in to KuantorFlow; the site receives only your name, email address and account number.
+- **Oxford Learner's Dictionaries** and **Wiktionary** receive the word being looked up, and nothing else.
+
+The site itself runs on PythonAnywhere, which stores the database and the files described above.
+
+### Deleting it
+
+**Delete account**, in *Settings*, removes your account and, with it:
+
+- your saved conversations with Mykola;
+- your settings;
+- the record of your answers and the words scheduled for you.
+
+It asks first whether your cards should go with you or stay in the shared deck.
+
+**The activity logs are not rewritten** when you delete your account. The lines that mention you are deleted along with everything else in those logs, within about a year.
+
+**Reset Auth** signs you out and clears what this browser has stored, including your conversation with Mykola.
+
+There is no separate button yet for deleting only your saved conversations while keeping the account. If you want that, ask the site's owner and it will be done by hand.
+
 ## The idea behind it
 
 A card here is a **lexical entry**, not a word-and-translation pair. The translation is a fast bridge into memory; the English definition and a real dictionary example then make you handle the word in English, and both stay on the card long after the translation stops being necessary — which is why you can hide the translations once they are in the way. The deck is made of words *you* met, in the topics you chose, and vocabulary met in real life is remembered far better than somebody else's list.

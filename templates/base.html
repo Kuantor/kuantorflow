@@ -596,6 +596,12 @@
 
     <footer class="site-footer">
         KuantorFlow &mdash; interactive language learning with notes and dictionaries
+        {# #90: one small, quiet link on every page, as the ticket asked. It
+           points into the user guide rather than to a page of its own, because
+           the guide is the one place this app describes itself: /help renders
+           it and Mykola answers from it (#310, #460), so the notice a visitor
+           reads and the one Mykola quotes cannot drift apart. #}
+        <a class="site-footer-privacy" href="{{ url_for('help_page') }}#privacy-what-the-site-keeps">Privacy</a>
     </footer>
 
     <script>
@@ -984,7 +990,7 @@
                 <a class="mykola-consent-yes" href="{{ url_for('login_google') }}">Sign in with Google</a>
                 <button type="button" class="mykola-consent-no">Stay anonymous</button>
             </div>
-            <p class="mykola-consent-note">Signing in lets Mykola greet you by name and remember your chats between visits (saved under your account). Stay anonymous and nothing is kept under your name.</p>
+            <p class="mykola-consent-note">Signing in lets Mykola greet you by name and remember your chats between visits (saved under your account). Stay anonymous and nothing is kept under your name. <a href="{{ url_for('help_page') }}#privacy-what-the-site-keeps">What the site keeps</a></p>
         </div>
         {% endif %}
         <div id="mykola-messages">
