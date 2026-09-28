@@ -679,7 +679,21 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   case-insensitive — grouping `Tip` and `tip` apart would compute two schedules
   and let the second upsert overwrite the first. **Change a rule in `recall.py`,
   then run the rebuild**: that is the whole migration story for this table.
-  Nothing on a page reads it yet; #480 (the draw) and #92 (*Review (N due)*) do.
+  **The draw reads it** (#480): `rounds._draw_weight()` turns one learner's
+  `utils.due_dates()` into a `games.sample(weight=)` callable through
+  `recall.draw_weight()` — due today and never answered weigh 1, scheduled for
+  later weighs `NOT_DUE_WEIGHT` (0.2). **Down-weighted, never excluded**: a
+  topic you know still deals in full. `games.sample()` knows nothing of
+  schedules (weights arrive as data, Efraimidis–Spirakis keys, picked cards
+  shuffled so the heaviest are not always first), and a weight of None is the
+  old uniform draw — which is what an anonymous visitor, a learner with no
+  answers, and an unreadable schedule all get. Seven rounds use it: every one
+  whose question is **one card** (the six graded games and *Fill the gap*, which
+  now draws through `sample()` rather than slicing a shuffle). *Odd one out*
+  builds questions from four words across two topics with its own generator,
+  and *Real or fake* draws bare words with no `pos` to key on. The card and the
+  schedule meet through `recall.word_key()`, the one definition of how a word is
+  keyed. #92 (*Review (N due)*) is the next reader.
 - **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
   a lexicon confirmed. The game invents with a trigram model trained on the
   deck, so it sometimes produces real English and marks the learner wrong for

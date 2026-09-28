@@ -139,7 +139,7 @@ So a round will sometimes ask fewer questions than the number you set, and when 
 
 ### What the site remembers about your answers
 
-When you are signed in, KuantorFlow keeps a record of **your answers in the games**: the word, which game asked it, whether you got it right, and when. It is kept so the site can learn which words you already know and which you are about to forget, and bring those back to you before you do — the idea behind spaced repetition. Nothing on the page uses it yet; it is being collected first, so that the choices can be made from real answers rather than guesses.
+When you are signed in, KuantorFlow keeps a record of **your answers in the games**: the word, which game asked it, whether you got it right, and when. It is kept so the site can learn which words you already know and which you are about to forget, and bring those back to you before you do — the idea behind spaced repetition.
 
 Most of it comes from the games that mark your answer themselves: the **Quiz**, **Multiple choice**, **Scrambled**, **Spell it**, **Rebuild the sentence** and **Listen and type**.
 
@@ -148,6 +148,12 @@ Most of it comes from the games that mark your answer themselves: the **Quiz**, 
 *Odd one out* and *Real or fake* are not recorded, because their questions are about topics and invented words rather than about one of your cards. If you practise without signing in, nothing is recorded at all.
 
 The record is about you alone, and other learners cannot see it. **Deleting your account erases it** along with the account.
+
+### Words that are due come up first
+
+From your answers the site works out, for every word you have played, **the day it is next worth asking** — soon for a word you missed, further off each time you get it right. When you are signed in, the games use that: **words due today, and words you have never answered, are dealt first**, and a word you already know for now comes up several times less often. It is never left out altogether, so a topic you know well still plays in full.
+
+This applies to the Quiz, **Multiple choice**, **Scrambled**, **Fill the gap**, **Spell it**, **Rebuild the sentence** and **Listen and type** — every game whose question is one of your cards. *Odd one out* and *Real or fake* still draw at random. Without signing in, every game draws at random, as it always has.
 
 ### Quiz
 

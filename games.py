@@ -808,8 +808,8 @@ def one_per_word(cards):
 # --- drawing the round ---------------------------------------------------
 
 
-def sample(cards, count, rng=None):
-    """`count` cards drawn uniformly from `cards`, without replacement.
+def sample(cards, count, rng=None, weight=None):
+    """`count` cards drawn from `cards`, without replacement.
 
     Every card in the selection has the same chance whichever topic it came
     from, so a topic with 36 cards contributes more questions than one with 20
@@ -817,12 +817,31 @@ def sample(cards, count, rng=None):
     Weighting by topic instead would make a small topic's words several times
     more likely, and nobody asked for that.
 
+    **`weight` makes some cards likelier than others** (#480): a callable
+    giving each card a positive number, which for a signed-in learner comes
+    from their SM-2 schedule, so words due today are dealt before words that
+    are not. The weights arrive as data -- nothing here knows what a schedule
+    is, and this module stays free of any database. Drawn by Efraimidis and
+    Spirakis's method: each card gets `u ** (1 / w)` for a uniform `u` and the
+    largest keys win, which is exact weighted sampling without replacement in
+    one pass. **No weight excludes**: anything at or below zero is treated as
+    tiny rather than as never, so a small topic still deals every word. The
+    picked cards are shuffled afterwards, or the heaviest would always come
+    first.
+
     Fewer cards than asked for is not an error: the round is what there is.
     `rng` is injectable so a test can pin the draw.
     """
     if count >= len(cards):
         return list(cards)
-    return (rng or random).sample(list(cards), count)
+    rng = rng or random
+    if weight is None:
+        return rng.sample(list(cards), count)
+    keyed = sorted(((rng.random() ** (1.0 / max(weight(card), 1e-6)), n, card)
+                    for n, card in enumerate(cards)), reverse=True)
+    picked = [card for _key, _n, card in keyed[:count]]
+    rng.shuffle(picked)
+    return picked
 
 
 # --- scrambling a word (#133) --------------------------------------------
