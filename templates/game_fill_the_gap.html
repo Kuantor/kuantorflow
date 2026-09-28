@@ -10,10 +10,12 @@
    card deck rather than copied — two flip implementations would diverge the
    first time either was touched. This page is the faces and the scoring.
 
-   The scoring is **self-marked and never written down**: nothing compares a
-   guess to the answer, because the guess is never typed, and #233's rule that
-   a game recording a score is a write does not bite here — the count dies
-   with the page.
+   The scoring is **self-marked**: nothing compares a guess to the answer,
+   because the guess is never typed. Since #484 it is also **written down**:
+   *Finish* posts every card the learner turned over, ticked or not, and a
+   signed-in learner's marks go to #338's log as `fill_the_gap` rows, which
+   #479's schedule weighs below a checked answer. The score on screen is still
+   counted here, so it appears whether or not the post arrives.
 #}
 {% block deck_crumbs %}
     <p class="crumbs">
@@ -77,9 +79,10 @@
        credit is on the card whether or not the back carries a definition. #}
     {% include "_source_credit.html" %}
     {# Ticked by the learner, after flipping. Nothing checks it against
-       anything -- that is what self-marked means. #}
+       anything -- that is what self-marked means. The card id travels with
+       the tick when the round is finished (#484). #}
     <label class="gap-remember">
-        <input type="checkbox" class="gap-remember-box">
+        <input type="checkbox" class="gap-remember-box" data-card-id="{{ card.id }}">
         I remember it
     </label>
 {% endblock %}
@@ -137,7 +140,48 @@
                 });
             });
 
+            // Which cards were turned over (#484). Only those are answers: a
+            // card never flipped was never attempted, and recording it as
+            // forgotten would put words in the learner's history they never
+            // saw the answer to. deck.html's own click handler runs first
+            // (its script is above this one), so by the time this listener
+            // fires the card already carries `flipped` if it just turned.
+            var flipped = {};
+            deck.querySelectorAll(".flip-card").forEach(function (card) {
+                function note() {
+                    if (card.classList.contains("flipped")) {
+                        flipped[card.dataset.index] = true;
+                    }
+                }
+                card.addEventListener("click", note);
+                card.addEventListener("keydown", note);
+            });
+
+            // Posted to this round's own URL, whose query string carries the
+            // topics the server reads the ids back against. `keepalive` so a
+            // learner who presses Finish and immediately leaves still sends
+            // it. Not awaited: the score below is counted here, as it always
+            // was, and a lost post costs a history row and nothing on screen.
+            function send() {
+                var form = new FormData();
+                boxes.forEach(function (box) {
+                    var index = box.closest(".flip-card").dataset.index;
+                    // A tick implies a flip -- the box is on the back face.
+                    if (box.checked || flipped[index]) {
+                        form.append("answer_" + box.dataset.cardId,
+                                    box.checked ? "{{ gap_remembered }}" : "");
+                    }
+                });
+                if (!Array.from(form.keys()).length) return;
+                try {
+                    fetch(window.location.href, { method: "POST", body: form,
+                                                  keepalive: true,
+                                                  credentials: "same-origin" });
+                } catch (e) {}
+            }
+
             finish.addEventListener("click", function () {
+                send();
                 var score = remembered();
                 var panel = document.createElement("div");
                 panel.className = "panel gap-result";
