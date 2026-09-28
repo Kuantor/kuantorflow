@@ -192,7 +192,7 @@
                 again.className = "crumbs";
                 again.innerHTML =
                     '<a href="{{ url_for("index") }}">&larr; Home</a>' +
-                    '<a href="{{ url_for("game_play", game=activity.slug, topic=topics, hint=hint) }}">Play again</a>';
+                    '<a href="{{ replay_url(activity, topics, hint=hint) }}">{{ "Back to review" if reviewing else "Play again" }}</a>';
                 panel.appendChild(again);
                 // Replaces the deck rather than sitting under it: the round is
                 // over, and leaving the cards on screen invites carrying on.

@@ -155,6 +155,16 @@ From your answers the site works out, for every word you have played, **the day 
 
 This applies to the Quiz, **Multiple choice**, **Scrambled**, **Fill the gap**, **Spell it**, **Rebuild the sentence** and **Listen and type** — every game whose question is one of your cards. *Odd one out* and *Real or fake* still draw at random. Without signing in, every game draws at random, as it always has.
 
+### Review: the words due today
+
+When you are signed in and some of your words are due, the **Practise your words** panel on the front page shows a **Review (N due)** button, where N is how many words are waiting. It opens a page listing them — the ones waiting longest first, with how many days each is overdue — and the games you can review them in.
+
+Pick a game and you play an ordinary round of it, dealt **only from your due words**, with the longest-waiting ones most likely to come up. Your answers are checked and recorded exactly as in any other round, and that is what moves each word to its next date: a word you get right comes back after a longer gap, and a word you miss comes back tomorrow. When the round is over, **Back to review** shows what is still due.
+
+A game can only use a word it has what it needs for — *Spell it* needs an English explanation, *Rebuild the sentence* an example sentence — so a review round may be shorter than the list, and says so. If none of the due words fits a game, the page says that and lets you pick another. Only words you can still see in your deck are counted, so a word whose card has been deleted is never promised.
+
+With nothing due, the button is not shown, and the review page tells you the day your next word comes due.
+
 ### Quiz
 
 You are shown a word and you **type the translation**. There is no multiple choice: producing a word is harder than recognising one, and it holds much better.

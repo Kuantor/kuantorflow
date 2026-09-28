@@ -141,7 +141,7 @@
         {% endfor %}
         <p class="crumbs">
             <a href="{{ url_for('index') }}">&larr; Home</a>
-            <a href="{{ url_for('game_play', game=activity.slug, topic=topics, words=words) }}">Play again</a>
+            <a href="{{ replay_url(activity, topics, words=words) }}">{{ 'Back to review' if reviewing else 'Play again' }}</a>
         </p>
     {% endif %}
 {% endblock %}

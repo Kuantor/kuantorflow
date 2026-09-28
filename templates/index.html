@@ -117,6 +117,14 @@
        reason about, so a second copy of the rule could only guess. #}
     <div class="panel">
         <h2>Practise your words</h2>
+        {# #92. Only when something is due: an empty badge is noise, and an
+           anonymous visitor has no schedule to count. The number is words the
+           learner can actually be dealt -- see rounds._due_for_review(). #}
+        {% set due_words = due_for_review() %}
+        {% if due_words %}
+            <a class="review-badge" href="{{ url_for('review_page') }}">Review
+               ({{ due_words|length }} due)</a>
+        {% endif %}
         <div class="topic-tiles">
             {# The quiz first: it is the oldest activity here and the one a
                returning learner is most likely to want, and until now it was

@@ -29,6 +29,8 @@ import random
 
 from flask import (
     abort,
+    g,
+    has_request_context,
     redirect,
     render_template,
     request,
@@ -231,6 +233,11 @@ def inject_activities():
         # Said in one place because three surfaces say it (#261), and a tooltip
         # that differed between them would read as three different states.
         "under_construction": UNDER_CONSTRUCTION,
+        # #92. A callable, not a value: this processor runs for every page, and
+        # only the front page's badge needs the deck and the schedule read.
+        "due_for_review": _due_for_review,
+        "reviewing": _reviewing(),
+        "replay_url": replay_url,
     }
 
 
@@ -515,18 +522,13 @@ def _draw_weight(on_card=None):
     draws bare words with no part of speech to key a schedule on, asking only
     whether a word is English -- a due word answers that trivially.
     """
-    user_id = web._current_user_id()
-    if not user_id:
-        return None
-    try:
-        due = utils.due_dates(user_id)
-    except Exception:
-        app.logger.exception("Could not read the recall schedule for the draw "
-                             "(#480); dealing uniformly")
-        return None
+    due = _schedule()
     if not due:
         return None
-    weight = recall.draw_weight(due, recall.today())
+    if _reviewing():
+        weight = recall.review_weight(due, recall.today())
+    else:
+        weight = recall.draw_weight(due, recall.today())
     if on_card is None:
         return weight
     return lambda item: weight(on_card(item))
@@ -534,6 +536,151 @@ def _draw_weight(on_card=None):
 
 def _first(item):
     return item[0]
+
+
+def _schedule():
+    """This learner's `{word_key: due_on}`, read once per request.
+
+    Cached in `g` because a review round asks twice -- to filter the deck and
+    to weight the draw -- and the front page's badge a third time. Empty for an
+    anonymous visitor, and for a schedule that cannot be read: a round that
+    will not deal is worse than one dealt without preference (#480).
+    """
+    if "recall_schedule" not in g:
+        user_id = web._current_user_id()
+        due = {}
+        if user_id:
+            try:
+                due = utils.due_dates(user_id)
+            except Exception:
+                app.logger.exception("Could not read the recall schedule "
+                                     "(#480); dealing uniformly")
+        g.recall_schedule = due
+    return g.recall_schedule
+
+
+# --- Review (N due) (#92) -----------------------------------------------------
+#
+# A review is **an ordinary round of an ordinary game**, dealt only from the
+# words due today. Not a screen of its own: #338 settled on 18 September that
+# the schedule runs on answers the site checks, so the self-rated flip screen
+# #92 first described would have produced the one kind of evidence the schedule
+# refuses. The round grades as usual, its answers reach the log as usual, and
+# that is what moves each word to its next date -- nothing here writes.
+#
+# The flag travels in the URL (`?review=1`), so it survives the POST that grades
+# the round: every game form posts back to its own URL, *Fill the gap* posts to
+# `window.location.href`, and the quiz builds `self_url` with it.
+
+REVIEW_GAMES = ("quiz", "spell_it", "listen_and_type", "scrambled",
+                "multiple_choice", "rebuild_the_sentence", "fill_the_gap")
+
+
+def _reviewing():
+    """Is this round a review? Only for a signed-in learner -- an anonymous
+    visitor has no schedule, and `?review=1` from one deals the whole deck."""
+    return (has_request_context() and request.args.get("review") == "1"
+            and bool(web._current_user_id()))
+
+
+def _round_cards(topics):
+    """The cards a one-card round deals from: the selection, or in a review
+    only the ones due today.
+
+    Every round whose question is one card reads its deck through here, on the
+    GET that deals it **and** the POST that grades it -- so the ids a review
+    posts back are found, and a hand-built POST cannot grade a word that is not
+    due. A word answered in this round is still due while it is being graded:
+    the schedule refresh runs after grading, in the same request.
+    """
+    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(),
+                                           **web.viewer())
+    if not _reviewing():
+        return cards
+    today = recall.today()
+    due = _schedule()
+    return [card for card in cards
+            if recall.is_due(due.get(recall.word_key(card.get("word"),
+                                                     card.get("pos"))), today)]
+
+
+def _due_for_review():
+    """The words due today that this learner can actually be shown.
+
+    `[(word, pos, due_on), ...]`, most overdue first. **Counted against the
+    visible deck**, not the schedule: the schedule is keyed on the word, but a
+    round needs a card, and a due word whose last card was deleted -- or whose
+    topic has since gone private -- cannot be dealt. Counting it would have the
+    badge promise a round it cannot deal. Duplicate cards are one word.
+    Cached in `g`, since the front page may ask more than once.
+    """
+    if "due_for_review" in g:
+        return g.due_for_review
+    found = []
+    due = _schedule()
+    if due:
+        today = recall.today()
+        topics = games.visible_topic_names(_visible_sections())
+        cards = utils.get_flashcards_by_topics(
+            topics, web.cards_owner_filter(), **web.viewer()) if topics else []
+        seen = set()
+        for card in cards:
+            key = recall.word_key(card.get("word"), card.get("pos"))
+            if key in seen or not recall.is_due(due.get(key), today):
+                continue
+            seen.add(key)
+            found.append((card["word"], card.get("pos"), due[key]))
+        found.sort(key=lambda row: (row[2], row[0].casefold()))
+    g.due_for_review = found
+    return found
+
+
+def replay_url(activity, topics, **params):
+    """Where a round's *Play again* goes: the same round again, or -- after a
+    review -- back to the review page, which says what is still due.
+
+    Rebuilding a review's URL from its topics would name every visible topic
+    and drop the flag: the next round would deal the whole deck and remember
+    that as the learner's own selection, which is #342's bug.
+    """
+    if _reviewing():
+        return url_for("review_page")
+    return url_for("game_play", game=activity.slug, topic=topics, **params)
+
+
+def review_url(slug):
+    """A review round of one game."""
+    if slug == "quiz":
+        return url_for("quiz_topics", review=1)
+    return url_for("game_play", game=slug, review=1)
+
+
+@app.route("/review")
+def review_page():
+    """*Review (N due)*: the words due today, and a game to play them in (#92).
+
+    For a signed-in learner only. An anonymous visitor has no schedule, so the
+    page says so and offers sign-in rather than an empty list that reads as
+    "you know everything".
+    """
+    due = _due_for_review()
+    upcoming = None
+    if web._current_user_id() and not due:
+        later = [d for d in _schedule().values()
+                 if not recall.is_due(d, recall.today())]
+        upcoming = min(later) if later else None
+    return render_template(
+        "review.html", due=due, upcoming=upcoming, today=recall.today(),
+        signed_in=bool(web._current_user_id()),
+        review_games=[games.ACTIVITIES[slug] for slug in REVIEW_GAMES
+                      if _reachable_review(slug)],
+        review_url=review_url)
+
+
+def _reachable_review(slug):
+    """A game the review page may offer: the quiz always, a game only where
+    this deployment can run it."""
+    return slug == "quiz" or _reachable_activity(slug) is not None
 
 
 def _record_recall(activity, graded):
@@ -620,7 +767,7 @@ def _scrambled_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
+    cards = _round_cards(topics)
     cards = games.one_per_word(cards)
 
     if request.method == "POST":
@@ -845,7 +992,7 @@ def _fill_the_gap_round(activity, topics):
     # One card per word, before the eligibility rule so a duplicate never
     # reaches `dropped` (#272's rule). Shuffled first, so which of a word's
     # cards survives is not always the lowest id.
-    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
+    cards = _round_cards(topics)
 
     if request.method == "POST":
         return _fill_the_gap_marked(activity, topics, cards)
@@ -995,7 +1142,7 @@ def _multiple_choice_round(activity, topics):
     field = f"translation_{lang}"
     page["lang_name"] = QUIZ_LANGS[lang]
 
-    in_selection = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
+    in_selection = _round_cards(topics)
     usable, untranslated = games.playable(
         in_selection,
         lambda card: bool(card.get(field)) and bool((card.get("word") or "").strip()))
@@ -1099,7 +1246,7 @@ def _listen_and_type_round(activity, topics):
     words = games.word_count(request.args.get("words"),
                              games.remembered_word_count(session))
     field, label = _gap_translation(prefs)
-    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
+    cards = _round_cards(topics)
 
     if request.method == "POST":
         results = []
@@ -1252,7 +1399,7 @@ def _spell_it_round(activity, topics):
 
     if request.method == "POST":
         results = []
-        cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
+        cards = _round_cards(topics)
         for card, given, correct in _graded_answers(activity, cards,
                                                     _typed_the_word):
             results.append({
@@ -1280,7 +1427,7 @@ def _spell_it_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
+    cards = _round_cards(topics)
     cards = games.one_per_word(cards)
     usable, dropped = games.playable(
         cards,
@@ -1343,7 +1490,7 @@ def _rebuild_the_sentence_round(activity, topics):
     # this deck holds true duplicates besides). Before the eligibility rule,
     # so a duplicate never reaches `dropped` -- it is usable, just already
     # asked.
-    cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
+    cards = _round_cards(topics)
     cards = games.one_per_word(cards)
 
     if request.method == "POST":
@@ -1627,7 +1774,7 @@ def _run_quiz(topics, heading, self_url, back, words):
     # was asked 20 has no way to tell that from the word limit. 74 of the 569
     # cards in production have no Ukrainian and 38 no Russian, so this is a
     # number people will actually meet.
-    in_selection = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
+    in_selection = _round_cards(topics)
     usable, untranslated = games.playable(in_selection,
                                           lambda card: card.get(field))
     cards = [card for card, _ in usable]
@@ -1711,6 +1858,22 @@ def quiz_topics():
     is the way to quiz on everything.
     """
     requested = request.args.getlist("topic")
+    if _reviewing():
+        # A review (#92) is a quiz over every visible topic, dealt only from
+        # the words due today by `_round_cards()`. Not remembered as the
+        # learner's selection, for #342's reason: they chose "what is due",
+        # not every topic on the site.
+        topics = games.visible_topic_names(_visible_sections())
+        words = games.word_count(request.args.get("words"),
+                                 games.remembered_word_count(session))
+        return _run_quiz(
+            topics,
+            heading="Review",
+            self_url=lambda lang: url_for("quiz_topics", review=1, lang=lang,
+                                          words=words),
+            back=(url_for("review_page"), "Back to review"),
+            words=words,
+        )
     if not requested:
         return _render_picker(
             games.ACTIVITIES["quiz"], url_for("quiz_topics"))
