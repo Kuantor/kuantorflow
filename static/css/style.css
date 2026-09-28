@@ -252,6 +252,10 @@ body {
     font-size: 0.85rem;
     padding: 1rem 0 2rem;
 }
+/* #90: small and quiet, as the ticket asked -- the footer's own colour, set
+   apart by a dot rather than a louder style. */
+.site-footer-privacy { color: inherit; margin-left: 0.4rem; }
+.site-footer-privacy::before { content: "\00B7"; margin-right: 0.4rem; text-decoration: none; display: inline-block; }
 
 /* Panels (translucent cards over the background) — #197.
 
