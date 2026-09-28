@@ -365,3 +365,55 @@ CREATE TABLE IF NOT EXISTS flashcards (
 -- added_by_user_id, idx_added_by and fk_flashcards_user — are now real
 -- statements in apply_schema.py, which runs them on databases that predate
 -- them and skips them everywhere else.
+
+-- Every answer a signed-in learner gave in a graded round (#338, phase 1).
+--
+-- **A log, not a state table.** One row per answer, appended and never
+-- updated, which is how Anki's `revlog` and FSRS's `ReviewLog` keep review
+-- history: the schedule #479 builds is a *cache* of this table, rebuildable
+-- from it, so changing the algorithm later loses nobody's progress. It also
+-- means there is no race to design around -- two rounds finishing at once add
+-- two sets of rows, where an upsert of counters would have had to be a single
+-- statement to avoid losing one.
+--
+-- Memory attaches to **the word and part of speech**, not to the card -- the
+-- unit #101 means by a card's identity, and Duolingo's "lexeme". So `word`
+-- and `pos` are copied at answer time rather than joined: a card whose word is
+-- later edited (#176) keeps the history of what was actually asked, the deck's
+-- duplicate cards are one word, and a card deleted and looked up again keeps
+-- its history. `card_id` records which card was shown, and nothing more.
+--
+-- The two foreign keys differ on purpose. Deleting an **account** takes its
+-- rows (CASCADE): this is a derived fact about one person, the only table so
+-- far recording how a named person performed, and the user guide promises
+-- that deleting your account erases it. Deleting a **card** keeps them (SET
+-- NULL, as `fk_topics_user` does), because what the learner knew does not
+-- stop being true when the card goes.
+--
+-- A round is one request, so its rows share `answered_at` and `game` -- that
+-- is what a round is here, and why there is no table of rounds. The time is
+-- UTC, written by `UTC_TIMESTAMP()` rather than the column default, so it does
+-- not depend on the server's time zone; #479 turns it into a learner's day.
+--
+-- A new table, so no `apply_schema.py` step: this file's pass creates it on an
+-- existing database too (#237's shape). Below `flashcards`, because a foreign
+-- key needs its target created first.
+CREATE TABLE IF NOT EXISTS recall_answers (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT NOT NULL,
+    card_id     INT NULL,
+    word        VARCHAR(255) NOT NULL,
+    pos         VARCHAR(20),
+    -- The activity's slug (`spell_it`, `quiz`, ...). Games are not equal
+    -- evidence -- recognising a word among four is not spelling it -- and
+    -- keeping which one it was makes weighting them later a rebuild of #479's
+    -- schedule rather than a migration.
+    game        VARCHAR(32) NOT NULL,
+    correct     TINYINT(1) NOT NULL,
+    answered_at DATETIME NOT NULL,
+    INDEX idx_recall_answers_learner (user_id, word, pos, answered_at),
+    CONSTRAINT fk_recall_answers_user FOREIGN KEY (user_id)
+        REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_recall_answers_card FOREIGN KEY (card_id)
+        REFERENCES flashcards (id) ON DELETE SET NULL
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

@@ -450,9 +450,10 @@ def _chose_the_word(card, given):
     return given.casefold() == card["word"].casefold()
 
 
-def _graded_answers(cards, judge):
+def _graded_answers(activity, cards, judge):
     """What a graded round asked, what was typed for it, and whether it was
-    right -- `[(card, given, correct), ...]` in submission order (#416).
+    right -- `[(card, given, correct), ...]` in submission order (#416) --
+    and, for a signed-in learner, a row per answer in `recall_answers` (#338).
 
     The six rounds that grade server-side had six copies of this loop: read the
     questions back out of the submitted field names (`games.asked()`, since the
@@ -476,19 +477,49 @@ def _graded_answers(cards, judge):
     a hyphen to a space, so a generated slip on `well-being` would be marked
     right.
 
-    It is also the seam the next feature needs. #338 records per-learner recall
-    from exactly the rounds that grade an answer against a real card, and this
-    is that set: one write here rather than one per round, and the two rounds
-    that must never write -- *Odd one out*, whose POST is indexed and carries
-    no card id, and *Real or fake*, whose items are invented words with no row
-    behind them -- are precisely the two that cannot call this.
+    **It is where #338's log is written**, because the set of rounds that
+    reach it is exactly the set that may write: the six that grade an answer
+    against a real card. The two that must never write -- *Odd one out*, whose
+    POST is indexed and carries no card id, and *Real or fake*, whose items are
+    invented words with no row behind them -- are precisely the two that cannot
+    call this, and *Fill the gap* is self-marked and never grades at all. So a
+    new graded game inherits the write by grading the normal way, and that is
+    why `activity` is a parameter: the row records which game asked.
     """
     by_id = {str(card["id"]): card for card in cards}
     graded = []
     for card in games.asked(request.form, by_id):
         given = (request.form.get(f"answer_{card['id']}") or "").strip()
         graded.append((card, given, bool(judge(card, given))))
+    _record_recall(activity, graded)
     return graded
+
+
+def _record_recall(activity, graded):
+    """Append a graded round to the learner's answer log (#338, phase 1).
+
+    **Only a signed-in learner has one.** An anonymous visitor has no
+    `user_id` to key a row on, and #125 already says only an account writes;
+    they keep #337's session-scoped version. A **blocked** account (#126) is
+    recorded like any other: that line was drawn at writing *shared* content,
+    and this is private data about the person, which would only make their
+    schedule wrong on the day they are unblocked.
+
+    **A failure costs the log row and nothing else.** The learner has just
+    answered a round, and a results page that fails because a history table
+    could not be written would be the feature hurting the thing it exists to
+    serve. It is logged, so a table that has quietly stopped filling is
+    noticed -- `confirmed_words` sat empty for a week because nobody looked.
+    """
+    user_id = web._current_user_id()
+    if not user_id or not graded:
+        return
+    try:
+        utils.record_answers(user_id, activity.slug,
+                             [(card, correct) for card, _given, correct in graded])
+    except Exception:
+        app.logger.exception("Could not record a %s round for recall (#338)",
+                             activity.slug)
 
 
 def _round_played(activity, topics, results, stage="graded"):
@@ -541,7 +572,8 @@ def _scrambled_round(activity, topics):
         # now forgiven, none of which taught a learner anything when marked
         # wrong.
         results = []
-        for card, given, correct in _graded_answers(cards, _typed_the_word):
+        for card, given, correct in _graded_answers(activity, cards,
+                                                    _typed_the_word):
             results.append({
                 "word": card["word"],
                 "scrambled": request.form.get(f"scrambled_{card['id']}", ""),
@@ -870,7 +902,7 @@ def _multiple_choice_round(activity, topics):
         # Graded against `answerable` rather than the deduplicated draw, so
         # grading never depends on the dedupe landing the same way twice.
         results = []
-        for card, given, correct in _graded_answers(answerable,
+        for card, given, correct in _graded_answers(activity, answerable,
                                                     _chose_the_word):
             results.append({
                 "prompt": card[field],
@@ -963,7 +995,8 @@ def _listen_and_type_round(activity, topics):
 
     if request.method == "POST":
         results = []
-        for card, given, correct in _graded_answers(cards, _typed_the_word):
+        for card, given, correct in _graded_answers(activity, cards,
+                                                    _typed_the_word):
             results.append({
                 "word": card["word"],
                 "pos": card.get("pos"),
@@ -1108,7 +1141,8 @@ def _spell_it_round(activity, topics):
     if request.method == "POST":
         results = []
         cards = utils.get_flashcards_by_topics(topics, web.cards_owner_filter(), **web.viewer())
-        for card, given, correct in _graded_answers(cards, _typed_the_word):
+        for card, given, correct in _graded_answers(activity, cards,
+                                                    _typed_the_word):
             results.append({
                 "word": card["word"],
                 "pos": card.get("pos"),
@@ -1203,7 +1237,7 @@ def _rebuild_the_sentence_round(activity, topics):
     if request.method == "POST":
         results = []
         for card, given, correct in _graded_answers(
-                cards, _rebuilt_the_sentence):
+                activity, cards, _rebuilt_the_sentence):
             # The sentence travels with the answer: which example was drawn and
             # how it was shuffled are both random, so nothing here could be
             # rebuilt from the card.
@@ -1498,7 +1532,8 @@ def _run_quiz(topics, heading, self_url, back, words):
         # facts about a translation and neither one about an English headword,
         # so games.normalise_answer() has no business knowing them.
         graded = _graded_answers(
-            cards, lambda card, given: _matched_a_variant(card, given, field))
+            games.ACTIVITIES["quiz"], cards,
+            lambda card, given: _matched_a_variant(card, given, field))
         # Narrowed to what was actually asked, because the template's
         # empty-state guard reads `cards` and a POST that graded nothing is
         # not a quiz with questions on it.
