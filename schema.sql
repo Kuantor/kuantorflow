@@ -417,3 +417,40 @@ CREATE TABLE IF NOT EXISTS recall_answers (
     CONSTRAINT fk_recall_answers_card FOREIGN KEY (card_id)
         REFERENCES flashcards (id) ON DELETE SET NULL
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- Each learner's SM-2 schedule, one row per word they have answered (#479).
+--
+-- **A cache of `recall_answers`, never the source of anything.** Every value
+-- here is what `recall.replay()` computes from that word's rows in the log, so
+-- the table can be dropped and rebuilt (`scripts/rebuild_schedule.py`) without
+-- losing a thing -- which is what lets the rules change later, the way Anki
+-- rescheduled everybody for FSRS by replaying its `revlog`. Nothing writes a
+-- value here that the log could not reproduce.
+--
+-- Keyed on the **word and part of speech**, not the card (#338): the deck's
+-- duplicate cards are one word, and a deleted card's word keeps its schedule.
+-- `pos` is `NOT NULL DEFAULT ''` here although it is nullable in the log,
+-- because a primary key cannot hold NULL -- the log's NULL is stored as ''.
+--
+-- `ease` is in permille, as Anki stores `factor` (2500 = 2.5), so no float
+-- ever reaches the table. `due_on` is a DATE, not a TIMESTAMP: a word is due on
+-- a day rather than at an instant, the day is the learner's (Kyiv, from 04:00),
+-- and TIMESTAMP ends in January 2038.
+--
+-- CASCADE from `users`, like the log it is derived from. No foreign key to a
+-- card, because it has no card column.
+CREATE TABLE IF NOT EXISTS recall_schedule (
+    user_id       INT NOT NULL,
+    word          VARCHAR(255) NOT NULL,
+    pos           VARCHAR(20) NOT NULL DEFAULT '',
+    reps          SMALLINT NOT NULL DEFAULT 0,
+    lapses        SMALLINT NOT NULL DEFAULT 0,
+    ease          SMALLINT NOT NULL DEFAULT 2500,
+    interval_days INT NOT NULL DEFAULT 0,
+    due_on        DATE NOT NULL,
+    PRIMARY KEY (user_id, word, pos),
+    -- "What is due for this learner" -- #480's draw and #92's badge.
+    INDEX idx_recall_schedule_due (user_id, due_on),
+    CONSTRAINT fk_recall_schedule_user FOREIGN KEY (user_id)
+        REFERENCES users (id) ON DELETE CASCADE
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

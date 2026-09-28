@@ -9,6 +9,11 @@ requests==2.32.3
 # inside the route, so a deploy that misses this install loses /help alone.
 Markdown==3.11
 
+# The recall schedule's day is Kyiv's (#479), and Windows ships no time-zone
+# database for `zoneinfo` to read. Linux has one; this makes it the same
+# everywhere, and recall.py still falls back to UTC+2 without it.
+tzdata==2026.4
+
 # Optional "Sign in with Google" (OAuth 2.0 / OpenID Connect). If unset,
 # the feature disables itself — see GOOGLE_CLIENT_ID in app.py.
 Authlib==1.7.2

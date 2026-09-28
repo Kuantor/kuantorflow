@@ -651,6 +651,35 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   the log, and why there is no table of rounds. The guide's *What the site
   remembers about your answers* is the disclosure, and it shipped with the table.
   Nothing reads the table yet; #479, #480 and #92 are the readers, in that order.
+- **`recall_schedule` + `recall.py`** (#479) — each learner's SM-2 schedule,
+  one row per `(user_id, word, pos)`, and **a cache of `recall_answers`, never a
+  source**. `recall.replay()` is pure — one word's answers in, its schedule out
+  — so the live refresh after a round and `scripts/rebuild_schedule.py` are the
+  same arithmetic and cannot drift. The live refresh replays each answered word
+  from its *whole* history rather than stepping it, which is what makes that
+  true. It runs in `_record_recall()` **after** the log is committed, in its own
+  `try`: a lost log row is lost history, a stale schedule row is a cache the
+  rebuild repairs, so the second must never take the first with it.
+  SM-2 on verified pass/fail: 1, 6, then `round(interval × ease)`; a fail resets
+  to 1 day, counts a lapse and takes 0.2 off ease (floor 1.3); a pass leaves
+  ease alone, so with booleans ease only falls — conservative by design. Four
+  rules SM-2 lacks, each written out in `recall.py`: **one answer per
+  learner-day moves the schedule** (the first); **the day is Kyiv's from
+  04:00** (the log is UTC — `tzdata` is a requirement because Windows has no
+  zone database, and a fixed UTC+2 is the fallback); **an early pass is
+  practice** and moves nothing, while an early *fail* is a real lapse — without
+  that, a word played four days running reaches 37 days untested; and **a
+  self-marked answer is weaker** (#484): on a day with any checked answer the
+  first checked one decides, an unticked card is a full lapse, a tick is half
+  the growth and never past `WEAK_PASS_CAP` (6 days). Which games are
+  self-marked is read from `Activity.self_marked`, nowhere else.
+  `pos` is `NOT NULL DEFAULT ''` here though nullable in the log (a primary key
+  holds no NULL), `ease` is permille (Anki's `factor`), `due_on` is a `DATE`.
+  Words are grouped by `casefold()` because the key's collation is
+  case-insensitive — grouping `Tip` and `tip` apart would compute two schedules
+  and let the second upsert overwrite the first. **Change a rule in `recall.py`,
+  then run the rebuild**: that is the whole migration story for this table.
+  Nothing on a page reads it yet; #480 (the draw) and #92 (*Review (N due)*) do.
 - **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
   a lexicon confirmed. The game invents with a trigram model trained on the
   deck, so it sometimes produces real English and marks the learner wrong for
@@ -786,7 +815,7 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   `reports/scripts/md_to_pdf.py`). Small PRs are exempt unless asked.
 - **The console one-offs live in `scripts/`** (#442) — `apply_schema.py`,
   `seed_topics.py` + `seed_words.py`, `claim_topics.py`, `claim_flashcards.py`,
-  `retopic.py`. They are run, never imported by the app, which is why they can
+  `retopic.py`, `rebuild_schedule.py` (#479). They are run, never imported by the app, which is why they can
   sit in a directory of their own while the app's modules stay flat in the root
   (see #442 for why *those* have not moved: seven `Path(__file__)` sites that
   would fail **silently** one level down).
@@ -1052,6 +1081,21 @@ from the first graded round a signed-in learner finishes after the reload;
 **until the step has run, those rounds still work** and each one logs a
 "Could not record … for recall" error, which is the thing to look for if the
 table stays empty.
+
+**#479 needs three steps, in this order**: `pip install -r requirements.txt`
+(it adds `tzdata`), `apply_schema.py` (the dry run should show
+`~ recall_schedule` and `=` against everything else — a new table, no
+migration), then **`scripts/rebuild_schedule.py`**, `--dry-run` first. The
+rebuild is not optional on the day: the live refresh only reaches words answered
+*after* the reload, so every answer recorded since #338 shipped has no schedule
+row until it runs. Expect one `~` line per learner with answers, all `new`; a
+second run says `nothing to do`. It is also the step to run after **any** change
+to the rules in `recall.py`.
+
+```bash
+venv/bin/python scripts/rebuild_schedule.py --dry-run
+venv/bin/python scripts/rebuild_schedule.py
+```
 
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
 a brand-new table, so the `schema.sql` pass creates it on an existing database

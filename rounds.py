@@ -512,6 +512,14 @@ def _record_recall(activity, graded):
     could not be written would be the feature hurting the thing it exists to
     serve. It is logged, so a table that has quietly stopped filling is
     noticed -- `confirmed_words` sat empty for a week because nobody looked.
+
+    **Then the schedule catches up** (#479): the words this round answered are
+    replayed from the log into `recall_schedule`. A separate step with its own
+    `try`, because the two failures mean different things -- a lost log row is
+    lost history, while a stale schedule row is only a cache that
+    `scripts/rebuild_schedule.py` rebuilds from the log. So the log is written
+    first and committed on its own, and a schedule that fails to refresh never
+    takes the log row with it.
     """
     user_id = web._current_user_id()
     if not user_id or not graded:
@@ -521,6 +529,14 @@ def _record_recall(activity, graded):
                              [(card, correct) for card, _given, correct in graded])
     except Exception:
         app.logger.exception("Could not record a %s round for recall (#338)",
+                             activity.slug)
+        return
+    try:
+        utils.refresh_schedule(user_id, [(card["word"], card.get("pos"))
+                                         for card, _given, _correct in graded])
+    except Exception:
+        app.logger.exception("Could not refresh the recall schedule after a %s "
+                             "round (#479); rebuild_schedule.py repairs it",
                              activity.slug)
 
 
