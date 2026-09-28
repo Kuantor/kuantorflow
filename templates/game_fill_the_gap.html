@@ -159,9 +159,9 @@
 
             // Posted to this round's own URL, whose query string carries the
             // topics the server reads the ids back against. `keepalive` so a
-            // learner who presses Finish and immediately leaves still sends
-            // it. Not awaited: the score below is counted here, as it always
-            // was, and a lost post costs a history row and nothing on screen.
+            // learner who presses Finish and immediately leaves via Home still
+            // sends it. Returns a promise that settles when the post does --
+            // and never rejects -- because Play again waits on it (#337).
             function send() {
                 var form = new FormData();
                 boxes.forEach(function (box) {
@@ -172,16 +172,51 @@
                                     box.checked ? "{{ gap_remembered }}" : "");
                     }
                 });
-                if (!Array.from(form.keys()).length) return;
+                if (!Array.from(form.keys()).length) return Promise.resolve();
                 try {
-                    fetch(window.location.href, { method: "POST", body: form,
-                                                  keepalive: true,
-                                                  credentials: "same-origin" });
-                } catch (e) {}
+                    return fetch(window.location.href, {
+                        method: "POST", body: form, keepalive: true,
+                        credentials: "same-origin"
+                    }).catch(function () {});
+                } catch (e) {
+                    return Promise.resolve();
+                }
+            }
+
+            // #337. The next round is dealt from what that post stores -- the
+            // words not remembered -- so Play again must not outrun it. It
+            // waits for the post, but never longer than this: a slow or failed
+            // post costs the repeats, which is how the game worked before, and
+            // must never leave the learner stuck on the results page.
+            var REPLAY_WAIT_MS = 1500;
+
+            function waitThenGo(link, saved) {
+                var settled = false;
+                saved.then(function () { settled = true; });
+                link.addEventListener("click", function (e) {
+                    // A new tab (ctrl/cmd/shift/middle click) leaves this page
+                    // open, so the post finishes anyway; only a plain click
+                    // navigates away and needs to wait.
+                    if (e.button !== 0 || e.ctrlKey || e.metaKey ||
+                        e.shiftKey || e.altKey) return;
+                    e.preventDefault();
+                    if (link.dataset.going) return;
+                    link.dataset.going = "1";
+                    if (!settled) {
+                        link.textContent = "Dealing…";
+                        link.setAttribute("aria-disabled", "true");
+                    }
+                    var timeout = new Promise(function (resolve) {
+                        setTimeout(resolve, REPLAY_WAIT_MS);
+                    });
+                    Promise.race([saved, timeout]).then(function () {
+                        window.location.href = link.href;
+                    });
+                });
             }
 
             finish.addEventListener("click", function () {
-                send();
+                var saved = send();
                 var score = remembered();
                 var panel = document.createElement("div");
                 panel.className = "panel gap-result";
@@ -192,8 +227,9 @@
                 again.className = "crumbs";
                 again.innerHTML =
                     '<a href="{{ url_for("index") }}">&larr; Home</a>' +
-                    '<a href="{{ replay_url(activity, topics, hint=hint) }}">{{ "Back to review" if reviewing else "Play again" }}</a>';
+                    '<a data-replay href="{{ replay_url(activity, topics, hint=hint) }}">{{ "Back to review" if reviewing else "Play again" }}</a>';
                 panel.appendChild(again);
+                waitThenGo(again.querySelector("[data-replay]"), saved);
                 // Replaces the deck rather than sitting under it: the round is
                 // over, and leaving the cards on screen invites carrying on.
                 deck.parentNode.insertBefore(panel, deck);
