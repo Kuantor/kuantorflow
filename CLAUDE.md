@@ -712,6 +712,17 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   twice. `replay_url()` sends a review's *Play again* back to `/review`:
   rebuilding the URL from `topics` would name every visible topic, drop the flag
   and remember the whole deck as the learner's selection (#342).
+  **#337 is the short clock beside it**: *Fill the gap*'s unticked cards come
+  back in the next round. `_fill_the_gap_marked()` stores their `word_key`s in
+  the **session** (`games.MISSED_KEY`, capped at `MISSED_CAP`, *replaced* each
+  finish so a remembered word leaves), for everybody, signed in or not; the
+  deal splits them off with `games.split_carried()` — at most `CARRY_SHARE`
+  (half) of the round — draws the rest through `sample()` as usual, and
+  shuffles the two together. No schema and no conflict with the schedule: repeats
+  in a sitting are never a learner-day's *first* answer, so they move nothing.
+  **The one browser-only part**: *Play again* waits for *Finish*'s POST (at most
+  `REPLAY_WAIT_MS`, 1.5 s) before navigating, because the next deal reads what
+  that POST stored; a plain click is intercepted, a new-tab click is not.
 - **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
   a lexicon confirmed. The game invents with a trigram model trained on the
   deck, so it sometimes produces real English and marks the learner wrong for

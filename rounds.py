@@ -1031,11 +1031,24 @@ def _fill_the_gap_round(activity, topics):
     # cost, and one card per word already fixes the reported repetition, since
     # the two `tip` cards are one word.
     questions = []
+    # The words missed last round come back first (#337), up to CARRY_SHARE of
+    # the round, and the rest is drawn as usual. A carried word that is no
+    # longer usable -- topic deselected, card edited or gone, or not due in a
+    # review -- is simply not in `usable`, so it drops out in silence, and the
+    # round is never shorter for it. Shuffled together afterwards, so the
+    # repeats are not always the first cards.
+    carried, rest = games.split_carried(
+        usable, games.missed_words(session),
+        int(wanted * games.CARRY_SHARE),
+        key=lambda item: recall.word_key(item[0].get("word"),
+                                         item[0].get("pos")))
     # Through `games.sample()` rather than a slice of the shuffled list, so the
     # learner's due words come first here too (#480). With no schedule the
     # weight is None and this is the same uniform draw the slice was.
-    for card, sentence in games.sample(usable, wanted,
-                                       weight=_draw_weight(_first)):
+    dealt = carried + games.sample(rest, wanted - len(carried),
+                                   weight=_draw_weight(_first))
+    random.shuffle(dealt)
+    for card, sentence in dealt:
         word = (card.get("word") or "").strip()
         questions.append({
             # Posted back with the tick (#484), and read back against the
@@ -1091,6 +1104,12 @@ def _fill_the_gap_marked(activity, topics, cards):
         _round_played(activity, topics,
                       [{"correct": correct} for _card, _given, correct in graded],
                       stage="self-marked")
+        # #337: the ones not remembered come back next round. For everybody,
+        # signed in or not -- it is the session, not the log -- and it replaces
+        # last round's list, so a word remembered this time leaves it.
+        games.remember_missed(
+            session, [recall.word_key(card.get("word"), card.get("pos"))
+                      for card, _given, correct in graded if not correct])
     return "", 204
 
 

@@ -117,6 +117,71 @@ def remember_selection(store, names):
     store[SELECTION_KEY] = list(names)
 
 
+# --- the words a learner just missed (#337) --------------------------------
+#
+# *Fill the gap*'s unticked cards come back in the next round: repetition
+# **within one sitting**, the opposite instruction to #479's spacing and not in
+# conflict with it, since the schedule counts only the first answer of a
+# learner-day. So it lives in the session, like the selection above -- no
+# schema, works signed out, gone with the browser.
+MISSED_KEY = "gap_missed"
+# The largest round `gapped_deck_size` allows. The session is a signed cookie
+# Werkzeug drops silently past ~4 KB -- signing the learner out -- so the store
+# carries its own cap rather than trusting that rounds stay small.
+MISSED_CAP = 50
+# How much of a round may be repeats. A judgement about how repetition feels,
+# not a measured number: all of them would have a 1/10 round replay nine of the
+# same ten, which reads as no progress. Worth revisiting after real play.
+CARRY_SHARE = 0.5
+
+
+def remember_missed(store, keys):
+    """Replace the missed words with `keys` -- `(word, pos)` pairs, already
+    keyed the way the schedule keys a word.
+
+    **Replaced, not appended**: a word remembered this round leaves, a word
+    missed again stays. That is the whole decay rule, and it needs no
+    timestamps. Stored as two-item lists because the session is JSON.
+    """
+    unique = []
+    for key in keys:
+        if key not in unique:
+            unique.append(key)
+    store[MISSED_KEY] = [list(key) for key in unique[:MISSED_CAP]]
+
+
+def missed_words(store):
+    """The remembered missed words as a set of `(word, pos)` tuples.
+
+    Anything that is not a pair of strings is ignored rather than trusted:
+    the value came back from a cookie, and a remembered value is a hint.
+    """
+    stored = store.get(MISSED_KEY)
+    if not isinstance(stored, list):
+        return set()
+    return {tuple(item) for item in stored
+            if isinstance(item, list) and len(item) == 2
+            and all(isinstance(part, str) for part in item)}
+
+
+def split_carried(items, missed, limit, key, rng=None):
+    """`(carried, rest)`: the items whose `key(item)` is in `missed`, at most
+    `limit` of them, and everything else.
+
+    When more were missed than the limit allows, which ones come back is
+    random, so a round of repeats is not the same five every time. The ones
+    not chosen go into `rest`, where they are simply drawn like any other
+    word. `key` is how an item names its word -- supplied by the caller,
+    because this module keys nothing itself.
+    """
+    matched = [item for item in items if key(item) in missed]
+    if len(matched) > limit:
+        matched = (rng or random).sample(matched, max(limit, 0))
+    chosen = {id(item) for item in matched}
+    rest = [item for item in items if id(item) not in chosen]
+    return matched, rest
+
+
 # --- how long a round is -------------------------------------------------
 #
 # A quiz over the whole curriculum was 93 typed answers, which is not a round
