@@ -617,6 +617,43 @@ def remember_confirmed_word(word, source):
         conn.close()
 
 
+def record_answers(user_id, game, answers):
+    """Append one graded round to `recall_answers` (#338). Returns rows written.
+
+    `answers` is `[(card, correct), ...]`; the card's `word` and `pos` are
+    copied into the row rather than joined later, because memory attaches to
+    the word and a card can be edited or deleted after it was asked.
+
+    **One statement for the whole round**, so every row gets the same
+    `UTC_TIMESTAMP()` -- MySQL evaluates it once per statement, which is what
+    lets a round be recovered from the log as "one game, one instant" with no
+    table of rounds. A plain INSERT and nothing else: the log is append-only,
+    so there is no read and no race.
+
+    Nothing to write -- no account, or nothing graded -- answers without
+    opening a connection. A failure raises; the caller decides that a lost
+    log row must not cost the learner their results page.
+    """
+    rows = [(user_id, card.get("id"), card["word"], card.get("pos"), game,
+             1 if correct else 0)
+            for card, correct in answers]
+    if not user_id or not rows:
+        return 0
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO recall_answers "
+            "(user_id, card_id, word, pos, game, correct, answered_at) VALUES "
+            + ", ".join(["(%s, %s, %s, %s, %s, %s, UTC_TIMESTAMP())"] * len(rows)),
+            [value for row in rows for value in row])
+        conn.commit()
+        cursor.close()
+        return len(rows)
+    finally:
+        conn.close()
+
+
 def resolve_topic(name, viewer_id=None, admin=False, topic_id=None):
     """The one topic this visitor means by `name` (#382), or None.
 

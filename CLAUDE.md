@@ -399,7 +399,8 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   `rounds._vetted_pseudowords()`: that module holds pure round logic with no
   request and no database in it. The six rounds that call it are exactly the
   six that grade an answer against a card row, so #338's per-learner recall is
-  one write there rather than one per round — and the two that must never
+  one write there rather than one per round (it is, since phase 1 — see
+  `recall_answers` below) — and the two that must never
   record anything, *Odd one out* and *Real or fake*, are the two that **cannot**
   call it, since neither posts a card id. A new graded game inherits both by
   grading through it. Selection
@@ -617,6 +618,33 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   A refusal carries `sign_in_required: False` — they already signed in, so
   there is nothing to offer and the answer is tomorrow. The recap's refusal is
   `{"recap": None}`, like every other thing that can go wrong there.
+- **`recall_answers`** (#338, phase 1) — every answer a signed-in learner gave
+  in a graded round, **appended and never updated**. It is a log rather than a
+  state table because every mature spaced-repetition system keeps one — Anki's
+  `revlog`, FSRS's `ReviewLog` — and derives the schedule from it: #479's
+  `recall_schedule` is a cache of this table, rebuildable from it, so changing
+  the algorithm later loses nobody's progress. Being append-only it has no race
+  to design around, which is why it needs none of `_claim()`'s single-statement
+  care.
+  **Memory attaches to the word and part of speech**, not the card (the
+  18 September decision on #338 was reversed on the 27th, after looking at
+  Duolingo, which like us has one shared vocabulary for many learners). So
+  `word`/`pos` are **copied** at answer time: an edited card keeps the history
+  of what was asked, duplicate cards are one word, and `fk_recall_answers_card`
+  is SET NULL so a deleted card keeps its history. `fk_recall_answers_user` is
+  **CASCADE** — the first in this schema — because this is a derived fact about
+  one person and the user guide promises deleting the account erases it.
+  **The write is in `rounds._graded_answers()`**, which is why it now takes the
+  `activity`: the six rounds that grade against a card reach it and nothing else
+  can — *Odd one out* posts indexes, *Real or fake* has no rows, *Fill the gap*
+  is self-marked. `_record_recall()` writes only for a signed-in learner, records
+  a blocked one too (private data, not shared content), and **swallows a
+  failure** after logging it, because a history table must never cost a learner
+  their results page. One `INSERT` per round, so every row shares one
+  `UTC_TIMESTAMP()` — that shared instant plus `game` is what a round *is* in
+  the log, and why there is no table of rounds. The guide's *What the site
+  remembers about your answers* is the disclosure, and it shipped with the table.
+  Nothing reads the table yet; #479, #480 and #92 are the readers, in that order.
 - **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
   a lexicon confirmed. The game invents with a trigram model trained on the
   deck, so it sometimes produces real English and marks the learner wrong for
@@ -1009,6 +1037,15 @@ the tables stay in `schema.sql` until a later change drops them. **The one
 visible effect is on the day**: spend already counted resets to zero, because
 the new table starts empty, so every ceiling is a little looser for the rest of
 that day.
+
+**#338 (phase 1) needs `apply_schema.py`, and it is one step**:
+`recall_answers` is a brand-new table, so the `schema.sql` pass creates it on
+an existing database and no migration is needed. The dry run should show
+`~ recall_answers` and `=` against everything else. It starts empty and fills
+from the first graded round a signed-in learner finishes after the reload;
+**until the step has run, those rounds still work** and each one logs a
+"Could not record … for recall" error, which is the thing to look for if the
+table stays empty.
 
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
 a brand-new table, so the `schema.sql` pass creates it on an existing database
