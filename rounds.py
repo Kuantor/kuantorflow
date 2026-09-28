@@ -1005,6 +1005,17 @@ def _fill_the_gap_round(activity, topics):
     hint = _round_hint(activity)
 
     random.shuffle(cards)
+    # A missed word must survive the one-card-per-word pass (#337). That pass
+    # keys on the spelling alone, while the missed list keys on word *and*
+    # part of speech: with `lease` the noun and `lease` the verb both in the
+    # deck, a learner who missed the verb could be dealt the noun instead, and
+    # the repeat silently lost -- found by playing it, not by the suite. So
+    # the missed cards go first (the sort is stable, keeping the shuffle within
+    # each group), and `one_per_word()` keeps the first of each word.
+    missed = games.missed_words(session)
+    if missed:
+        cards.sort(key=lambda card: recall.word_key(
+            card.get("word"), card.get("pos")) not in missed)
     cards = games.one_per_word(cards)
 
     # The rule returns the gapped sentence, not a yes: finding an example that
@@ -1038,7 +1049,7 @@ def _fill_the_gap_round(activity, topics):
     # round is never shorter for it. Shuffled together afterwards, so the
     # repeats are not always the first cards.
     carried, rest = games.split_carried(
-        usable, games.missed_words(session),
+        usable, missed,
         int(wanted * games.CARRY_SHARE),
         key=lambda item: recall.word_key(item[0].get("word"),
                                          item[0].get("pos")))
