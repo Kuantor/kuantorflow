@@ -1144,7 +1144,11 @@ def _listen_and_type_round(activity, topics):
     # the stated reason -- and a duplicate is perfectly usable, it has just
     # already been asked. Adding it would make the sentence say 153 cards have
     # no headword a voice can read, which is false and alarming.
-    unique = [{"id": card["id"], "word": card["word"].strip()}
+    # `pos` rides along though the page never shows it: the draw's weight
+    # finds a word's schedule by word *and* part of speech (#480), and without
+    # it every scheduled verb here looked never answered.
+    unique = [{"id": card["id"], "word": card["word"].strip(),
+               "pos": card.get("pos")}
               for card in games.one_per_word(card for card, _ in usable)]
 
     return render_template(
