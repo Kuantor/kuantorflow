@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Review | KuantorFlow{% endblock %}
+
+{#
+   *Review (N due)* (#92): the words due today, and a game to play them in.
+
+   There is no review screen of its own on purpose. #338 settled that the
+   schedule runs on answers the site checks, so a review is an ordinary round of
+   an ordinary game, dealt only from the due words (`rounds._round_cards()`). The
+   round grades as usual and its answers move each word to its next date --
+   nothing on this page writes anything.
+
+   The list is counted against the learner's **visible deck**, not the schedule:
+   a due word whose card was deleted, or whose topic has gone private, cannot be
+   dealt, so it is not promised here.
+#}
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+    </p>
+    <h1 class="page-title">Review</h1>
+
+    {% if not signed_in %}
+    <div class="panel">
+        <p>Reviewing needs an account: the site works out which of your words
+           are due from the answers you gave while signed in.</p>
+        <p class="hint">Sign in from the header, play a few games, and the
+           words you answered come back here on the day they are due.</p>
+    </div>
+    {% elif due %}
+    <div class="panel">
+        <p><strong>{{ due|length }} word{{ '' if due|length == 1 else 's' }}</strong>
+           {{ 'is' if due|length == 1 else 'are' }} due today. Pick a game to
+           review {{ 'it' if due|length == 1 else 'them' }} in &mdash; the round
+           is dealt only from these, the ones waiting longest first.</p>
+        <div class="topic-tiles review-games">
+            {% for activity in review_games %}
+                {% set icon = activity.slug | game_icon %}
+                <a class="topic-tile{{ ' topic-tile--image' if icon else '' }}"
+                   href="{{ review_url(activity.slug) }}">
+                    {% if icon %}
+                        <img class="topic-tile-img" src="{{ icon }}" alt=""
+                             loading="lazy" decoding="async">
+                    {% endif %}
+                    <span class="topic-tile-name">{{ activity.name }}</span>
+                    <span class="topic-tile-count">{{ activity.tagline }}</span>
+                </a>
+            {% endfor %}
+        </div>
+        <p class="hint">A game can only use a word it has what it needs for
+           &mdash; <em>Spell it</em> needs an English explanation,
+           <em>Rebuild the sentence</em> an example &mdash; so a round may be
+           shorter than the list below. It says so when that happens.</p>
+    </div>
+
+    <div class="panel">
+        <h2>Due today</h2>
+        <ul class="review-list">
+            {% for word, pos, due_on in due %}
+                {% set late = (today - due_on).days %}
+                <li><span class="review-word">{{ word }}</span>
+                    {% if pos %}<span class="pos">{{ pos }}</span>{% endif %}
+                    <span class="hint">{% if late == 0 %}due today{% elif late == 1 %}1 day overdue{% else %}{{ late }} days overdue{% endif %}</span></li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% else %}
+    <div class="panel">
+        <p><strong>Nothing is due today.</strong>
+        {% if upcoming %}The next word comes due on
+           {{ upcoming.day }} {{ upcoming.strftime('%B') }}.
+        {% else %}Play a few games while signed in and the words you answer
+           will come back here on the day they are due.{% endif %}</p>
+        <p><a href="{{ url_for('index') }}">Back to the games</a></p>
+    </div>
+    {% endif %}
+{% endblock %}
+

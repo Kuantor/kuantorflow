@@ -143,6 +143,29 @@ def draw_weight(due_by_word, on_day):
     return weight
 
 
+def is_due(due_on, on_day):
+    """Whether a word scheduled for `due_on` is due on `on_day`."""
+    return due_on is not None and due_on <= on_day
+
+
+def review_weight(due_by_word, on_day):
+    """A `weight(card)` for a review round (#92): **most overdue first**.
+
+    Every card in a review is due, so plain `draw_weight()` would weigh them
+    all 1 and deal at random. Here a word counts one more for every day it has
+    waited past its date, so when more are due than a round holds, the ones
+    left longest come first -- a word three weeks overdue is closer to being
+    forgotten than one due this morning. A likelier draw, not a strict order,
+    so a round is not the same ten words every time the learner falls behind.
+    """
+    def weight(card):
+        due = due_by_word.get(word_key(card.get("word"), card.get("pos")))
+        if not is_due(due, on_day):
+            return NOT_DUE_WEIGHT
+        return DUE_WEIGHT + (on_day - due).days
+    return weight
+
+
 @dataclass(frozen=True)
 class Answer:
     """One row of the log, as far as the schedule cares."""

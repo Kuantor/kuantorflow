@@ -2735,3 +2735,16 @@ button:disabled:hover { background: #9db4c7; }
 }
 .help-guide th { background: #f3f7fa; }
 .help-guide code { font-size: 0.9em; }
+
+/* Review (N due) (#92): the due words, one per line, with how long each has
+   waited. A plain list rather than tiles -- it is read, not clicked. */
+.review-list { list-style: none; margin: 0; padding: 0; columns: 2 14rem; column-gap: 1.5rem; }
+.review-list li { break-inside: avoid; padding: 0.2rem 0; }
+.review-word { font-weight: 600; margin-right: 0.3rem; }
+.review-games { margin: 0.8rem 0; }
+.review-badge {
+    display: inline-block; margin: 0 0 0.8rem; padding: 0.45rem 0.9rem;
+    border-radius: 999px; background: var(--yellow); color: var(--ink);
+    font-weight: 700; text-decoration: none;
+}
+.review-badge:hover, .review-badge:focus-visible { filter: brightness(0.95); text-decoration: underline; }

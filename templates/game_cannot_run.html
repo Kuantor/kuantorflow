@@ -16,19 +16,33 @@
    round, so by the time this renders it is what the picker will read back.
 #}
 {% block content %}
+    {# In a review (#92) the selection is "what is due", not topics, so the way
+       out is the review page and another game rather than the picker. #}
     <p class="crumbs">
         <a href="{{ url_for('index') }}">&larr; Home</a>
+        {% if reviewing %}
+        <a href="{{ url_for('review_page') }}">Back to review</a>
+        {% else %}
         <a href="{{ url_for('game_picker', game=activity.slug) }}">Choose topics</a>
+        {% endif %}
     </p>
     <h1 class="page-title">{{ activity.name }}</h1>
 
     <div class="panel">
+        {% if reviewing %}
+        <p>None of the words due today can be played in {{ activity.name }}.</p>
+        {% else %}
         <p>{{ heading }}</p>
+        {% endif %}
         {% if explanation %}<p class="hint">{{ explanation }}</p>{% endif %}
         {% if settings.individual_cards %}
             <p class="hint"><em>Use only individual cards</em> is on, so anyone
                else&rsquo;s are hidden.</p>
         {% endif %}
+        {% if reviewing %}
+        <p><a href="{{ url_for('review_page') }}">Try another game</a></p>
+        {% else %}
         <p><a href="{{ url_for('game_picker', game=activity.slug) }}">Choose different topics</a></p>
+        {% endif %}
     </div>
 {% endblock %}

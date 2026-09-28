@@ -693,7 +693,25 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   builds questions from four words across two topics with its own generator,
   and *Real or fake* draws bare words with no `pos` to key on. The card and the
   schedule meet through `recall.word_key()`, the one definition of how a word is
-  keyed. #92 (*Review (N due)*) is the next reader.
+  keyed.
+  **#92 is the second reader: *Review (N due)*.** A review is **an ordinary
+  round of an ordinary game**, dealt only from the words due today — there is no
+  review screen, because a self-rated one would produce exactly the evidence the
+  schedule refuses. `?review=1` marks it and travels in the URL, which is what
+  gets it through the grading POST: game forms post to their own URL, *Fill the
+  gap* to `window.location.href`, the quiz through a `self_url` carrying it.
+  `rounds._round_cards()` is the one deck read of the seven one-card rounds and
+  filters to due words in a review, on the GET **and** the POST (a word is still
+  due while it is graded: the refresh runs after). The draw uses
+  `recall.review_weight()` — one more per day overdue, so the longest-waiting
+  come first — and nothing here writes: the answers move the dates as any round's
+  do. `_due_for_review()` counts against the **visible deck**, not the schedule,
+  so a due word with no card left is never promised; it is a context-processor
+  *callable* so only the front page, which calls it, pays for the read.
+  `_schedule()` caches `due_dates()` in `g`, since one review request reads it
+  twice. `replay_url()` sends a review's *Play again* back to `/review`:
+  rebuilding the URL from `topics` would name every visible topic, drop the flag
+  and remember the whole deck as the learner's selection (#342).
 - **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
   a lexicon confirmed. The game invents with a trigram model trained on the
   deck, so it sometimes produces real English and marks the learner wrong for
