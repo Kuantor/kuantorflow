@@ -435,38 +435,6 @@ def _said_farewell_today() -> bool:
         return False
 
 
-# One logged exchange starts with its "[YYYY-MM-DD HH:MM:SS]" stamp.
-EXCHANGE_RE = re.compile(r"^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]$", re.M)
-
-
-def _split_exchanges(text: str) -> list[str]:
-    """One chat-log file's text split into its individual exchanges."""
-    stamps = list(EXCHANGE_RE.finditer(text))
-    return [text[m.start():(stamps[i + 1].start() if i + 1 < len(stamps) else len(text))].strip()
-            for i, m in enumerate(stamps)]
-
-
-def _last_exchanges(count: int = 3) -> str:
-    """The signed-in user's last `count` exchanges with Mykola, oldest first.
-
-    The welcome-back recap (ai_agent#30) reviews whole log *files*; a restart
-    after a break reviews the last few *messages* (ai_agent#54), so it stays
-    focused on where the conversation actually stopped. '' when there is no
-    history (including every anonymous visitor, who has no per-user logs).
-    """
-    collected: list[str] = []
-    for path in _user_log_files():             # newest file first
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        # take this file's newest exchanges first, then walk further back
-        collected = _split_exchanges(text)[-(count - len(collected)):] + collected
-        if len(collected) >= count:
-            break
-    return "\n\n".join(collected[-count:])
-
-
 def _last_chat_activity() -> datetime | None:
     """When the signed-in user last exchanged a message with Mykola, from the
     newest log file's timestamp. None for anonymous visitors and newcomers."""
@@ -882,14 +850,41 @@ def mykola_chat_stream():
     )
 
 
+# What Mykola says when a recap was asked for and there is none to give (#495).
+# Fixed sentences, so answering costs nothing. Before #495 every one of these
+# was silence, which was right while the recap fired by itself -- nobody had
+# asked -- and wrong once a learner has pressed a button and is waiting.
+RECAP_NOTHING_YET = ("I don't have an earlier conversation with you to look "
+                     "back on yet. Once we've talked, I can remind you where "
+                     "we left off.")
+RECAP_LIMIT_REACHED = ("That's all the recaps for today — ask me again "
+                       "tomorrow. Everything we talked about is still here.")
+RECAP_FAILED = ("I couldn't look back over our chats just now. Please try "
+                "again in a moment.")
+
+
 @app.route("/mykola/recap", methods=["POST"])
 def mykola_recap():
-    """Welcome-back recap of the signed-in user's previous conversations
-    (issue ai_agent#30). The recap is an optional nicety: anonymous visitors,
-    empty histories, older agent versions, and errors all return
-    {"recap": null} so the widget silently keeps its normal greeting."""
+    """Mykola's recap of the signed-in learner's previous conversations
+    (ai_agent#30) -- **only when the learner asks for it** (#495).
+
+    Two callers, told apart by `requested` in the JSON body:
+
+    * **The *Recap our last chats* button** sends `requested: true` and gets
+      the recap: a call to the agent's model, which is `claude-opus-5` and the
+      most expensive thing this app does (#456). It claims the recap ceiling,
+      and when there is nothing to give it answers `notice` -- a fixed
+      sentence the widget shows -- rather than silence, because somebody is
+      waiting on a button they pressed.
+    * **Opening the chat** sends nothing and gets **only the farewell**
+      (ai_agent#39), which is deterministic and free, or `{"recap": null}`.
+      It never reaches the model. Until #495 opening the chat *was* the
+      recap, so a learner paid for one on every visit whether they wanted it
+      or not.
+    """
     if not MYKOLA_AVAILABLE or not session.get("user") or web.is_blocked():
         return jsonify({"recap": None})
+    requested = bool((request.get_json(silent=True) or {}).get("requested"))
     # The learner already said goodbye today: wish them a good rest instead
     # of restarting the dialogue (ai_agent#39). Deterministic — no model call.
     if _said_farewell_today():
@@ -897,32 +892,36 @@ def mykola_recap():
         return jsonify({
             "recap": f"{name}, please have a rest, and return tomorrow! Goodnight!"
         })
+    if not requested:
+        return jsonify({"recap": None})
 
     # The account's day (#447), and **after** the farewell check above, which
     # is deterministic and costs nothing: claiming before it would spend a slot
     # on a message the model never writes. Every guard here sits after the free
     # refusals and immediately before the call it pays for.
     #
-    # A refusal is `{"recap": None}`, which is what every other thing that can
-    # go wrong here answers — the recap is an optional nicety, so the widget
-    # keeps its normal greeting rather than showing an error.
+    # Nothing to recap is asked **before** the ceiling, so a learner with no
+    # history is told so without spending one of the day's five on it -- the
+    # same rule as the farewell: free answers first, the claim immediately
+    # before the call it pays for.
+    agent = get_mykola()
+    if not hasattr(agent, "recap"):  # older ai_agent checkout
+        return jsonify({"recap": None, "notice": RECAP_FAILED})
+    logs = _read_user_logs()
+    if not logs:
+        return jsonify({"recap": None, "notice": RECAP_NOTHING_YET})
+
     if web.account_refusal(utils.RECAP, utils.RECAP_ALL,
                            web.RECAP_USER_DAILY, web.RECAP_ALL_DAILY,
                            web.RECAP_USER_LIMIT_PROMPT):
-        return jsonify({"recap": None})
-
-    agent = get_mykola()
-    if not hasattr(agent, "recap"):  # older ai_agent checkout
-        return jsonify({"recap": None})
-    logs = _read_user_logs()
-    if not logs:
-        return jsonify({"recap": None})
+        return jsonify({"recap": None, "notice": RECAP_LIMIT_REACHED})
     try:
         text = agent.recap(logs, **_agent_kwargs(agent.recap))
-        return jsonify({"recap": text or None})
+        return jsonify({"recap": text or None,
+                        "notice": None if text else RECAP_FAILED})
     except Exception:
         app.logger.exception("Mykola recap failed")
-        return jsonify({"recap": None})
+        return jsonify({"recap": None, "notice": RECAP_FAILED})
 
 
 @app.route("/mykola/restart-check", methods=["POST"])
@@ -931,8 +930,16 @@ def mykola_restart_check():
 
     The widget asks on load, sending the moment of its own last message. A
     break longer than the user's `restart_chat_interval` (hours; 0 = never)
-    starts a fresh chat: Mykola reviews the last three exchanges, a new
-    chat-log file is opened, and the widget is handed its id and his recap.
+    starts a fresh chat: a new chat-log file is opened and the widget is
+    handed its id.
+
+    **No recap** (#495). This used to open the fresh chat with Mykola's review
+    of the last three exchanges -- a model call on every return after the
+    interval (two hours by default), and the one paid path in the app that
+    claimed no ceiling. The restart itself is free and still useful, so it
+    stays; the recap is the learner's to ask for, with the button.
+    `"recap": null` is still sent, so a widget from before this change keeps
+    working.
 
     Like the recap endpoint, this is an optional nicety — every failure path
     answers {"restart": false} so the chat simply carries on.
@@ -956,28 +963,7 @@ def mykola_restart_check():
     if away_hours < hours:
         return jsonify({"restart": False, "away_hours": round(away_hours, 2)})
 
-    recap = _restart_recap(away_hours)
     chat_id = _new_chat_id()
-    _start_chat_log(chat_id, away_hours, recap)
+    _start_chat_log(chat_id, away_hours, None)
     return jsonify({"restart": True, "away_hours": round(away_hours, 2),
-                    "chat_id": chat_id, "recap": recap})
-
-
-def _restart_recap(away_hours: float) -> str | None:
-    """Mykola's review of the last three exchanges, opening the restarted
-    chat. None whenever it can't be produced — anonymous visitors (no logs),
-    an older agent without recap(), or an API failure — in which case the
-    fresh chat simply starts from his usual greeting."""
-    agent = get_mykola()
-    if not hasattr(agent, "recap"):
-        return None
-    exchanges = _last_exchanges(3)
-    if not exchanges:
-        return None
-    try:
-        text = agent.recap(exchanges,
-                           **_agent_kwargs(agent.recap, away_hours=away_hours))
-        return text or None
-    except Exception:
-        app.logger.exception("Mykola restart recap failed")
-        return None
+                    "chat_id": chat_id, "recap": None})

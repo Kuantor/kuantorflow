@@ -1758,6 +1758,28 @@ button:disabled:hover { background: #9db4c7; }
 }
 #mykola-form button:hover { background: var(--blue-dark); }
 #mykola-form button:disabled { opacity: 0.6; cursor: default; }
+/* #495: the recap, on request. A quiet outlined pill above the input --
+   secondary to Send, and small enough not to crowd a phone-sized panel. */
+.mykola-tools {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-start;
+    padding: 0.35rem 0.6rem 0;
+    border-top: 1px solid #e4e9ee;
+}
+.mykola-recap {
+    margin: 0;
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--blue);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--blue-dark);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.mykola-recap:hover, .mykola-recap:focus-visible { background: rgba(0, 0, 0, 0.04); }
+.mykola-recap:disabled { opacity: 0.55; cursor: default; }
 
 /* The panel/launcher use display:flex, which overrides the UA [hidden] rule,
    so hiding needs to be explicit (same pattern as .modal-overlay above).
