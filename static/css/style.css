@@ -43,7 +43,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.9rem 1.4rem;
+    /* Half the old 0.9rem: the links' own 44px boxes now make the height. */
+    padding: 0.45rem 1.4rem;
     background: rgba(20, 40, 60, 0.55);
     backdrop-filter: blur(6px);
 }
@@ -55,13 +56,29 @@ body {
     letter-spacing: 0.02em;
 }
 .brand span { color: var(--yellow); }
+/* The four links are boxes you can hit (#502, item 2): each was a 21px line of
+   text spaced by a margin, and guidance for a finger is 44px. The height comes
+   from the box, not the font, so the header reads the same; the gaps between
+   the words are now the boxes' padding, which is also part of each target. */
+.site-header nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0 0.25rem;
+    margin-right: -0.6rem;          /* the last word stays where it was */
+}
 .site-header nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;            /* 44px */
+    padding: 0 0.6rem;
+    border-radius: 8px;
     color: #e8eef4;
     text-decoration: none;
-    margin-left: 1.2rem;
     font-size: 0.95rem;
 }
-.site-header nav a:hover { color: var(--yellow); }
+.site-header nav a:hover { color: var(--yellow); background: rgba(255, 255, 255, 0.08); }
+.site-header nav a:focus-visible { outline: 2px solid var(--yellow); outline-offset: -2px; }
 
 /* Layout */
 .page {
