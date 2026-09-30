@@ -21,6 +21,7 @@ import io
 import json
 import re
 import time
+from urllib.parse import quote
 
 from flask import (
     Response,
@@ -791,12 +792,24 @@ def word_list_csv(topic):
     applog.word_list_exported(found["name"], len(cards), "csv",
                               user=web._current_email())
     response = Response("﻿" + out.getvalue(),
-                        mimetype="text/csv; charset=utf-8")
-    # Werkzeug writes `filename*=UTF-8''...` for a name that is not ASCII, so
-    # a Cyrillic topic name survives the download.
-    response.headers.set("Content-Disposition", "attachment",
-                         filename=_word_list_filename(found["name"], "csv"))
+                        mimetype="text/csv")   # Flask adds the charset
+    response.headers["Content-Disposition"] = _attachment(
+        _word_list_filename(found["name"], "csv"))
     return response
+
+
+def _attachment(filename):
+    """A `Content-Disposition` that carries any topic name.
+
+    Written out because Werkzeug's `filename=` keyword puts a non-ASCII name
+    into the header raw -- measured, not assumed: a topic called `Житло`
+    produced a header no server can send. So: an ASCII `filename` for old
+    clients, and RFC 5987's `filename*` with the real name, which every
+    current browser prefers.
+    """
+    fallback = re.sub(r"\s+", " ", filename.encode("ascii", "ignore").decode()).strip()
+    return (f'attachment; filename="{fallback}"; '
+            f"filename*=UTF-8''{quote(filename)}")
 
 
 # A tiny sample deck so the card-deck activity (#78) can be opened and its
