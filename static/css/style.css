@@ -2261,25 +2261,55 @@ button:disabled:hover { background: #9db4c7; }
 .verdict {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem 1.4rem;
-    margin: 0.5rem 0 0;
+    gap: 0.5rem 0.6rem;
+    margin: 0.6rem 0 0;
 }
+/* Each answer is a whole row you can hit (#502, item 1). It was a bare 17px
+   radio in a 21px-tall line, and guidance for a finger is 44-48px (Apple,
+   Google; WCAG 2.2's floor is 24px). The label already wraps its input, so
+   the whole box selects the answer with no script. */
 .verdict label {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.6rem;
+    flex: 1 1 7rem;                 /* Real | Invented fit side by side on a phone */
+    min-height: 2.75rem;            /* 44px */
     margin: 0;
-    font-size: 0.95rem;
+    padding: 0.5rem 0.85rem;
+    border: 1.5px solid #c5d0da;
+    border-radius: 10px;
+    background: #fff;
+    font-size: 1rem;
     color: var(--ink);
     cursor: pointer;
+    transition: border-color 0.12s, background-color 0.12s;
 }
-.verdict input { width: 1.05rem; height: 1.05rem; }
+.verdict label:hover { border-color: var(--blue); background: #f2f7fb; }
+/* The chosen answer is visible from across the room, not only as a dot. A
+   browser without :has() still shows the checked radio. */
+.verdict label:has(input:checked) {
+    border-color: var(--blue);
+    background: #e3eef8;
+    font-weight: 600;
+}
+.verdict label:has(input:focus-visible) {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+.verdict input {
+    flex: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0;
+    accent-color: var(--blue);
+}
 /* #130's four answers, stacked rather than in a row. A modifier on `.verdict`
-   and not a class of its own: the label mechanics — the flex row, the gap, the
+   and not a class of its own: the label mechanics — the row, the border, the
    hit area around the radio — are identical, and the only difference is that
    four English words do not fit across a phone the way "Real / Invented"
    does. Two blocks would drift the first time one of them is tuned. */
-.verdict--stacked { flex-direction: column; gap: 0.45rem; }
+.verdict--stacked { flex-direction: column; gap: 0.5rem; }
+.verdict--stacked label { flex: none; }
 
 /* Activities with no round yet (#261). Greyed rather than removed: the tile
    staying on the page is what makes the set of activities legible — a learner
