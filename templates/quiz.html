@@ -63,7 +63,7 @@
 
     {% elif results is none %}
         <div class="panel panel--tight">
-            <p>Type the {{ lang_name }} translation for each English word ({{ cards|length }} question{{ '' if cards|length == 1 else 's' }}):
+            <p>Type the {{ lang_name }} translation for each English word ({{ cards|length }} question{{ '' if cards|length == 1 else 's' }}).
             {# Why the round is shorter than the picker's card count implied.
                The picker counts cards; a card with no translation in this
                language cannot be asked, and without this the difference looks
