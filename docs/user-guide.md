@@ -301,7 +301,7 @@ If he tells you he has answered a lot of questions today and asks you to try aga
 
 ### Recaps
 
-When you are signed in, Mykola can look back over your last few conversations and remind you where you left off. Press **Recap our last chats**, just above the message box, whenever you want one. He does not do it by himself: a recap is written by the same paid AI as his answers, so it happens only when you ask.
+When you are signed in, Mykola can look back over your last few conversations and remind you where you left off. Press **Recap our last chats**, just above the message box, whenever you want one. He does not do it by himself: a recap is written by the same paid AI as his answers, so it happens only when you ask. The button goes away once you have pressed it, since one recap per conversation is enough, and comes back when you start a new chat.
 
 If you have been away for a few hours, he starts a fresh conversation, so a new day does not open in the middle of an old one. How long that silence has to be is yours to set. The fresh conversation begins with his ordinary greeting, and the recap button is there if you want to pick up the thread.
 

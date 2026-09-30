@@ -1767,6 +1767,8 @@ button:disabled:hover { background: #9db4c7; }
     padding: 0.35rem 0.6rem 0;
     border-top: 1px solid #e4e9ee;
 }
+/* display:flex overrides the UA [hidden] rule; the row goes once pressed. */
+.mykola-tools[hidden] { display: none; }
 .mykola-recap {
     margin: 0;
     padding: 0.25rem 0.75rem;

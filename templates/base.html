@@ -1098,6 +1098,16 @@
             // turn: `history` is assigned from the server's reply, so an
             // interrupted question was never in it.
             var pending = null;
+            // Whether this conversation has had its recap asked for (#495).
+            // The button goes once pressed -- one recap per conversation --
+            // and comes back with the next one (New chat, or a restart after
+            // a break). Saved with the thread so a page change does not bring
+            // it back.
+            var recapAsked = false;
+            function syncRecapButton() {
+                var tools = document.querySelector(".mykola-tools");
+                if (tools) tools.hidden = recapAsked;
+            }
 
             function hasStorage() {
                 try {
@@ -1177,6 +1187,7 @@
                     // so this is what the *next* page needs in order to know
                     // that something is owed.
                     pending: pending,
+                    recapAsked: recapAsked,
                 };
                 try {
                     localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(data));
@@ -1409,6 +1420,9 @@
             function requestRecap() {
                 if (recapButton.disabled) return;
                 recapButton.disabled = true;
+                recapAsked = true;
+                syncRecapButton();
+                saveWidgetState();
                 var typing = addMessage("mykola typing", "Mykola is recalling your previous conversations…");
                 fetch("{{ url_for('mykola_recap') }}", {
                     method: "POST",
@@ -1430,6 +1444,11 @@
                   .catch(function () {
                       typing.remove();
                       addMessage("mykola", "I couldn't look back over our chats just now. Please try again in a moment.");
+                      // The request never got an answer, so the offer
+                      // stands: the button comes back for the retry.
+                      recapAsked = false;
+                      syncRecapButton();
+                      saveWidgetState();
                   })
                   .then(function () { recapButton.disabled = false; });
             }
@@ -1489,6 +1508,9 @@
                     addMessage("mykola", recap);
                     history.push({ role: "assistant", content: recap });
                 }
+                // A new conversation may have its own recap (#495).
+                recapAsked = false;
+                syncRecapButton();
                 // The break has been accounted for: start the clock again so a
                 // second page load doesn't restart the same conversation twice.
                 lastMessageAt = Date.now();
@@ -1733,6 +1755,8 @@
                     messages.scrollTop = state.scrollTop;
                 }
                 lastMessageAt = state.lastMessageAt || null;
+                recapAsked = !!state.recapAsked;
+                syncRecapButton();
 
                 // A question asked on the page we just left, whose answer died
                 // with it (#304). Picked up here, before anything else looks at
