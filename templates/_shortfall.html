@@ -13,7 +13,7 @@
    nothing was dropped, so a caller can include it unconditionally.
 #}
 {% if dropped %}
-    <span class="hint">{{ dropped }}
+    <span class="hint shortfall">{{ dropped }}
         {{- ' card' if dropped == 1 else ' cards' }} here
         {{ 'is' if dropped == 1 else 'are' }} not usable for this game{% if activity.needs %},
         which needs {{ activity.needs }}{% endif %}, so
