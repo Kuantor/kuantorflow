@@ -88,6 +88,15 @@
         </p>
         {% endif %}
     </div>
+    {# #496: the topic's words, taken away -- a printable handout, or a file to
+       keep. Both read exactly what this page shows. `t` travels with them so
+       a name shared by a public and a private topic stays the one open here. #}
+    {% if cards %}
+    <p class="crumbs topic-export">
+        <a href="{{ url_for('word_list', topic=topic, t=topic_row.id) }}">Print word list</a>
+        <a href="{{ url_for('word_list_csv', topic=topic, t=topic_row.id) }}">Download (.csv)</a>
+    </p>
+    {% endif %}
     {% if can_set_visibility %}
     <script>
         (function () {

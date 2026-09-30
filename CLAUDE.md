@@ -459,6 +459,16 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   `delete_account()` removes and what it does not (the activity logs) — so **a
   change to any of those is a change to that section**, and
   `automation/tests/test_privacy_notice.py` pins the ones that can be derived.
+- **A topic's word list** (#496) — `/flashcards/<topic>/word-list` (a
+  standalone print page, the worksheet's shape) and `…/word-list.csv`. Both
+  read through `cards._topic_and_cards()`, **the topic page's own read**, so
+  an export can never hold a card the page would not show: #382's 404 and
+  #127's owner filter come with it. The printout follows the hidden languages;
+  the CSV keeps every column, is UTF-8 **with a BOM** (Excel on Windows needs
+  it for Cyrillic) and defuses cells a spreadsheet would run as a formula,
+  since card text is learners' writing. Wiktionary's text carries its credit in
+  both (#390): a dagger and a footer line on paper, the `*_source` columns in
+  the file. Logged as `EXPORT` in `cards.log`; nothing is written or spent.
 - **`schema.sql` + `apply_schema.py`** — `schema.sql` holds `CREATE TABLE` only
   and describes a **fresh** database; every change to an **existing** one is a
   `Step` in `apply_schema.py`'s `MIGRATIONS` (#180). Adding a column is

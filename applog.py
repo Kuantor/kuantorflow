@@ -226,6 +226,17 @@ def topic_generated(title, asked, saved, skipped=0, failed=0, user=None):
            skipped=skipped, failed=failed, user=_user(user))
 
 
+def word_list_exported(topic, count, fmt, user=None):
+    """A topic's word list was downloaded or opened to print (#496).
+
+    Logged so "does anybody use this?" has an answer. `fmt` is `csv` or
+    `print` -- the second is the print page being opened, which is as close to
+    "printed" as a server can see.
+    """
+    _write(CARDS, "EXPORT", topic=topic, cards=count, format=fmt,
+           user=_user(user))
+
+
 def topic_visibility_set(name, public, topic_id=None, user=None,
                          outcome="changed"):
     """A topic was made public or private (#382).

@@ -102,6 +102,14 @@ On a card you added you can **edit** any field, **move** it to another topic, or
 
 The *Card deck* link at the top of a topic opens the same cards as a **deck**: one at a time, click to flip between the English side and the translation, arrows to move through the pile, and a *Flip animation* switch if you would rather it did not turn.
 
+### Printing or downloading a topic's words
+
+Every topic page has two buttons under its title. **Print word list** opens the topic's words as a handout: each word with its part of speech, its English explanation and its translations, ready to print, or to save as a PDF from your browser's print dialog. A box there adds one example sentence per word. The list shows the languages you have chosen to see in Settings.
+
+**Download (.csv)** saves the same words as a spreadsheet file that opens in Excel or Google Sheets, with every column kept, whichever languages you hide. It is yours to keep: nothing about it depends on the site staying up.
+
+Both contain exactly the cards the topic page shows you, and anyone who can open a topic can take its words, signed in or not. Where an explanation or example comes from Wiktionary, the printout marks it and names the source at the bottom, and the file says so in its last two columns; that credit is the condition of copying Wiktionary's text.
+
 ## Practising: the games and activities
 
 ### The games, in one list
@@ -373,7 +381,7 @@ This is the whole picture, in plain words: what KuantorFlow keeps about you, who
 - **Your answers in the games**, so the site can bring words back before you forget them. This is described under *What the site remembers about your answers*.
 - **Your conversations with Mykola**, described below.
 
-**Activity logs, for everybody.** Like most websites, KuantorFlow writes a short line for each thing that happens, so that problems can be found and fixed. For example: a card saved, a word looked up, a file uploaded (its name, not its contents), the idea you typed to build a topic, a round played and its score, a setting changed. If you are signed in, **the line includes your email address**. The logs never contain what you say to Mykola. They are started afresh every 30 days, and **each one is deleted automatically after about a year**.
+**Activity logs, for everybody.** Like most websites, KuantorFlow writes a short line for each thing that happens, so that problems can be found and fixed. For example: a card saved, a word looked up, a file uploaded (its name, not its contents), the idea you typed to build a topic, a round played and its score, a topic's word list printed or downloaded, a setting changed. If you are signed in, **the line includes your email address**. The logs never contain what you say to Mykola. They are started afresh every 30 days, and **each one is deleted automatically after about a year**.
 
 ### Your conversations with Mykola
 

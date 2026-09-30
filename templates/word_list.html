@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Word list: {{ topic }} | KuantorFlow</title>
+<link rel="stylesheet" href="{{ static_url('css/style.css') }}">
+
+{#
+   #496 — a topic's words as a handout: print it, or save it as a PDF from the
+   print dialog.
+
+   **A standalone page, not an extension of base.html**, for the worksheet's
+   reason (#340): it has to print in isolation, and the site's header, footer
+   and Mykola would otherwise be on the sheet, with a print stylesheet whose
+   whole job is hiding a page it does not own.
+
+   The cards are the topic page's own read (`cards._topic_and_cards()`), so
+   the list and the page cannot disagree about what is in the topic or who may
+   see it. Translations follow the learner's hidden languages; the CSV beside
+   it keeps everything.
+
+   **The Wiktionary credit is printed** (#390): its text is CC BY-SA, and the
+   credit is the condition of copying it -- on paper as much as on screen. A
+   dagger marks each explanation or example that is Wiktionary's, and one line
+   at the foot names the source and the licence.
+#}
+<style>
+    /* ---- screen ---- */
+    .wl-page { max-width: 58rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+    .wl-controls { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem;
+                   align-items: center; margin-bottom: 1.25rem; }
+    .wl-controls form { display: flex; gap: 0.4rem; align-items: center;
+                        margin: 0; color: #fff; font-weight: 600;
+                        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45); }
+    .wl-controls .crumbs { margin: 0; }
+    .wl-sheet { background: #fff; color: #1b1b1b; padding: 2rem 2.25rem;
+                border-radius: 6px; box-shadow: 0 2px 14px rgba(0,0,0,0.25); }
+    .wl-head { border-bottom: 1px solid #bbb; padding-bottom: 0.6rem;
+               margin-bottom: 1rem; }
+    .wl-title { font-size: 1.35rem; margin: 0 0 0.3rem; color: #1b1b1b; }
+    .wl-meta { margin: 0; font-size: 0.9rem; color: #444; }
+    .wl-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    .wl-table th { text-align: left; font-size: 0.8rem; text-transform: uppercase;
+                   letter-spacing: 0.04em; color: #555;
+                   border-bottom: 1.5px solid #888; padding: 0.35rem 0.5rem; }
+    .wl-table td { vertical-align: top; border-bottom: 1px solid #ddd;
+                   padding: 0.45rem 0.5rem; }
+    .wl-word { font-weight: 700; white-space: nowrap; }
+    .wl-pos { display: block; font-weight: 400; font-style: italic;
+              font-size: 0.82rem; color: #555; }
+    .wl-example { display: block; margin-top: 0.25rem; font-style: italic;
+                  color: #333; }
+    .wl-mark { font-size: 0.8em; color: #555; }
+    .wl-empty { margin: 0; color: #444; }
+    .wl-credit { margin: 1rem 0 0; font-size: 0.8rem; color: #444; }
+    .wl-credit a { color: inherit; }
+
+    /* On a phone the table is wider than the screen; let it scroll inside
+       the sheet rather than push the page sideways. Paper is never this
+       narrow, so print is untouched. */
+    .wl-scroll { overflow-x: auto; }
+
+    /* ---- print ----
+       The controls go and the sheet becomes the page. Colours are set
+       explicitly, as on the worksheet: a handout is printed in black and white
+       more often than not, and a screen grey can print as nothing. */
+    @page { size: A4; margin: 16mm 14mm; }
+    @media print {
+        html, body { background: #fff !important; color: #000 !important; }
+        body > *:not(.wl-page) { display: none !important; }
+        .wl-page { max-width: none; margin: 0; padding: 0; }
+        .wl-no-print { display: none !important; }
+        .wl-sheet { box-shadow: none; border-radius: 0; padding: 0; }
+        .wl-sheet, .wl-title, .wl-meta, .wl-table th, .wl-pos, .wl-example,
+        .wl-mark, .wl-credit { color: #000 !important; }
+        .wl-scroll { overflow: visible; }
+        .wl-table { font-size: 10.5pt; }
+        /* A row is one word: never split it across two sheets, and repeat the
+           column headings at the top of each. */
+        .wl-table tr { break-inside: avoid; page-break-inside: avoid; }
+        .wl-table thead { display: table-header-group; }
+    }
+</style>
+</head>
+<body>
+
+{% set topic_args = {'topic': topic, 't': topic_id} %}
+<div class="wl-page">
+
+    <div class="wl-controls wl-no-print">
+        {# `crumbs` goes on the wrapper, never on the link: the class carries the
+           blue background and `.crumbs a` the white text (see worksheet.html). #}
+        <p class="crumbs">
+            <a href="{{ url_for('flashcards', **topic_args) }}">&larr; Back to the topic</a>
+        </p>
+        <form method="GET" action="{{ url_for('word_list', topic=topic) }}">
+            <input type="hidden" name="t" value="{{ topic_id }}">
+            <input type="checkbox" id="wl-examples" name="examples" value="1"
+                   {% if with_examples %}checked{% endif %}
+                   onchange="this.form.submit()">
+            <label for="wl-examples">Include one example per word</label>
+            <noscript><button type="submit">Apply</button></noscript>
+        </form>
+        <button type="button" onclick="window.print()">Print</button>
+        <p class="crumbs">
+            <a href="{{ url_for('word_list_csv', **topic_args) }}">Download (.csv)</a>
+        </p>
+    </div>
+
+    <div class="wl-sheet">
+        <div class="wl-head">
+            <h1 class="wl-title">{{ topic }}</h1>
+            <p class="wl-meta">{{ cards | length }} word{{ '' if cards | length == 1 else 's' }}
+               &middot; {{ today.day }} {{ today.strftime('%B %Y') }}
+               &middot; KuantorFlow</p>
+        </div>
+
+        {% if not cards %}
+            <p class="wl-empty">There are no words in this topic yet.</p>
+        {% else %}
+            {% set ns = namespace(credited=false) %}
+            <div class="wl-scroll">
+            <table class="wl-table">
+                <thead>
+                    <tr>
+                        <th>Word</th>
+                        <th>Explanation</th>
+                        {% for field, label in languages %}<th>{{ label }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                {% for card in cards %}
+                    {% set example = (card.examples_en or [None])[0] if with_examples else None %}
+                    <tr>
+                        <td class="wl-word">{{ card.word }}{% if card.pos %}<span class="wl-pos">{{ card.pos }}</span>{% endif %}</td>
+                        <td>
+                            {{- card.explanation_en or '' -}}
+                            {%- if card.explanation_en and card.explanation_source == 'wiktionary' -%}
+                                {% set ns.credited = true %}<span class="wl-mark"> &dagger;</span>
+                            {%- endif -%}
+                            {%- if example -%}
+                                <span class="wl-example">{{ example }}
+                                {%- if card.examples_source == 'wiktionary' -%}
+                                    {% set ns.credited = true %}<span class="wl-mark"> &dagger;</span>
+                                {%- endif -%}</span>
+                            {%- endif -%}
+                        </td>
+                        {% for field, label in languages %}<td>{{ card[field] or '' }}</td>{% endfor %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% if ns.credited %}
+                <p class="wl-credit">&dagger; From Wiktionary (<a href="https://en.wiktionary.org/">en.wiktionary.org</a>),
+                   licensed <a href="{{ wiktionary_licence_url }}">{{ wiktionary_licence }}</a>
+                   ({{ wiktionary_licence_url }}).</p>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+</body>
+</html>
