@@ -998,7 +998,7 @@ def _fill_the_gap_round(activity, topics):
         return _fill_the_gap_marked(activity, topics, cards)
 
     prefs = web.current_settings()
-    wanted = prefs["gapped_deck_size"]
+    wanted, picked = _gap_round_size(activity, prefs)
     field, label = _gap_translation(prefs)
     # #334. `none` is the default and reproduces #235 exactly, so a learner who
     # never opens the control sees the game they have always seen.
@@ -1080,10 +1080,39 @@ def _fill_the_gap_round(activity, topics):
     # Logged at the deal (#448), and again if the learner finishes (#484): a
     # round abandoned half-way is still a round somebody was dealt.
     _round_played(activity, topics, questions, stage="dealt")
+    # *Play again* keeps a size the learner picked, and only that: a round
+    # that came in without one replays without one, at *Cards per round*.
+    replay = replay_url(activity, topics, hint=hint,
+                        **({"words": picked} if picked else {}))
     return render_template(
         "game_fill_the_gap.html", activity=activity, topics=topics,
         cards=questions, wanted=wanted, dropped=dropped, hint=hint,
-        gap_remembered=GAP_REMEMBERED)
+        gap_remembered=GAP_REMEMBERED, replay=replay)
+
+
+def _gap_round_size(activity, prefs):
+    """How many cards a *Fill the gap* round deals, and the size to replay
+    with -- `(wanted, picked)`, where `picked` is None unless the URL named one.
+
+    **Two ways in, two numbers (#499).** From the picker the URL carries
+    `words`, the box the learner just typed in, and that decides -- as in every
+    other game. A topic's flashcards page links straight to the round
+    (`activity_play_url()`), and so does a review, with **no** `words`: there
+    is no box on those paths, and *Cards per round* in Settings (#235) is the
+    size. Before #499 the setting won on both, so the picker showed a box the
+    round ignored.
+
+    Not `games.remembered_word_count()` on the direct path, which is what the
+    other games fall back to: this game has its own setting for exactly that
+    case, and the learner chose to keep the difference (#499).
+    """
+    setting = prefs["gapped_deck_size"]
+    raw = request.args.get("words")
+    if raw is None or not raw.strip():
+        return setting, None
+    # Unreadable falls back to the setting rather than to the box's default.
+    wanted = games.word_count(raw, setting, activity.words)
+    return wanted, wanted
 
 
 # The value a ticked card posts. Anything else -- the empty string an untick

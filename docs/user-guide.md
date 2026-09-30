@@ -211,7 +211,7 @@ You mark yourself: tick **I remember it** on the ones you knew, and the count in
 
 The default is **no hint at all**, exactly as before — you only see letters if you ask for them. Like the other before-you-start choices, it is made in the picker rather than on the card: being able to reveal a letter of the word you are stuck on is not a hint, it is the answer arriving late.
 
-A card can only appear here if one of its examples actually contains its own word, so a card with no examples sits the game out and a round can be shorter than you asked for. It says so when that happens. How many cards a round deals is yours to set — see *Cards per round* in Settings.
+A card can only appear here if one of its examples actually contains its own word, so a card with no examples sits the game out and a round can be shorter than you asked for. It says so when that happens. How many cards a round deals is the **Words** number on the page where you choose topics, as in every game. When you start it straight from a topic's flashcards page, or from a review, there is no box to type in, and *Cards per round* in Settings is the number instead.
 
 ### Odd one out
 
@@ -320,7 +320,7 @@ A recap is a paid answer like any other, so there are five a day. If there is no
 | Explanatory dictionary | Oxford Learner's, which needs no key and is the default. Wiktionary needs no key either, and knows far more rare and technical words — its definitions are written for a general reader rather than for a learner, so it is the one to switch to when Oxford has nothing for the words you are meeting. It also brings the short usage sentences its editors write, where it has them. A card built from it says so underneath the definition, and links the entry: Wiktionary is written by volunteers and shared under a licence that asks anybody reusing it to credit them. Merriam-Webster is greyed out unless this site is configured for it, and says which key it needs — the same rule the translators follow. |
 | Ukrainian / Russian | Hide a language everywhere: on the cards and in Mykola's answers. |
 | Quiz language | The language a quiz opens in. The in-page switch still takes it in the other. |
-| Cards per round | How many cards *Fill the gap* deals, between 5 and 50. Ten by default. |
+| Cards per round | How many cards *Fill the gap* deals when you start it from a topic's flashcards page or a review, between 5 and 50. Ten by default. From the page where you choose topics, the **Words** box decides. |
 | How fast words are spoken | The speed of the spoken word, from 50% to 150% of normal. Applies to the speaker button on your cards and to *Listen and type*. The voice itself comes from your browser, so what it sounds like depends on which browser you use. |
 | Restart chat after | Hours of silence before Mykola starts a fresh conversation. Zero means never. |
 | Fast thinking | Mykola deliberates less and answers shorter and quicker, and his recaps are shorter too. On by default. |

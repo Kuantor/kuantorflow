@@ -227,7 +227,7 @@
                 again.className = "crumbs";
                 again.innerHTML =
                     '<a href="{{ url_for("index") }}">&larr; Home</a>' +
-                    '<a data-replay href="{{ replay_url(activity, topics, hint=hint) }}">{{ "Back to review" if reviewing else "Play again" }}</a>';
+                    '<a data-replay href="{{ replay }}">{{ "Back to review" if reviewing else "Play again" }}</a>';
                 panel.appendChild(again);
                 waitThenGo(again.querySelector("[data-replay]"), saved);
                 // Replaces the deck rather than sitting under it: the round is

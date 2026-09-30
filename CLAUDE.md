@@ -746,6 +746,13 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   (half) of the round — draws the rest through `sample()` as usual, and
   shuffles the two together. No schema and no conflict with the schedule: repeats
   in a sitting are never a learner-day's *first* answer, so they move nothing.
+  **Its round size has two sources** (#499): the picker's `words` when the URL
+  carries it, like every game, and *Cards per round* (`gapped_deck_size`,
+  #235) when it does not — the topic's flashcards page and a review link
+  straight in with no box. `_gap_round_size()` decides, and *Play again*
+  carries `words` only if the round came with it. The other games fall back to
+  the remembered picker number instead, and that difference was kept on
+  purpose.
   **The one browser-only part**: *Play again* waits for *Finish*'s POST (at most
   `REPLAY_WAIT_MS`, 1.5 s) before navigating, because the next deal reads what
   that POST stored; a plain click is intercepted, a new-tab click is not.
