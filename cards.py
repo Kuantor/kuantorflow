@@ -15,8 +15,13 @@ word list and then saves cards through `_save_and_log()` like everything else,
 so it is a way of *making* cards rather than a feature beside them.
 """
 
+import csv
+import datetime
+import io
 import json
+import re
 import time
+from urllib.parse import quote
 
 from flask import (
     Response,
@@ -670,12 +675,7 @@ def flashcards(topic):
     private one -- which only the admin can ever see. It is checked against the
     same rule rather than trusted.
     """
-    wanted = request.args.get("t", type=int)
-    found = utils.resolve_topic(topic, topic_id=wanted, **web.viewer())
-    if found is None:
-        abort(404)
-    cards = utils.get_flashcards_by_topic(found["name"], web.cards_owner_filter(),
-                                    **web.viewer())
+    found, cards = _topic_and_cards(topic)
     # The move dialog's topic suggestions (#177) are fetched from
     # /topics.json when it first opens, rather than queried here: this page is
     # loaded by everyone and the list is only needed by someone who actually
@@ -686,6 +686,130 @@ def flashcards(topic):
         # admin reads every topic (#382) and still does not own this one.
         can_set_visibility=(found["created_by_user_id"] is not None
                             and found["created_by_user_id"] == web._current_user_id()))
+
+
+def _topic_and_cards(topic):
+    """The topic this visitor means and the cards they may see in it -- **the
+    one read** behind the topic page and its word list (#496), so a download
+    can never hold a card the page would not show.
+
+    Resolved first, and a name this visitor may not see is a 404 (#382):
+    `?t=` settles which topic when a name matches two, checked against the
+    same rule rather than trusted. The cards then come through #127's owner
+    filter, exactly as the page reads them.
+    """
+    wanted = request.args.get("t", type=int)
+    found = utils.resolve_topic(topic, topic_id=wanted, **web.viewer())
+    if found is None:
+        abort(404)
+    cards = utils.get_flashcards_by_topic(found["name"], web.cards_owner_filter(),
+                                          **web.viewer())
+    return found, cards
+
+
+# --- a topic's word list: printed or downloaded (#496) ----------------------
+#
+# The reading half of #25. Nothing here writes or spends: the cards are read
+# the way the topic page reads them, so anybody who can open the page -- an
+# anonymous visitor on a public topic included -- can take its words away.
+
+WORD_LIST_COLUMNS = ("word", "pos", "explanation_en", "translation_ukr",
+                     "translation_rus", "examples_en", "explanation_source",
+                     "examples_source")
+
+# A cell a spreadsheet would read as a formula. Card text is written by
+# learners and readable by everybody, so `=HYPERLINK(...)` in somebody's
+# explanation must arrive in a teacher's Excel as text, not as a live formula
+# -- the usual defence is a leading apostrophe, which Excel does not show.
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+# Characters Windows refuses in a file name.
+_UNSAFE_IN_FILENAME = re.compile(r'[\\/:*?"<>|]+')
+
+
+def _csv_cell(value):
+    """One cell: a list of examples one per line, and a formula defused."""
+    if isinstance(value, (list, tuple)):
+        value = "\n".join(str(v) for v in value if v)
+    text = "" if value is None else str(value)
+    return "'" + text if text.startswith(_FORMULA_START) else text
+
+
+def _word_list_filename(topic, extension):
+    name = _UNSAFE_IN_FILENAME.sub(" ", topic).strip() or "topic"
+    return f"KuantorFlow - {name} - {datetime.date.today():%Y-%m-%d}.{extension}"
+
+
+@app.route("/flashcards/<topic>/word-list")
+def word_list(topic):
+    """A topic's words laid out to print (#496): a handout for a lesson, and a
+    way to keep them on paper or -- through the print dialog -- as a PDF.
+
+    **A standalone page, not base.html**, for the worksheet's reason (#340):
+    a handout has to print in isolation, and a print stylesheet hiding the
+    header, the footer and Mykola is the version that rots the next time the
+    layout changes.
+
+    **The learner's hidden languages apply** (#46/#79) -- this is what they
+    asked to see -- where the download keeps everything. `?examples=1` adds
+    one example per word, off by default because examples double the length.
+    """
+    found, cards = _topic_and_cards(topic)
+    prefs = web.current_settings()
+    languages = [(field, label) for field, label, shown in (
+        ("translation_ukr", "Ukrainian", prefs["show_ukrainian"]),
+        ("translation_rus", "Russian", prefs["show_russian"])) if shown]
+    with_examples = request.args.get("examples") == "1"
+    applog.word_list_exported(found["name"], len(cards), "print",
+                              user=web._current_email())
+    return render_template(
+        "word_list.html", topic=found["name"], topic_id=found["id"],
+        cards=cards, languages=languages, with_examples=with_examples,
+        today=datetime.date.today())
+
+
+@app.route("/flashcards/<topic>/word-list.csv")
+def word_list_csv(topic):
+    """The same cards as a spreadsheet (#496), for keeping.
+
+    **Everything, whatever the Settings hide**: a file is for keeping, and a
+    column nobody wants is easy to delete, where one that was never written
+    cannot be got back. The two `*_source` columns travel with the text for
+    #390's reason -- Wiktionary's text is CC BY-SA and the credit is the
+    condition of copying it.
+
+    **UTF-8 with a byte-order mark**, because Excel on Windows opens a CSV
+    without one in the system code page and every Cyrillic letter comes out as
+    mojibake; the file has to be right on a double-click.
+    """
+    found, cards = _topic_and_cards(topic)
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\r\n")
+    writer.writerow(WORD_LIST_COLUMNS)
+    for card in cards:
+        writer.writerow([_csv_cell(card.get(column))
+                         for column in WORD_LIST_COLUMNS])
+    applog.word_list_exported(found["name"], len(cards), "csv",
+                              user=web._current_email())
+    response = Response("﻿" + out.getvalue(),
+                        mimetype="text/csv")   # Flask adds the charset
+    response.headers["Content-Disposition"] = _attachment(
+        _word_list_filename(found["name"], "csv"))
+    return response
+
+
+def _attachment(filename):
+    """A `Content-Disposition` that carries any topic name.
+
+    Written out because Werkzeug's `filename=` keyword puts a non-ASCII name
+    into the header raw -- measured, not assumed: a topic called `Житло`
+    produced a header no server can send. So: an ASCII `filename` for old
+    clients, and RFC 5987's `filename*` with the real name, which every
+    current browser prefers.
+    """
+    fallback = re.sub(r"\s+", " ", filename.encode("ascii", "ignore").decode()).strip()
+    return (f'attachment; filename="{fallback}"; '
+            f"filename*=UTF-8''{quote(filename)}")
 
 
 # A tiny sample deck so the card-deck activity (#78) can be opened and its
