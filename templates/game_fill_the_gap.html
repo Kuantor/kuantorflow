@@ -34,7 +34,7 @@
             {# Said here rather than only on the last card: a round of six when
                the setting says ten is a question the learner has at the start,
                not at the end. #}
-            <span class="hint">Only {{ cards|length }} card{{ '' if cards|length == 1 else 's' }}
+            <span class="hint shortfall">Only {{ cards|length }} card{{ '' if cards|length == 1 else 's' }}
                 in this round — that is all we could make from this selection.</span>
         {% endif %}
         {# How many, above; *why*, here. The two answer different questions and

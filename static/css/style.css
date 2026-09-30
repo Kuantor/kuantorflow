@@ -852,7 +852,9 @@ a.button-link { display: inline-block; text-decoration: none;
 .hint { color: var(--muted); font-size: 0.92rem; }
 /* "n cards here are not usable" (#266) on a line of its own under the
    instruction (#502): two messages -- what to do, and why the round is
-   shorter than the selection -- read as one run-on sentence inline. */
+   shorter than the selection -- read as one run-on sentence inline. Also
+   worn by the three rounds' own shortfall notes (Fill the gap's "only N
+   cards", Multiple choice's unbuildable words, Odd one out's short run). */
 .hint.shortfall { display: block; margin-top: 0.3rem; }
 /* A hint that belongs to the field above it rather than to the panel (#292):
    close under the row, so it reads as part of the Topic box rather than as a

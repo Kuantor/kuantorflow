@@ -28,7 +28,7 @@
                    game can use. #}
                 {% include "_shortfall.html" with context %}
                 {% if unbuildable %}
-                    <span class="hint">{{ unbuildable }}
+                    <span class="hint shortfall">{{ unbuildable }}
                     {{ 'word' if unbuildable == 1 else 'words' }} could not be
                     given four different answers.</span>
                 {% endif %}
