@@ -1417,6 +1417,24 @@
                     })
                     .catch(function () {});
             }
+            // The recap's reply, however it arrived: whole (JSON), or as the
+            // closing event of a stream that has just typed it out.
+            function showRecap(data) {
+                if (data.recap) {
+                    addMessage("mykola", data.recap);
+                    history.push({ role: "assistant", content: data.recap });
+                } else if (data.notice) {
+                    // A fixed sentence -- nothing to recap, the day's recaps
+                    // used up, or a failure. Shown, not sent back to the
+                    // model as conversation.
+                    addMessage("mykola", data.notice);
+                }
+                // Only the failure asks to be tried again, so only it brings
+                // the button back; the other notices are answers.
+                if (data.retry) recapAsked = false;
+                syncRecapButton();
+                saveWidgetState();
+            }
             function requestRecap() {
                 if (recapButton.disabled) return;
                 recapButton.disabled = true;
@@ -1424,33 +1442,31 @@
                 syncRecapButton();
                 saveWidgetState();
                 var typing = addMessage("mykola typing", "Mykola is recalling your previous conversations…");
+                // Streamed where the browser can read a stream, so the recap
+                // is typed out like any answer (and honours the typewriter
+                // setting, which readReply() reads). Every refusal still
+                // comes back as plain JSON, which is what the header tells
+                // apart.
+                var canStream = typeof ReadableStream !== "undefined";
                 fetch("{{ url_for('mykola_recap') }}", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ requested: true }),
-                }).then(function (resp) { return resp.json(); })
-                  .then(function (data) {
-                      typing.remove();
-                      if (data.recap) {
-                          addMessage("mykola", data.recap);
-                          history.push({ role: "assistant", content: data.recap });
-                      } else if (data.notice) {
-                          // A fixed sentence -- nothing to recap, the day's
-                          // recaps used up, or a failure. Shown, not sent back
-                          // to the model as conversation.
-                          addMessage("mykola", data.notice);
-                      }
-                  })
-                  .catch(function () {
-                      typing.remove();
-                      addMessage("mykola", "I couldn't look back over our chats just now. Please try again in a moment.");
-                      // The request never got an answer, so the offer
-                      // stands: the button comes back for the retry.
-                      recapAsked = false;
-                      syncRecapButton();
-                      saveWidgetState();
-                  })
-                  .then(function () { recapButton.disabled = false; });
+                    body: JSON.stringify({ requested: true, stream: canStream }),
+                }).then(function (resp) {
+                    var type = resp.headers.get("Content-Type") || "";
+                    if (type.indexOf("text/event-stream") === 0) {
+                        return readReply(resp, typing, showRecap);
+                    }
+                    return resp.json().then(function (data) {
+                        typing.remove();
+                        showRecap(data);
+                    });
+                }).catch(function () {
+                    typing.remove();
+                    // The request never got an answer, so the offer
+                    // stands: the button comes back for the retry.
+                    showRecap({ notice: "I couldn't look back over our chats just now. Please try again in a moment.", retry: true });
+                }).then(function () { recapButton.disabled = false; });
             }
             recapButton.addEventListener("click", requestRecap);
             {% endif %}
@@ -1881,7 +1897,10 @@
                 TYPEWRITER = !!on && !reducedMotion();
             };
 
-            function readReply(resp, typing) {
+            // `finish` receives the closing event; the chat's own
+            // finishAnswer() when omitted. The recap passes showRecap() (#495),
+            // so both are typed by this one function and cannot drift.
+            function readReply(resp, typing, finish) {
                 var reader = resp.body.getReader();
                 var decoder = new TextDecoder();
                 var buffer = "";        // whole events only; a split frame waits
@@ -1908,7 +1927,7 @@
                 function settle() {
                     if (bubble) bubble.remove(); else typing.remove();
                     if (closing.type === "error") showChatError(closing);
-                    else finishAnswer(closing);
+                    else (finish || finishAnswer)(closing);
                 }
 
                 function tick() {

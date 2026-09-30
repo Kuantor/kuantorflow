@@ -303,6 +303,8 @@ If he tells you he has answered a lot of questions today and asks you to try aga
 
 When you are signed in, Mykola can look back over your last few conversations and remind you where you left off. Press **Recap our last chats**, just above the message box, whenever you want one. He does not do it by himself: a recap is written by the same paid AI as his answers, so it happens only when you ask. The button goes away once you have pressed it, since one recap per conversation is enough, and comes back when you start a new chat.
 
+The recap is typed out as he writes it, like his answers. With *Fast thinking* on (the default) it is a short one, a sentence or two and two ideas for what to do next; turn it off for a fuller look back.
+
 If you have been away for a few hours, he starts a fresh conversation, so a new day does not open in the middle of an old one. How long that silence has to be is yours to set. The fresh conversation begins with his ordinary greeting, and the recap button is there if you want to pick up the thread.
 
 A recap is a paid answer like any other, so there are five a day. If there is nothing to look back on yet, or you have used the day's five, he says so — nothing is broken, and nothing is lost.
@@ -321,7 +323,7 @@ A recap is a paid answer like any other, so there are five a day. If there is no
 | Cards per round | How many cards *Fill the gap* deals, between 5 and 50. Ten by default. |
 | How fast words are spoken | The speed of the spoken word, from 50% to 150% of normal. Applies to the speaker button on your cards and to *Listen and type*. The voice itself comes from your browser, so what it sounds like depends on which browser you use. |
 | Restart chat after | Hours of silence before Mykola starts a fresh conversation. Zero means never. |
-| Fast thinking | Mykola deliberates less and answers shorter and quicker. On by default. |
+| Fast thinking | Mykola deliberates less and answers shorter and quicker, and his recaps are shorter too. On by default. |
 | Type his answer out | His reply is typed out as it arrives instead of landing in chunks. On by default. |
 
 Settings belong to your account and follow you between devices. Signed out, you can see them but not change them.

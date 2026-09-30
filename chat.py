@@ -876,6 +876,12 @@ def mykola_recap():
       and when there is nothing to give it answers `notice` -- a fixed
       sentence the widget shows -- rather than silence, because somebody is
       waiting on a button they pressed.
+      With `stream: true` as well, and an agent that has `stream_recap()`,
+      the recap arrives as Server-Sent Events -- `delta`s, then one `done`
+      carrying the whole `recap` -- so the widget types it out like any
+      answer (#495, from testing: it used to land in one piece, the one
+      message of Mykola's the typewriter never touched). Every refusal is
+      decided before the first byte and stays plain JSON.
     * **Opening the chat** sends nothing and gets **only the farewell**
       (ai_agent#39), which is deterministic and free, or `{"recap": null}`.
       It never reaches the model. Until #495 opening the chat *was* the
@@ -884,7 +890,8 @@ def mykola_recap():
     """
     if not MYKOLA_AVAILABLE or not session.get("user") or web.is_blocked():
         return jsonify({"recap": None})
-    requested = bool((request.get_json(silent=True) or {}).get("requested"))
+    body = request.get_json(silent=True) or {}
+    requested = bool(body.get("requested"))
     # The learner already said goodbye today: wish them a good rest instead
     # of restarting the dialogue (ai_agent#39). Deterministic — no model call.
     if _said_farewell_today():
@@ -906,7 +913,7 @@ def mykola_recap():
     # before the call it pays for.
     agent = get_mykola()
     if not hasattr(agent, "recap"):  # older ai_agent checkout
-        return jsonify({"recap": None, "notice": RECAP_FAILED})
+        return jsonify({"recap": None, "notice": RECAP_FAILED, "retry": True})
     logs = _read_user_logs()
     if not logs:
         return jsonify({"recap": None, "notice": RECAP_NOTHING_YET})
@@ -915,13 +922,52 @@ def mykola_recap():
                            web.RECAP_USER_DAILY, web.RECAP_ALL_DAILY,
                            web.RECAP_USER_LIMIT_PROMPT):
         return jsonify({"recap": None, "notice": RECAP_LIMIT_REACHED})
+    # `retry` rides with RECAP_FAILED only: that sentence says to try again,
+    # so the widget brings its button back. The other notices are answers.
+    if body.get("stream") and hasattr(agent, "stream_recap"):
+        return _recap_stream(agent, logs)
     try:
         text = agent.recap(logs, **_agent_kwargs(agent.recap))
         return jsonify({"recap": text or None,
-                        "notice": None if text else RECAP_FAILED})
+                        "notice": None if text else RECAP_FAILED,
+                        "retry": not text})
     except Exception:
         app.logger.exception("Mykola recap failed")
-        return jsonify({"recap": None, "notice": RECAP_FAILED})
+        return jsonify({"recap": None, "notice": RECAP_FAILED, "retry": True})
+
+
+def _recap_stream(agent, logs):
+    """The recap as `/mykola/chat/stream` sends an answer: `delta` events as
+    the text arrives, then one `done` with the whole of it. A failure -- even
+    halfway -- closes with `done` carrying RECAP_FAILED and `retry`, not the
+    chat's `error` event: the widget replaces the half-typed text with that
+    sentence, which is what the JSON path answers for the same failure.
+
+    `fast` reaches the agent through `_agent_kwargs()` like every other
+    setting, which is how fast thinking now shortens the recap too."""
+    kwargs = _agent_kwargs(agent.stream_recap)
+
+    def events():
+        text = ""
+        try:
+            for delta in agent.stream_recap(logs, **kwargs):
+                text += delta
+                yield web._sse({"type": "delta", "text": delta})
+        except Exception:
+            app.logger.exception("Mykola recap failed")
+            text = ""
+        text = text.strip()
+        yield web._sse({"type": "done", "recap": text or None,
+                        "notice": None if text else RECAP_FAILED,
+                        "retry": not text})
+
+    return Response(
+        stream_with_context(events()),
+        mimetype="text/event-stream",
+        # The chat stream's headers, for its reasons: nginx would otherwise
+        # buffer the whole recap and deliver it in one piece.
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.route("/mykola/restart-check", methods=["POST"])

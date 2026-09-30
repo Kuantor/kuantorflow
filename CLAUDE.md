@@ -638,6 +638,13 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   waiting on a button. `/mykola/restart-check` still restarts a stale chat (free)
   and sends `"recap": null` for old widgets; `_restart_recap()` and
   `_last_exchanges()` are gone with it.
+  With `stream: true` and an agent that has `stream_recap()` (ai_agent,
+  kuantorflow#495) the recap is **streamed** — `delta`s, then a `done` carrying
+  `recap`/`notice`/`retry` — and the widget types it through the chat's own
+  `readReply()`, handed `showRecap()` as its finisher; an older agent gets the
+  JSON path. `fast` reaches the recap through `_agent_kwargs()` like every
+  setting, so fast thinking shortens it. `retry` rides only with
+  `RECAP_FAILED`, and it is what brings the hidden button back.
 - **`recall_answers`** (#338, phase 1) — every answer a signed-in learner gave
   in a graded round, **appended and never updated**. It is a log rather than a
   state table because every mature spaced-repetition system keeps one — Anki's
