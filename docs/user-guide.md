@@ -301,9 +301,13 @@ If he tells you he has answered a lot of questions today and asks you to try aga
 
 ### Recaps
 
-If you have been away for a few hours he starts a fresh conversation and opens it with a short **recap** of where you left off, rather than pretending to remember everything or forgetting it all. How long that silence has to be is yours to set.
+When you are signed in, Mykola can look back over your last few conversations and remind you where you left off. Press **Recap our last chats**, just above the message box, whenever you want one. He does not do it by himself: a recap is written by the same paid AI as his answers, so it happens only when you ask. The button goes away once you have pressed it, since one recap per conversation is enough, and comes back when you start a new chat.
 
-A recap is a paid answer like any other, so there are five a day. Past that the conversation simply opens with his ordinary greeting — nothing is broken, and nothing is lost.
+The recap is typed out as he writes it, like his answers. With *Fast thinking* on (the default) it is a short one, a sentence or two and two ideas for what to do next; turn it off for a fuller look back.
+
+If you have been away for a few hours, he starts a fresh conversation, so a new day does not open in the middle of an old one. How long that silence has to be is yours to set. The fresh conversation begins with his ordinary greeting, and the recap button is there if you want to pick up the thread.
+
+A recap is a paid answer like any other, so there are five a day. If there is nothing to look back on yet, or you have used the day's five, he says so — nothing is broken, and nothing is lost.
 
 ## Settings
 
@@ -318,8 +322,8 @@ A recap is a paid answer like any other, so there are five a day. Past that the 
 | Quiz language | The language a quiz opens in. The in-page switch still takes it in the other. |
 | Cards per round | How many cards *Fill the gap* deals, between 5 and 50. Ten by default. |
 | How fast words are spoken | The speed of the spoken word, from 50% to 150% of normal. Applies to the speaker button on your cards and to *Listen and type*. The voice itself comes from your browser, so what it sounds like depends on which browser you use. |
-| Restart chat after | Hours of silence before Mykola starts a fresh conversation with a recap. Zero means never. |
-| Fast thinking | Mykola deliberates less and answers shorter and quicker. On by default. |
+| Restart chat after | Hours of silence before Mykola starts a fresh conversation. Zero means never. |
+| Fast thinking | Mykola deliberates less and answers shorter and quicker, and his recaps are shorter too. On by default. |
 | Type his answer out | His reply is typed out as it arrives instead of landing in chunks. On by default. |
 
 Settings belong to your account and follow you between devices. Signed out, you can see them but not change them.
@@ -328,7 +332,7 @@ Settings belong to your account and follow you between devices. Signed out, you 
 
 ### Why you might be asked to come back tomorrow
 
-Five things on this site cost money every time you use them: looking a word up, generating a text, talking to Mykola, the welcome-back recap he writes, and importing a file of notes. They call paid language services, and KuantorFlow pays for them.
+Five things on this site cost money every time you use them: looking a word up, generating a text, talking to Mykola, a recap of your past conversations when you ask for one, and importing a file of notes. They call paid language services, and KuantorFlow pays for them.
 
 So each of them has a limit. The limits are there to stop a runaway loop — a script, a stuck button, somebody leaning on *regenerate* — rather than to ration you. A normal study session does not come near them.
 
@@ -373,7 +377,7 @@ This is the whole picture, in plain words: what KuantorFlow keeps about you, who
 
 ### Your conversations with Mykola
 
-**If you are signed in**, your conversations are saved on the server under your account. That is how Mykola can greet you and sum up where you left off when you come back after a break. This is the only place the text of your messages is stored.
+**If you are signed in**, your conversations are saved on the server under your account. That is how Mykola can sum up where you left off when you ask him for a recap. This is the only place the text of your messages is stored.
 
 **If you are not signed in**, nothing you say to Mykola is saved on the server. The conversation lives only in your browser.
 

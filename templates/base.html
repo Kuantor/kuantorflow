@@ -999,6 +999,15 @@
         {# "Copied" (#245). A status rather than an alert: it reports something
            the learner just did on purpose, so it should not interrupt them. #}
         <div id="mykola-copied" class="mykola-copied" role="status" aria-live="polite"></div>
+        {% if current_user %}
+        {# #495. The recap of past conversations is a call to Mykola's model --
+           the most expensive thing this app does -- so it happens when the
+           learner asks and not before. Signed-in only: an anonymous visitor
+           has no saved conversations to look back on (#163). #}
+        <div class="mykola-tools">
+            <button type="button" id="mykola-recap" class="mykola-recap">Recap our last chats</button>
+        </div>
+        {% endif %}
         <form id="mykola-form" autocomplete="off">
             <input type="text" id="mykola-input" placeholder="Type your question…" required>
             <button type="submit" id="mykola-send">Send</button>
@@ -1089,6 +1098,16 @@
             // turn: `history` is assigned from the server's reply, so an
             // interrupted question was never in it.
             var pending = null;
+            // Whether this conversation has had its recap asked for (#495).
+            // The button goes once pressed -- one recap per conversation --
+            // and comes back with the next one (New chat, or a restart after
+            // a break). Saved with the thread so a page change does not bring
+            // it back.
+            var recapAsked = false;
+            function syncRecapButton() {
+                var tools = document.querySelector(".mykola-tools");
+                if (tools) tools.hidden = recapAsked;
+            }
 
             function hasStorage() {
                 try {
@@ -1168,6 +1187,7 @@
                     // so this is what the *next* page needs in order to know
                     // that something is owed.
                     pending: pending,
+                    recapAsked: recapAsked,
                 };
                 try {
                     localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(data));
@@ -1376,25 +1396,79 @@
                 });
             }
             {% if current_user %}
-            // Welcome-back recap for signed-in visitors (issue ai_agent#30):
-            // fetched once per page load, on first open. A null recap (no
-            // history, agent unavailable, error) keeps the normal greeting.
-            var recapRequested = false;
-            function requestRecap() {
-                if (recapRequested) return;
-                recapRequested = true;
-                var typing = addMessage("mykola typing", "Mykola is recalling your previous conversations…");
+            // The recap of past conversations (ai_agent#30), **only when the
+            // learner presses the button** (#495). It is a call to Mykola's
+            // model, so opening the chat no longer spends one. Opening it
+            // still asks the server once, without `requested`, for the one
+            // free answer that exists -- the farewell, if the learner said
+            // goodnight earlier today (ai_agent#39) -- and gets nothing else.
+            var recapButton = document.getElementById("mykola-recap");
+            var farewellChecked = false;
+            function checkFarewell() {
+                if (farewellChecked) return;
+                farewellChecked = true;
                 fetch("{{ url_for('mykola_recap') }}", { method: "POST" })
                     .then(function (resp) { return resp.json(); })
                     .then(function (data) {
-                        typing.remove();
                         if (data.recap) {
                             addMessage("mykola", data.recap);
                             history.push({ role: "assistant", content: data.recap });
                         }
                     })
-                    .catch(function () { typing.remove(); });
+                    .catch(function () {});
             }
+            // The recap's reply, however it arrived: whole (JSON), or as the
+            // closing event of a stream that has just typed it out.
+            function showRecap(data) {
+                if (data.recap) {
+                    addMessage("mykola", data.recap);
+                    history.push({ role: "assistant", content: data.recap });
+                } else if (data.notice) {
+                    // A fixed sentence -- nothing to recap, the day's recaps
+                    // used up, or a failure. Shown, not sent back to the
+                    // model as conversation.
+                    addMessage("mykola", data.notice);
+                }
+                // Only the failure asks to be tried again, so only it brings
+                // the button back; the other notices are answers.
+                if (data.retry) recapAsked = false;
+                syncRecapButton();
+                saveWidgetState();
+            }
+            function requestRecap() {
+                if (recapButton.disabled) return;
+                recapButton.disabled = true;
+                recapAsked = true;
+                syncRecapButton();
+                saveWidgetState();
+                var typing = addMessage("mykola typing", "Mykola is recalling your previous conversations…");
+                // Streamed where the browser can read a stream, so the recap
+                // is typed out like any answer (and honours the typewriter
+                // setting, which readReply() reads). Every refusal still
+                // comes back as plain JSON, which is what the header tells
+                // apart.
+                var canStream = typeof ReadableStream !== "undefined";
+                fetch("{{ url_for('mykola_recap') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ requested: true, stream: canStream }),
+                }).then(function (resp) {
+                    var type = resp.headers.get("Content-Type") || "";
+                    if (type.indexOf("text/event-stream") === 0) {
+                        return readReply(resp, typing, showRecap);
+                    }
+                    return resp.json().then(function (data) {
+                        typing.remove();
+                        showRecap(data);
+                    });
+                }).catch(function () {
+                    typing.remove();
+                    // The request never got an answer, so the offer
+                    // stands: the button comes back for the retry.
+                    showRecap({ notice: "I couldn't look back over our chats just now. Please try again in a moment.", retry: true });
+                }).then(function () { recapButton.disabled = false; });
+            }
+            recapButton.addEventListener("click", requestRecap);
             {% endif %}
             // Step the page aside while the panel is open (#184) so the widget
             // floats over the background rather than over the content. One
@@ -1411,7 +1485,7 @@
                 input.focus();
                 maybeShowConsent();
                 saveWidgetState();
-                {% if current_user %}if (!hasConversation()) requestRecap();{% endif %}
+                {% if current_user %}if (!hasConversation()) checkFarewell();{% endif %}
             }
             function closePanel() {
                 panel.hidden = true;
@@ -1450,6 +1524,9 @@
                     addMessage("mykola", recap);
                     history.push({ role: "assistant", content: recap });
                 }
+                // A new conversation may have its own recap (#495).
+                recapAsked = false;
+                syncRecapButton();
                 // The break has been accounted for: start the clock again so a
                 // second page load doesn't restart the same conversation twice.
                 lastMessageAt = Date.now();
@@ -1459,14 +1536,9 @@
             function newChat() {
                 // Start a fresh conversation (ai_agent#55): wipe the thread and
                 // mint a new chat id on the next message. Past exchanges stay
-                // logged server-side, so nothing is lost — and for signed-in
-                // visitors Mykola re-runs his welcome-back recap of the last
-                // few conversations, just as at the start of a new session.
+                // logged server-side, so nothing is lost. No recap by itself
+                // (#495): the button is right there for a learner who wants one.
                 startFreshChat(null, null);
-                {% if current_user %}
-                recapRequested = false;
-                requestRecap();
-                {% endif %}
                 input.focus();
             }
             function openVideo() {
@@ -1699,6 +1771,8 @@
                     messages.scrollTop = state.scrollTop;
                 }
                 lastMessageAt = state.lastMessageAt || null;
+                recapAsked = !!state.recapAsked;
+                syncRecapButton();
 
                 // A question asked on the page we just left, whose answer died
                 // with it (#304). Picked up here, before anything else looks at
@@ -1823,7 +1897,10 @@
                 TYPEWRITER = !!on && !reducedMotion();
             };
 
-            function readReply(resp, typing) {
+            // `finish` receives the closing event; the chat's own
+            // finishAnswer() when omitted. The recap passes showRecap() (#495),
+            // so both are typed by this one function and cannot drift.
+            function readReply(resp, typing, finish) {
                 var reader = resp.body.getReader();
                 var decoder = new TextDecoder();
                 var buffer = "";        // whole events only; a split frame waits
@@ -1850,7 +1927,7 @@
                 function settle() {
                     if (bubble) bubble.remove(); else typing.remove();
                     if (closing.type === "error") showChatError(closing);
-                    else finishAnswer(closing);
+                    else (finish || finishAnswer)(closing);
                 }
 
                 function tick() {

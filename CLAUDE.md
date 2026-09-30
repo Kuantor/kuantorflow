@@ -625,8 +625,26 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   widget's POST, ai_agent's `/api/chat` and the SSE stream share one allowance
   and a streamed message does not cost two.
   A refusal carries `sign_in_required: False` — they already signed in, so
-  there is nothing to offer and the answer is tomorrow. The recap's refusal is
-  `{"recap": None}`, like every other thing that can go wrong there.
+  there is nothing to offer and the answer is tomorrow.
+  **The recap happens only when asked** (#495). It is `claude-opus-5` over up
+  to 12,000 characters of past chats, and it used to fire by itself on every
+  chat open and on every return after `restart_chat_interval` — the second
+  path claiming no ceiling at all. Now `/mykola/recap` with `requested: true`
+  (the *Recap our last chats* button) is the only way to the model; without it
+  the endpoint answers only the free farewell (ai_agent#39) or nothing. The free
+  answers come first — farewell, then *nothing to recap* — and the ceiling is
+  claimed immediately before the call. A requested recap that cannot be given
+  answers a fixed `notice` sentence rather than silence, because somebody is
+  waiting on a button. `/mykola/restart-check` still restarts a stale chat (free)
+  and sends `"recap": null` for old widgets; `_restart_recap()` and
+  `_last_exchanges()` are gone with it.
+  With `stream: true` and an agent that has `stream_recap()` (ai_agent,
+  kuantorflow#495) the recap is **streamed** — `delta`s, then a `done` carrying
+  `recap`/`notice`/`retry` — and the widget types it through the chat's own
+  `readReply()`, handed `showRecap()` as its finisher; an older agent gets the
+  JSON path. `fast` reaches the recap through `_agent_kwargs()` like every
+  setting, so fast thinking shortens it. `retry` rides only with
+  `RECAP_FAILED`, and it is what brings the hidden button back.
 - **`recall_answers`** (#338, phase 1) — every answer a signed-in learner gave
   in a graded round, **appended and never updated**. It is a log rather than a
   state table because every mature spaced-repetition system keeps one — Anki's
