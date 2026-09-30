@@ -21,14 +21,14 @@
             <div class="panel panel--tight">
                 <p>Choose the English word for each
                    {{ lang_name }} one
-                   ({{ questions|length }} question{{ '' if questions|length == 1 else 's' }}):
+                   ({{ questions|length }} question{{ '' if questions|length == 1 else 's' }}).
                 {# Two different shortfalls, and a learner who ticked forty
                    topics and was asked twelve questions should be able to tell
                    which one happened. The picker counts cards, not cards this
                    game can use. #}
                 {% include "_shortfall.html" with context %}
                 {% if unbuildable %}
-                    <span class="hint">{{ unbuildable }}
+                    <span class="hint shortfall">{{ unbuildable }}
                     {{ 'word' if unbuildable == 1 else 'words' }} could not be
                     given four different answers.</span>
                 {% endif %}

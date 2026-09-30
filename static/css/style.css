@@ -11,7 +11,11 @@
     --blue-dark: #245680;
     --yellow: #f3c73a;
     --ink: #22303c;
-    --muted: #5b6b7a;
+    /* #4a5866, not #5b6b7a (#502, item 3): hint text over a panel over the
+       photograph measured 2.76:1 at the photo's darkest, below WCAG's 4.5:1.
+       With --panel-alpha at 0.80 it is 4.55:1 there, and still visibly
+       lighter than --ink, so a hint still reads as a hint. */
+    --muted: #4a5866;
     --ok-bg: #e6f4ea;
     --ok-border: #34a853;
     --ok-ink: #1e4620;
@@ -283,9 +287,14 @@ body {
    can be compared and tuned in one place.
 
    No backdrop blur: it hides the background, which is the thing this is
-   meant to reveal. */
+   meant to reveal.
+
+   0.80, not 0.72 (#502, item 3): the photograph still shows through, but
+   hint text (--muted) could not reach 4.5:1 over its dark areas at 0.72
+   without becoming as dark as body text. Measured against the photo's
+   darkest pixel, the worst case any panel can sit on. */
 :root {
-    --panel-alpha: 0.72;
+    --panel-alpha: 0.80;
     --widget-alpha: 0.88;
     --flashcard-alpha: 0.82;
 }
@@ -841,6 +850,12 @@ a.button-link { display: inline-block; text-decoration: none;
 }
 .topic-tile-count { font-size: 0.85rem; opacity: 0.8; }
 .hint { color: var(--muted); font-size: 0.92rem; }
+/* "n cards here are not usable" (#266) on a line of its own under the
+   instruction (#502): two messages -- what to do, and why the round is
+   shorter than the selection -- read as one run-on sentence inline. Also
+   worn by the three rounds' own shortfall notes (Fill the gap's "only N
+   cards", Multiple choice's unbuildable words, Odd one out's short run). */
+.hint.shortfall { display: block; margin-top: 0.3rem; }
 /* A hint that belongs to the field above it rather than to the panel (#292):
    close under the row, so it reads as part of the Topic box rather than as a
    caption for the whole form.
