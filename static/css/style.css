@@ -2272,7 +2272,7 @@ button:disabled:hover { background: #9db4c7; }
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    flex: 1 1 9rem;
+    flex: 1 1 7rem;                 /* Real | Invented fit side by side on a phone */
     min-height: 2.75rem;            /* 44px */
     margin: 0;
     padding: 0.5rem 0.85rem;
