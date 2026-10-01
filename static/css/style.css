@@ -339,6 +339,40 @@ input[type="text"]:focus {
     outline-offset: 0;
     border-color: var(--blue);
 }
+/* The file picker (#502, item 6). The browser's raw "Choose File" button was
+   the one control on the page left in the operating system's own style. Styled
+   through ::file-selector-button rather than replaced: the native input keeps
+   its keyboard handling, its screen-reader name and the chosen file's name
+   beside the button, none of which a hidden input behind a fake button gets
+   for free. The button is the site's secondary style -- outlined, so Upload &
+   save below stays the one filled button in the panel. */
+input[type="file"] {
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;            /* 44px */
+    padding: 0.3rem 0.4rem;
+    color: var(--ink);
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+input[type="file"]::file-selector-button {
+    margin: 0 0.75rem 0 0;
+    padding: 0.4rem 0.95rem;
+    border: 1.5px solid var(--blue);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--blue-dark);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.12s;
+}
+input[type="file"]:hover::file-selector-button { background: #e3eef8; }
+input[type="file"]:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 0;
+    border-color: var(--blue);
+}
 /* `a.button-link` shares this rule rather than copying it (#340): a link that
    is supposed to look like the button beside it has to *be* the same
    declaration, or the two drift the first time either is touched. */
