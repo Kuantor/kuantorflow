@@ -618,8 +618,11 @@ a.button-link { display: inline-block; text-decoration: none;
    here `.word` is a label rather than the block heading it is in every other
    game's results -- scoped to this row rather than changed globally. */
 .question .word.word--inline { display: inline; }
+/* 0.75rem is the floor for text on this site (#502, item 7): 12px. Five
+   rules sat at 0.72rem (11.5px) -- this badge, Mykola's caption, his
+   sources, the consent note and the topic builder's "saved" badge. */
 .pos {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #4a3a00;
     background: var(--yellow);
@@ -1710,7 +1713,7 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
     border: 2px solid #fff;
 }
 .mykola-header div { flex: 1; line-height: 1.15; }
-.mykola-header small { display: block; opacity: 0.85; font-size: 0.72rem; }
+.mykola-header small { display: block; opacity: 0.85; font-size: 0.75rem; }
 .mykola-close {
     margin: 0;
     padding: 0;
@@ -1756,7 +1759,7 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
 .mykola-msg.typing { opacity: 0.7; font-style: italic; }
 .mykola-sources {
     margin-top: 0.35rem;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: var(--muted);
 }
 
@@ -2029,7 +2032,7 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
     cursor: pointer;
 }
 .mykola-consent-no:hover { background: #f4f6f8; }
-.mykola-consent-note { margin: 0.5rem 0 0; font-size: 0.72rem; color: var(--muted); }
+.mykola-consent-note { margin: 0.5rem 0 0; font-size: 0.75rem; color: var(--muted); }
 
 .mykola-auth {
     display: flex;
@@ -2783,7 +2786,7 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
    Neither is red. A word the learner has already studied is not an error, and
    the popup is full of cards they chose to parse. */
 .proposal-saved {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 600;
     border-radius: 999px;
     padding: 0.15rem 0.65rem;
