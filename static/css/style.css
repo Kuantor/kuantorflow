@@ -54,7 +54,10 @@ body {
 /* Header */
 .site-header {
     display: flex;
-    align-items: center;
+    /* Baseline, not centre (#502, item 5): the wordmark is 1.35rem and the
+       links 0.95rem, so centring their boxes put the links' letters 2.7px
+       above the wordmark's. On one baseline the words read as one row. */
+    align-items: baseline;
     justify-content: space-between;
     /* Half the old 0.9rem: the links' own 44px boxes now make the height. */
     padding: 0.45rem 1.4rem;
