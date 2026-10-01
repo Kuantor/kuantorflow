@@ -43,8 +43,10 @@
     <div class="modal-overlay" id="about-modal" hidden>
         <div class="modal">
             <button type="button" class="modal-close" aria-label="Close">&times;</button>
-            {# WebP, and a phone gets the 640px copy (#517): the JPEG was 417 KB. #}
-            <img src="{{ static_url('img/main_image.webp') }}"
+            {# WebP, and a phone gets the 640px copy (#517): the JPEG was 417 KB.
+               Lazy, because this is on every page and hidden until About is
+               pressed: a browser does not fetch a lazy image nobody can see. #}
+            <img loading="lazy" src="{{ static_url('img/main_image.webp') }}"
                  srcset="{{ static_url('img/main_image-640.webp') }} 640w, {{ static_url('img/main_image.webp') }} 1254w"
                  sizes="(max-width: 640px) 92vw, 900px"
                  alt="About KuantorFlow">
