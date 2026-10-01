@@ -18,11 +18,15 @@
    press without a reload. #}
 <body data-speech-rate="{{ settings.speech_rate }}">
     <header class="site-header">
-        {# #208: the greeting lives here now, and the front page no longer repeats
-             it above the first panel. One caption, at the top, on every page. #}
-        <a class="brand" href="{{ url_for('index') }}">Welcome to Kuantor<span>Flow</span></a>
+        {# #208 put one caption at the top of every page; #502 (item 5) made it
+           a wordmark rather than a greeting. "Welcome to KuantorFlow" wrapped
+           onto two lines on a phone, and a greeting is what a page says once,
+           not what a header says on every page. The wordmark is also the way
+           home -- the convention every site keeps -- which is what lets the
+           Home link go on a phone, where the other three then fit one row. #}
+        <a class="brand" href="{{ url_for('index') }}" aria-label="KuantorFlow, home">Kuantor<span>Flow</span></a>
         <nav>
-            <a href="{{ url_for('index') }}">Home</a>
+            <a class="nav-home" href="{{ url_for('index') }}">Home</a>
             <a href="#" id="settings-link">Settings</a>
             <a href="#" id="about-link">About</a>
             {# A real href, not `#`: About is a picture in an overlay, Help is a

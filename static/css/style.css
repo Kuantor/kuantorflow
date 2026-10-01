@@ -83,6 +83,22 @@ body {
 }
 .site-header nav a:hover { color: var(--yellow); background: rgba(255, 255, 255, 0.08); }
 .site-header nav a:focus-visible { outline: 2px solid var(--yellow); outline-offset: -2px; }
+/* On a phone the wordmark is the way home, so Home goes and Settings, About and
+   Help fit one row beside it (#502, item 5) -- two rows of 44px links made the
+   header 102px there. Kept on wider screens, where there is room and a
+   labelled Home link costs nothing. */
+@media (max-width: 640px) {
+    .site-header { padding-left: 1rem; padding-right: 1rem; }
+    .site-header nav a.nav-home { display: none; }
+}
+/* The smallest phones still in use (320px) are about 30px short of one row:
+   a little less padding beside each word and a slightly smaller wordmark. The
+   boxes stay 44px tall; only their sides shrink. */
+@media (max-width: 360px) {
+    .brand { font-size: 1.2rem; }
+    .site-header nav a { padding: 0 0.4rem; }
+    .site-header nav { margin-right: -0.4rem; }
+}
 
 /* Layout */
 .page {
