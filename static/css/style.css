@@ -1,5 +1,5 @@
 /* KuantorFlow — shared styles.
-   Background: static/img/background.jpg (a misty Westminster embankment at
+   Background: static/img/background.webp (a misty Westminster embankment at
    dusk, #361); the gradient and base colour below are what a visitor sees
    while it loads or if it is missing, so they are sampled from the image
    rather than picked — it averages #776562, lighter mist above, dark at the
@@ -44,7 +44,8 @@ body {
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
     color: var(--ink);
     background-color: var(--dusk);
-    background-image: url("../img/background.jpg"),
+    /* WebP (#517): 76 KB where the JPEG was 283 KB, on every page. */
+    background-image: url("../img/background.webp"),
         linear-gradient(160deg, #8a7b7c 0%, #776562 55%, #3c3439 100%);
     background-size: cover, cover;
     background-position: center;
@@ -1022,6 +1023,13 @@ a.button-link { display: inline-block; text-decoration: none;
 
 /* Welcome popup (Issue #18) */
 .welcome-overlay[hidden] { display: none; }
+/* It opens once its pictures are decoded (#517), so a short fade is all it
+   needs -- and none for anyone who asked for less motion. */
+@keyframes welcome-in { from { opacity: 0; } }
+.welcome-overlay:not([hidden]) { animation: welcome-in 0.25s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+    .welcome-overlay:not([hidden]) { animation: none; }
+}
 .welcome-overlay {
     position: fixed;
     inset: 0;
@@ -1039,7 +1047,7 @@ a.button-link { display: inline-block; text-decoration: none;
     overflow: hidden;
     background:
         linear-gradient(rgba(7, 19, 34, 0.42), rgba(7, 19, 34, 0.42)),
-        url("../img/welcome_background.jpg") center center / cover no-repeat;
+        url("../img/welcome_background.webp") center center / cover no-repeat;
     border-radius: 14px;
     box-shadow: 0 16px 50px rgba(0, 0, 0, 0.45);
 }

@@ -539,7 +539,16 @@ def mykola_media_file(filename):
     repo. Behind the keyword gate like everything else."""
     if not MYKOLA_AVAILABLE:
         abort(404)
-    return send_from_directory(os.path.join(AI_AGENT_PATH, "static", "img"), filename)
+    folder = os.path.join(AI_AGENT_PATH, "static", "img")
+    # The welcome popup asks for the WebP poster (#517), which ai_agent gained
+    # in the same change. The two repos deploy in either order, so an ai_agent
+    # without it yet gets the JPEG it has always had: a browser shows the
+    # image by its Content-Type, not by the name in the URL.
+    if filename.endswith(".webp") and not os.path.isfile(os.path.join(folder, filename)):
+        fallback = filename[:-len(".webp")] + ".jpg"
+        if os.path.isfile(os.path.join(folder, fallback)):
+            filename = fallback
+    return send_from_directory(folder, filename)
 
 
 @app.route("/mykola-static/<path:filename>")
