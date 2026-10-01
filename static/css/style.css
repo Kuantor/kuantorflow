@@ -1895,7 +1895,10 @@ button:disabled:hover { background: #9db4c7; }
 #mykola-panel.minimized #mykola-messages,
 #mykola-panel.minimized #mykola-form,
 #mykola-panel.minimized .mykola-consent,
-#mykola-panel.minimized .mykola-auth { display: none; }
+#mykola-panel.minimized .mykola-auth,
+/* #495's recap row too (#502, item 4): left out when the row was added, so a
+   minimized bar kept a second row and covered twice as much of the page. */
+#mykola-panel.minimized .mykola-tools { display: none; }
 
 /* Must come after .minimized so a hidden panel always stays hidden. */
 #mykola-panel[hidden] { display: none; }
