@@ -336,7 +336,7 @@ A recap is a paid answer like any other, so there are five a day. If there is no
 | Quiz language | The language a quiz opens in. The in-page switch still takes it in the other. |
 | Cards per round | How many cards *Fill the gap* deals when you start it from a topic's flashcards page or a review, between 5 and 50. Ten by default. From the page where you choose topics, the **Words** box decides. |
 | How fast words are spoken | The speed of the spoken word, from 50% to 150% of normal. Applies to the speaker button on your cards and to *Listen and type*. The voice itself comes from your browser, so what it sounds like depends on which browser you use. |
-| Restart chat after | Hours of silence before Mykola starts a fresh conversation. Zero means never. |
+| Restart chat after | Hours without writing (1 to 24) before Mykola starts a fresh conversation. Tick *Never restart chat automatically* to keep one conversation going. |
 | Fast thinking | Mykola deliberates less and answers shorter and quicker, and his recaps are shorter too. On by default. |
 | Type his answer out | His reply is typed out as it arrives instead of landing in chunks. On by default. |
 
