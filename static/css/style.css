@@ -29,6 +29,15 @@
 
 * { box-sizing: border-box; }
 
+/* Named monospace fonts, not the bare generic (#502, item 7). A font list that
+   is only `monospace` makes browsers size it from 13px instead of 16px, so the
+   Help page's `0.9em` code came out at 11.7px -- under the site's 12px floor --
+   and the Settings popup's code shrank the same way. Any named family ahead of
+   the generic switches that off. */
+code, kbd, pre, samp {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+}
+
 body {
     margin: 0;
     min-height: 100vh;
@@ -554,6 +563,12 @@ a.button-link { display: inline-block; text-decoration: none;
     filter: grayscale(1);
     transition: opacity 0.15s ease, filter 0.15s ease;
 }
+/* Beside a headword the baseline-aligned box still sits 3.1px below the
+   word's visual middle, so it is lifted the same way as the pill (#502). Only
+   here: the deck's and Listen and type's speakers are tuned on their own.
+   A relative nudge rather than another vertical-align, which is what the
+   comment above warns against. */
+.word > .say { position: relative; top: -0.12em; }
 .say:hover, .say:focus-visible {
     opacity: 1;
     filter: none;
@@ -561,6 +576,7 @@ a.button-link { display: inline-block; text-decoration: none;
 /* A comfortable target on a phone, where this is most likely to be used. */
 @media (max-width: 640px) {
     .say { font-size: 1rem; width: 1.9em; height: 1.9em; opacity: 0.6; }
+    .word > .say { top: -0.08em; }   /* its larger box needs less lift */
 }
 .say--deck { font-size: 1rem; margin-left: 0.5rem; }
 /* #272's speaker sits beside the question number and is pressed repeatedly,
@@ -618,8 +634,11 @@ a.button-link { display: inline-block; text-decoration: none;
    here `.word` is a label rather than the block heading it is in every other
    game's results -- scoped to this row rather than changed globally. */
 .question .word.word--inline { display: inline; }
+/* 0.75rem is the floor for text on this site (#502, item 7): 12px. Five
+   rules sat at 0.72rem (11.5px) -- this badge, Mykola's caption, his
+   sources, the consent note and the topic builder's "saved" badge. */
 .pos {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #4a3a00;
     background: var(--yellow);
@@ -628,6 +647,12 @@ a.button-link { display: inline-block; text-decoration: none;
     vertical-align: middle;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    /* `middle` centres the pill on the x-height, which beside a bold
+       headword sits 2.1px below the word's visual middle (measured against
+       half its cap height, #502). Nudged up about half that -- the full lift
+       read as slightly high. Nothing else on the line moves. */
+    position: relative;
+    top: -0.09em;
 }
 .lang { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.7rem; }
 .card ul { margin: 0.3rem 0; padding-left: 1.3rem; }
@@ -1710,7 +1735,7 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
     border: 2px solid #fff;
 }
 .mykola-header div { flex: 1; line-height: 1.15; }
-.mykola-header small { display: block; opacity: 0.85; font-size: 0.72rem; }
+.mykola-header small { display: block; opacity: 0.85; font-size: 0.75rem; }
 .mykola-close {
     margin: 0;
     padding: 0;
@@ -1756,7 +1781,7 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
 .mykola-msg.typing { opacity: 0.7; font-style: italic; }
 .mykola-sources {
     margin-top: 0.35rem;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: var(--muted);
 }
 
@@ -2029,7 +2054,7 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
     cursor: pointer;
 }
 .mykola-consent-no:hover { background: #f4f6f8; }
-.mykola-consent-note { margin: 0.5rem 0 0; font-size: 0.72rem; color: var(--muted); }
+.mykola-consent-note { margin: 0.5rem 0 0; font-size: 0.75rem; color: var(--muted); }
 
 .mykola-auth {
     display: flex;
@@ -2783,7 +2808,7 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
    Neither is red. A word the learner has already studied is not an error, and
    the popup is full of cards they chose to parse. */
 .proposal-saved {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 600;
     border-radius: 999px;
     padding: 0.15rem 0.65rem;
