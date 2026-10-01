@@ -2981,8 +2981,9 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
         break-inside: avoid;
         page-break-inside: avoid;
     }
-    /* Right and wrong keep their tints where the printer has colour, and say
-       which they are in a way that survives black and white. */
+    /* Right and wrong: the panels print white (cleaner, and less ink than a
+       page of tints), the green or red left border stays where the printer
+       has colour, and a check or cross says which in black and white. */
     .question.correct, .question.wrong {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
