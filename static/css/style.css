@@ -29,6 +29,15 @@
 
 * { box-sizing: border-box; }
 
+/* Named monospace fonts, not the bare generic (#502, item 7). A font list that
+   is only `monospace` makes browsers size it from 13px instead of 16px, so the
+   Help page's `0.9em` code came out at 11.7px -- under the site's 12px floor --
+   and the Settings popup's code shrank the same way. Any named family ahead of
+   the generic switches that off. */
+code, kbd, pre, samp {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+}
+
 body {
     margin: 0;
     min-height: 100vh;
