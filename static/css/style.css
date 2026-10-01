@@ -592,10 +592,25 @@ a.button-link { display: inline-block; text-decoration: none;
 /* #269's results: the four words with the topic each came from. A list rather
    than the `.verdict` rows the question used, because nothing here is
    selectable any more -- it is a reading of what the grouping was. */
-.odd-words { list-style: none; margin: 0.4rem 0 0; padding: 0; }
-.odd-words li { margin: 0.3rem 0; }
+.odd-words { list-style: none; margin: 0.4rem 0 0; padding: 0; }   /* room for a gloss under each (#519) */
 .odd-words em { color: var(--muted); font-size: 0.85rem; margin-left: 0.4rem; }
 .odd-stranger { font-weight: 700; }
+/* What each word means, under it (#519). Normal weight even under the bold
+   stranger, and two lines at most, so the list stays a list to scan; the whole
+   text is still in the page for anyone who selects or reads it aloud. */
+.odd-gloss {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    margin-top: 0.1rem;
+    font-weight: 400;
+    font-size: 0.92rem;
+    color: var(--muted);
+}
+.odd-gloss-lang { font-style: italic; }
+.odd-words li { margin: 0.45rem 0; }
 /* #270's mask. Monospaced so the dashes line up and stay countable — the
    letter count is the whole of what the mask gives, and a proportional font
    makes `i` and `m` different widths of the same information. Letter-spacing

@@ -81,6 +81,18 @@
                             {{ word }}
                             <span class="pos">{{ r.intruder_topic if word == r.answer else r.home }}</span>
                             {% if word == r.given %}<em>&larr; you picked this</em>{% endif %}
+                            {# What the word means (#519): its explanation, or a
+                               translation in the prioritised language where it
+                               has none -- labelled, so it is not read as English. #}
+                            {% set gloss = r.glosses.get(word) if r.glosses else None %}
+                            {% if gloss %}
+                                <span class="odd-gloss">
+                                    {%- if gloss.label %}<span class="odd-gloss-lang">{{ gloss.label }}:</span> {% endif -%}
+                                    {{ gloss.text }}</span>
+                                {% if gloss.kind == 'explanation' %}
+                                    {% with card = gloss.card, fields = ['explanation'] %}{% include "_source_credit.html" %}{% endwith %}
+                                {% endif %}
+                            {% endif %}
                         </li>
                     {% endfor %}
                 </ul>
