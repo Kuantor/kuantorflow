@@ -145,6 +145,10 @@ Some games need more from a card than others: *Spell it* needs an English explan
 
 So a round will sometimes ask fewer questions than the number you set, and when that happens **it says so and tells you what was missing** — the cards are not gone, they just cannot be used for that particular game. If none of the cards you chose can be used, the round says that instead of showing you an empty page, and offers the picker back with your topics still ticked.
 
+### Printing a round
+
+Any game or quiz page prints cleanly with your browser's **Print** (Ctrl+P, or ⌘P on a Mac), which can also save it as a PDF. The site's header, Mykola and the buttons are left off, and the top of the page says which game it was, **which topics you played** (or that it was a review) and the date. On the results page every question is marked ✓ or ✗, so a black-and-white printout still shows what you got right.
+
 ### What the site remembers about your answers
 
 When you are signed in, KuantorFlow keeps a record of **your answers in the games**: the word, which game asked it, whether you got it right, and when. It is kept so the site can learn which words you already know and which you are about to forget, and bring those back to you before you do — the idea behind spaced repetition.

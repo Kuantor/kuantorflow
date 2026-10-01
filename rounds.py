@@ -25,6 +25,7 @@ when the Wiktionary vet went to `app._vetted_pseudowords()` rather than into
 there, one that needs the network or the session belongs here.
 """
 
+import datetime
 import random
 
 from flask import (
@@ -237,6 +238,9 @@ def inject_activities():
         # only the front page's badge needs the deck and the schedule read.
         "due_for_review": _due_for_review,
         "reviewing": _reviewing(),
+        # The print heading's date (#521), e.g. "1 October 2026". A callable,
+        # so only a page that prints the heading formats one.
+        "print_date": lambda: "{d.day} {d:%B %Y}".format(d=datetime.date.today()),
         "replay_url": replay_url,
     }
 
@@ -1895,7 +1899,9 @@ def _run_quiz(topics, heading, self_url, back, words):
     # and /quiz names several, which the declaration cannot say.
     common = {"heading": heading, "self_url": self_url, "back": back,
               "langs": langs, "topic_summary": _topic_summary(topics),
-              "activity": games.ACTIVITIES["quiz"]}
+              "activity": games.ACTIVITIES["quiz"],
+              # For the print heading (#521): which topics this run was over.
+              "topics": topics}
     if not langs:
         # Both languages hidden in Settings (#46/#79) — nothing to quiz on.
         return render_template(
