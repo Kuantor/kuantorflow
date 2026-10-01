@@ -1479,6 +1479,8 @@ def _attach_odd_one_out_glosses(results, topics):
     for result in results:
         for word in result["words"]:
             topic = result["intruder_topic"] if word == result["answer"] else result["home"]
+            if topic.casefold() not in allowed:   # asked of the match too, not only the read
+                continue
             card = by_word.get((topic.casefold(), word.strip().casefold()))
             gloss = _gloss(card, prefs) if card else None
             if gloss:
