@@ -347,17 +347,15 @@ input[type="text"]:focus {
    for free. The button is the site's secondary style -- outlined, so Upload &
    save below stays the one filled button in the panel. */
 input[type="file"] {
-    display: flex;
-    align-items: center;
-    min-height: 2.75rem;            /* 44px */
-    padding: 0.3rem 0.4rem;
+    /* The same height as the Topic box beside it (38px), so the row is even. */
+    padding: 0.25rem 0.4rem;
     color: var(--ink);
     font-size: 0.95rem;
     cursor: pointer;
 }
 input[type="file"]::file-selector-button {
     margin: 0 0.75rem 0 0;
-    padding: 0.4rem 0.95rem;
+    padding: 0.25rem 0.9rem;
     border: 1.5px solid var(--blue);
     border-radius: 8px;
     background: #fff;
