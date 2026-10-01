@@ -1553,6 +1553,17 @@ button:disabled:hover { background: #9db4c7; }
     isolation: isolate;
 }
 #mykola-launcher:hover { background: var(--blue-dark); }
+/* The page can always scroll clear of the widget (#502, item 4). Both the
+   launcher and the minimized bar are fixed to the bottom-right, so the last
+   thing on a page -- a game's final answer, Check answers, the footer -- sat
+   underneath them on a phone with no way to scroll it out. Room at the bottom
+   of the page, as tall as what covers it plus a gap, measured at 375px: the
+   launcher covers the bottom 66px, the minimized bar 86px (its caption can wrap
+   a line taller, hence the margin). The open panel is not included: it covers
+   460px on purpose while a conversation is under way, and closing it is how a
+   learner gets the page back. */
+body:has(#mykola-launcher:not([hidden])) { padding-bottom: 5rem; }
+body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
 #mykola-launcher img {
     width: 2.1rem;
     height: 2.1rem;
