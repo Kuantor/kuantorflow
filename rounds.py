@@ -1413,6 +1413,8 @@ def _odd_one_out_round(activity, topics):
                 "correct": bool(answer) and given == answer,
             })
         _round_played(activity, topics, results)
+        # After the log line, which records the round and not what it showed.
+        _attach_odd_one_out_glosses(results, topics)
         return render_template(
             "game_odd_one_out.html", activity=activity, topics=topics,
             questions=None, results=results, words=words, dropped=0,
@@ -1435,6 +1437,82 @@ def _odd_one_out_round(activity, topics):
         "game_odd_one_out.html", activity=activity, topics=topics,
         questions=questions, results=None, score=None, words=words,
         dropped=0, short=words - len(questions))
+
+
+def _attach_odd_one_out_glosses(results, topics):
+    """Give each word on the results page what it means (#519):
+    `result["glosses"][word]`, or no entry when there is nothing to say.
+
+    The answer form carries words and topic names, never card ids (#269), so
+    the cards are read here. **Only from `topics`** -- the selection
+    `game_play` already resolved against what this visitor may see -- and only
+    the topics a question actually names. A posted topic name is the browser's
+    word, so one outside that set (a private topic, #382, or anything typed
+    into the form) reads nothing. The read is the round's own, with #127's
+    owner filter, so a card hidden from the deck stays hidden here too.
+
+    A word is matched in the topic the question says it came from: the
+    stranger in its topic, the other three in the home topic. A word with two
+    cards there (two parts of speech) shows the first.
+
+    A database failure costs the glosses, never the results page.
+    """
+    names = {r[key] for r in results for key in ("home", "intruder_topic")}
+    allowed = {name.casefold(): name for name in topics}
+    wanted = sorted(allowed[n.casefold()] for n in names if n and n.casefold() in allowed)
+    for result in results:
+        result["glosses"] = {}
+    if not wanted:
+        return
+    try:
+        cards = utils.get_flashcards_by_topics(wanted, web.cards_owner_filter(),
+                                               **web.viewer())
+    except Exception:
+        app.logger.exception("Odd one out: could not read the explanations")
+        return
+    by_word = {}
+    for card in cards:
+        key = ((card.get("topic") or "").casefold(),
+               (card.get("word") or "").strip().casefold())
+        by_word.setdefault(key, card)          # the first card of a word wins
+    prefs = web.current_settings()
+    for result in results:
+        for word in result["words"]:
+            topic = result["intruder_topic"] if word == result["answer"] else result["home"]
+            if topic.casefold() not in allowed:   # asked of the match too, not only the read
+                continue
+            card = by_word.get((topic.casefold(), word.strip().casefold()))
+            gloss = _gloss(card, prefs) if card else None
+            if gloss:
+                result["glosses"][word] = gloss
+
+
+def _gloss(card, prefs):
+    """What a word means, for a results page (#519): its English explanation,
+    or, where it has none, a translation in the learner's **prioritised
+    language** -- Settings > Quiz language, the language #235's reveal already
+    uses (`_gap_translation()`). Where the card has no translation in that
+    language, the other visible one; where it has neither, None.
+
+    `{"kind": "explanation" | "translation", "text", "label", "card"}`; the
+    card travels for the Wiktionary credit (#390).
+    """
+    explanation = (card.get("explanation_en") or "").strip()
+    if explanation:
+        return {"kind": "explanation", "text": explanation, "label": None,
+                "card": card}
+    preferred, _label = _gap_translation(prefs)
+    visible = _visible_quiz_langs(prefs)
+    order = [preferred] if preferred else []
+    order += [f"translation_{code}" for code in visible
+              if f"translation_{code}" != preferred]
+    for field in order:
+        text = (card.get(field) or "").strip()
+        if text:
+            code = field[len("translation_"):]
+            return {"kind": "translation", "text": text,
+                    "label": visible.get(code), "card": card}
+    return None
 
 
 def _spell_it_round(activity, topics):

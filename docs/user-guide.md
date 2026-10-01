@@ -231,6 +231,8 @@ Where it can, the game takes the stranger from a topic in a different section, b
 
 When you finish, every question is shown again with **the topic each word came from** — including the ones you got right. That is the point of the game rather than a nicety: a word can honestly belong to two topics, and *negotiation* would not look out of place under either *Business and work* or *Crime and justice*. The game can only ask about the grouping **your deck** actually has, so it tells you what that grouping was instead of leaving you to argue with the screen.
 
+Under every word you also see **what it means**: its English explanation, or, for a card that has none, its translation in the language you chose under *Quiz language* in Settings (or the other language you show, if the card has no translation in that one). So the results double as a quick review of all the words in the round.
+
 One thing it will never do is use a word that sits in both topics as the stranger — that would make the question unanswerable rather than hard.
 
 ### Spell it
