@@ -44,10 +44,11 @@
         <div class="modal">
             <button type="button" class="modal-close" aria-label="Close">&times;</button>
             {# WebP, and a phone gets the 640px copy (#517): the JPEG was 417 KB.
-               Lazy, because this is on every page and hidden until About is
-               pressed: a browser does not fetch a lazy image nobody can see. #}
-            <img loading="lazy" src="{{ static_url('img/main_image.webp') }}"
-                 srcset="{{ static_url('img/main_image-640.webp') }} 640w, {{ static_url('img/main_image.webp') }} 1254w"
+               The address waits in data- attributes until About is pressed:
+               this is on every page and almost never opened. `loading="lazy"`
+               was tried first and Chrome fetched the hidden image anyway. #}
+            <img data-src="{{ static_url('img/main_image.webp') }}"
+                 data-srcset="{{ static_url('img/main_image-640.webp') }} 640w, {{ static_url('img/main_image.webp') }} 1254w"
                  sizes="(max-width: 640px) 92vw, 900px"
                  alt="About KuantorFlow">
         </div>
@@ -635,6 +636,12 @@
             var overlay = document.getElementById("about-modal");
             document.getElementById("about-link").addEventListener("click", function (e) {
                 e.preventDefault();
+                var img = overlay.querySelector("img[data-src]");
+                if (img) {   // the first time only (#517)
+                    img.srcset = img.dataset.srcset;
+                    img.src = img.dataset.src;
+                    img.removeAttribute("data-src");
+                }
                 overlay.hidden = false;
             });
             function close() { overlay.hidden = true; }
