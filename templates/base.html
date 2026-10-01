@@ -43,7 +43,11 @@
     <div class="modal-overlay" id="about-modal" hidden>
         <div class="modal">
             <button type="button" class="modal-close" aria-label="Close">&times;</button>
-            <img src="{{ static_url('img/main_image.jpg') }}" alt="About KuantorFlow">
+            {# WebP, and a phone gets the 640px copy (#517): the JPEG was 417 KB. #}
+            <img src="{{ static_url('img/main_image.webp') }}"
+                 srcset="{{ static_url('img/main_image-640.webp') }} 640w, {{ static_url('img/main_image.webp') }} 1254w"
+                 sizes="(max-width: 640px) 92vw, 900px"
+                 alt="About KuantorFlow">
         </div>
     </div>
 
@@ -501,7 +505,15 @@
     <div class="welcome-overlay" id="welcome-overlay" hidden>
         <div class="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
             <section class="welcome-step" id="welcome-step-1">
-                <img class="welcome-main-image" src="{{ static_url('img/main_image.jpg') }}" alt="Welcome to KuantorFlow">
+                {# WebP, phones get the 640px copy, and the popup waits for it
+                   to be decoded before it opens (#517). The addresses are in
+                   data- attributes until then: an ordinary src is fetched on
+                   every home-page visit, and the popup opens once a session. #}
+                <img class="welcome-main-image"
+                     data-src="{{ static_url('img/main_image.webp') }}"
+                     data-srcset="{{ static_url('img/main_image-640.webp') }} 640w, {{ static_url('img/main_image.webp') }} 1254w"
+                     sizes="(max-width: 640px) 92vw, 900px"
+                     alt="Welcome to KuantorFlow">
                 <div class="welcome-actions next-only">
                     <button type="button" id="welcome-next" class="welcome-next">Next &gt;</button>
                 </div>
@@ -511,7 +523,7 @@
                 <h2 id="welcome-title">Meet Mykola — AI Agent for English Learning</h2>
                 <div class="welcome-mykola-layout">
                     <img class="welcome-mykola-image"
-                         src="{{ mykola_media('mykola_poster.jpg') if mykola_enabled else static_url('img/mykola_avatar.jpg') }}"
+                         data-src="{{ mykola_media('mykola_poster.webp') if mykola_enabled else static_url('img/mykola_avatar.webp') }}"
                          alt="Mykola">
                     <div class="welcome-mykola-text">
                         <p>
@@ -944,9 +956,40 @@
 
             if (welcomeOverlay && welcomeStep1 && welcomeStep2 && welcomeNext && welcomeStart) {
                 var welcomeSeenKey = "kf_welcome_seen_{{ app_boot_id }}";
+                // #517: open the popup with its pictures in place, not before.
+                // The step 1 picture and the background are what it opens on;
+                // they get their addresses here (data-src until now, so a visit
+                // that shows no popup fetches nothing), and the popup waits
+                // until both are decoded -- at most WELCOME_WAIT_MS, after which
+                // it opens anyway: a slow connection gets a popup that fills
+                // in, never no popup. Step 2's poster loads alongside, so it is
+                // there when the learner presses Next.
+                var WELCOME_WAIT_MS = 2500;
+                function welcomeImagesReady() {
+                    var waits = [];
+                    welcomeOverlay.querySelectorAll("img[data-src]").forEach(function (img) {
+                        if (img.dataset.srcset) img.srcset = img.dataset.srcset;
+                        img.src = img.dataset.src;
+                        if (img.closest("#welcome-step-1")) waits.push(img);
+                    });
+                    // The same URL the stylesheet uses, so this is one download.
+                    var bg = new Image();
+                    bg.src = "{{ url_for('static', filename='img/welcome_background.webp') }}";
+                    waits.push(bg);
+                    var decoded = Promise.all(waits.map(function (img) {
+                        return img.decode ? img.decode().catch(function () {}) : Promise.resolve();
+                    }));
+                    var timeout = new Promise(function (done) { setTimeout(done, WELCOME_WAIT_MS); });
+                    return Promise.race([decoded, timeout]);
+                }
+
                 function openWelcome() {
-                    welcomeOverlay.hidden = false;
-                    document.body.classList.add("welcome-active");
+                    var show = function () {
+                        welcomeOverlay.hidden = false;
+                        document.body.classList.add("welcome-active");
+                    };
+                    if (typeof Promise === "undefined") { show(); return; }
+                    welcomeImagesReady().then(show, show);
                 }
 
                 function closeWelcome() {
@@ -977,13 +1020,13 @@
     {% if mykola_enabled %}
     <!-- Mykola AI chat widget (bottom-right). Logic lives in the ai_agent repo. -->
     <button type="button" id="mykola-launcher" aria-label="Chat with Mykola">
-        <img src="{{ static_url('img/mykola_avatar.jpg') }}" alt="Mykola">
+        <img src="{{ static_url('img/mykola_avatar.webp') }}" alt="Mykola">
         <span>Ask&nbsp;Mykola</span>
     </button>
 
     <div id="mykola-panel" hidden>
         <div class="mykola-header">
-            <img src="{{ static_url('img/mykola_avatar.jpg') }}"
+            <img src="{{ static_url('img/mykola_avatar.webp') }}"
                  id="mykola-avatar" class="mykola-avatar" alt="See Mykola's animation"
                  title="See Mykola conduct">
             <div>
