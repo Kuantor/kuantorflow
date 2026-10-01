@@ -618,6 +618,18 @@
         </div>
     </div>
 
+        {# #521. On paper the picker and the page title are gone, so a printed
+           round says what it was: the activity, the topics it was dealt from
+           (or, for a review, that it was the words due), and the date. Every
+           game and the quiz pass `activity` and `topics`; nothing else here
+           does. Hidden on screen. #}
+        {% if activity is defined and activity and topics is defined and topics %}
+        <p class="print-only print-heading">
+            <strong>{{ activity.name }}</strong>
+            &middot; {% if reviewing %}Review: words due today{% else %}{{ topics | join(', ') }}{% endif %}
+            &middot; {{ print_date() }}
+        </p>
+        {% endif %}
         {% block content %}{% endblock %}
     </main>
 
