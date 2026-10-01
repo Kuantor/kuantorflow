@@ -568,7 +568,7 @@ a.button-link { display: inline-block; text-decoration: none;
    here: the deck's and Listen and type's speakers are tuned on their own.
    A relative nudge rather than another vertical-align, which is what the
    comment above warns against. */
-.word > .say { position: relative; top: -0.23em; }
+.word > .say { position: relative; top: -0.12em; }
 .say:hover, .say:focus-visible {
     opacity: 1;
     filter: none;
@@ -576,7 +576,7 @@ a.button-link { display: inline-block; text-decoration: none;
 /* A comfortable target on a phone, where this is most likely to be used. */
 @media (max-width: 640px) {
     .say { font-size: 1rem; width: 1.9em; height: 1.9em; opacity: 0.6; }
-    .word > .say { top: -0.15em; }   /* its larger box needs less lift */
+    .word > .say { top: -0.08em; }   /* its larger box needs less lift */
 }
 .say--deck { font-size: 1rem; margin-left: 0.5rem; }
 /* #272's speaker sits beside the question number and is pressed repeatedly,
@@ -649,9 +649,10 @@ a.button-link { display: inline-block; text-decoration: none;
     letter-spacing: 0.04em;
     /* `middle` centres the pill on the x-height, which beside a bold
        headword sits 2.1px below the word's visual middle (measured against
-       half its cap height, #502). Nudged up without moving anything else. */
+       half its cap height, #502). Nudged up about half that -- the full lift
+       read as slightly high. Nothing else on the line moves. */
     position: relative;
-    top: -0.17em;
+    top: -0.09em;
 }
 .lang { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.7rem; }
 .card ul { margin: 0.3rem 0; padding-left: 1.3rem; }
