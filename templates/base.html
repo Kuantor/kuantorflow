@@ -235,10 +235,10 @@
 
                     {# How many cards a round of Fill the gap deals (#235).
                        A number box rather than a slider: the range is wide (5-50)
-                       and a learner picking a round length has a number in mind,
-                       where the restart interval below is a vaguer "after a
-                       while". Out-of-range values fall back to the default in
-                       sanitize(), so the box cannot store nonsense. #}
+                       and a learner picking a round length has a number in mind.
+                       A value typed outside the range is pulled back into it as
+                       soon as the box is left (clampNumberBox, #463), so what
+                       the box shows is what gets saved. #}
                     <fieldset class="settings-group">
                         <legend>Fill the gap round</legend>
                         <label class="settings-number">
@@ -256,6 +256,41 @@
                            flashcards page or a review; the topic picker's
                            Words box decides otherwise. A selection
                            with fewer playable cards deals what it has.</p>
+                    </fieldset>
+
+                    {# Automatic chat restart (ai_agent#54): after this many hours
+                       without a message, the next page opens a fresh
+                       conversation. Since #495 that is all it does -- no recap;
+                       the learner asks for one with the button.
+
+                       A number box, not a slider (#463): a learner thinks "two
+                       hours" and should type 2, not hunt for it on a 24-stop
+                       track. Half width, beside Fill the gap's box, the other
+                       number someone has in mind. The checkbox is the stored
+                       value 0, a different state from "rarely" rather than the
+                       bottom of the range, so the box's minimum stays 1; it
+                       greys the box (updateRestartState). #}
+                    {% set restart_hours = settings.restart_chat_interval %}
+                    <fieldset class="settings-group">
+                        <legend>Restart Mykola&rsquo;s chat after a break</legend>
+                        <label class="settings-number">
+                            Hours without writing
+                            <input type="number" name="restart_chat_interval"
+                                   min="1" max="24" step="1"
+                                   value="{{ restart_hours or 2 }}"
+                                   inputmode="numeric"
+                                   aria-describedby="restart-interval-hint"
+                                   {% if not restart_hours or settings_read_only %}disabled{% endif %}>
+                        </label>
+                        <p class="settings-hint settings-group-hint" id="restart-interval-hint">Between
+                           1 and 24. Come back after this long without writing
+                           and Mykola opens a fresh conversation.</p>
+                        <label class="settings-check">
+                            <input type="checkbox" name="restart_never"
+                                   {% if not restart_hours %}checked{% endif %}
+                                   {% if settings_read_only %}disabled{% endif %}>
+                            Never restart chat automatically
+                        </label>
                     </fieldset>
 
                     {# How fast a word is spoken (#268). A learner at B2 often
@@ -280,32 +315,6 @@
                            from your browser, not from KuantorFlow.</p>
                     </fieldset>
 
-                    {# Automatic chat restart (ai_agent#54): after this long
-                       without a message, Mykola reviews the last exchanges and
-                       starts a fresh conversation. The checkbox is the stored
-                       value 0 — it greys the slider out (updateRestartState). #}
-                    {% set restart_hours = settings.restart_chat_interval %}
-                    <fieldset class="settings-group settings-group--wide">
-                        <legend>Restart Mykola&rsquo;s chat after a break</legend>
-                        <div class="settings-slider-row">
-                            <input type="range" name="restart_chat_interval"
-                                   min="1" max="24" step="1"
-                                   value="{{ restart_hours or 2 }}"
-                                   aria-describedby="restart-interval-value"
-                                   {% if not restart_hours or settings_read_only %}disabled{% endif %}>
-                            <output id="restart-interval-value"
-                                    for="restart_chat_interval">{{ restart_hours or 2 }} h</output>
-                        </div>
-                        <label class="settings-check">
-                            <input type="checkbox" name="restart_never"
-                                   {% if not restart_hours %}checked{% endif %}
-                                   {% if settings_read_only %}disabled{% endif %}>
-                            Never restart chat automatically
-                        </label>
-                        <p class="settings-hint settings-group-hint">Come back after
-                           this long without writing and Mykola reviews your last
-                           three messages, then opens a fresh conversation.</p>
-                    </fieldset>
                     </div>{# /settings-grid #}
 
                     {# Fast thinking (ai_agent#50). Unlike the typewriter below,
@@ -819,16 +828,30 @@
             speechSlider.addEventListener("input", updateSpeechRate);
             updateSpeechRate();
 
-            var restartSlider = settingsForm.restart_chat_interval;
+            var restartBox = settingsForm.restart_chat_interval;
             var restartNever = settingsForm.restart_never;
-            var restartValue = document.getElementById("restart-interval-value");
             function updateRestartState() {
-                restartValue.textContent = restartSlider.value + " h";
                 if (settingsReadOnly) return;     // everything stays disabled
-                restartSlider.disabled = restartNever.checked;
+                restartBox.disabled = restartNever.checked;
             }
-            restartSlider.addEventListener("input", updateRestartState);
             restartNever.addEventListener("change", updateRestartState);
+
+            // A number box can be typed into, and min/max bound only the
+            // steppers -- so a typed 25 used to reach sanitize(), which does
+            // not clamp but falls back to the *default*: 25 hours saved as 2
+            // (#463). Pulled into range here instead, when the box is left and
+            // again before saving, so what the box shows is what is stored.
+            // Both number boxes, the same exposure: Fill the gap's has had it
+            // since #235.
+            function clampNumberBox(box) {
+                var low = Number(box.min), high = Number(box.max);
+                var value = Math.round(Number(box.value));
+                if (box.value === "" || isNaN(value)) value = Number(box.defaultValue);
+                box.value = String(Math.min(high, Math.max(low, value)));
+            }
+            [restartBox, settingsForm.gapped_deck_size].forEach(function (box) {
+                box.addEventListener("change", function () { clampNumberBox(box); });
+            });
 
             function openSettings() {
                 settingsForm.reset();      // discard unsaved edits from last open
@@ -890,6 +913,9 @@
                 // The default is therefore **reload**, and the exemptions are
                 // declared. `defaultChecked`/`defaultValue` hold what the
                 // server rendered, and are moved forward after each save.
+                // Saved without leaving a box fires no change, so clamp here too.
+                clampNumberBox(restartBox);
+                clampNumberBox(settingsForm.gapped_deck_size);
                 var APPLIED_WITHOUT_A_RELOAD = ["speech_rate",
                                                 "mykola_typewriter"];
                 var listChanged = Array.prototype.some.call(
@@ -921,7 +947,7 @@
                         speech_rate: Number(settingsForm.speech_rate.value),
                         // checked "never" is stored as 0 (ai_agent#54)
                         restart_chat_interval: restartNever.checked
-                            ? 0 : Number(restartSlider.value),
+                            ? 0 : Number(restartBox.value),
                     }),
                 }).then(function (resp) {
                     if (!resp.ok) throw new Error("save failed");
@@ -1821,6 +1847,16 @@
                 history = Array.isArray(state.history) ? state.history : [];
                 chatId = state.chatId || null;
                 uiMessages = Array.isArray(state.messages) ? state.messages : [];
+                // Everything saveWidgetState() writes is read back **here, before
+                // anything below can save** (#464). setMinimized() saves, and so
+                // does the scroll listener when scrollTop is restored; reading
+                // these two at the end let those saves store them as null and
+                // false. The live variables were right and the stored copy was
+                // not, so it showed only on the page *after* next: an anonymous
+                // visitor's break then had no timestamp at all and the chat
+                // never restarted, and a used recap button came back.
+                lastMessageAt = state.lastMessageAt || null;
+                recapAsked = !!state.recapAsked;
 
                 while (messages.firstChild) messages.removeChild(messages.firstChild);
                 if (uiMessages.length) {
@@ -1846,8 +1882,6 @@
                 if (typeof state.scrollTop === "number") {
                     messages.scrollTop = state.scrollTop;
                 }
-                lastMessageAt = state.lastMessageAt || null;
-                recapAsked = !!state.recapAsked;
                 syncRecapButton();
 
                 // A question asked on the page we just left, whose answer died
@@ -1857,7 +1891,7 @@
                 // It comes before the staleness check on purpose. Both can be
                 // true at once — ask something, wander off for three hours,
                 // come back — and restarting first would wipe the thread and
-                // the unanswered question with it. The recap is not lost by
+                // the unanswered question with it. The restart is not lost by
                 // waiting; it happens on the next load, once this turn has
                 // somewhere to belong.
                 if (state.pending) {
