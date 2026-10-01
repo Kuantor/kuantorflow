@@ -1847,6 +1847,16 @@
                 history = Array.isArray(state.history) ? state.history : [];
                 chatId = state.chatId || null;
                 uiMessages = Array.isArray(state.messages) ? state.messages : [];
+                // Everything saveWidgetState() writes is read back **here, before
+                // anything below can save** (#464). setMinimized() saves, and so
+                // does the scroll listener when scrollTop is restored; reading
+                // these two at the end let those saves store them as null and
+                // false. The live variables were right and the stored copy was
+                // not, so it showed only on the page *after* next: an anonymous
+                // visitor's break then had no timestamp at all and the chat
+                // never restarted, and a used recap button came back.
+                lastMessageAt = state.lastMessageAt || null;
+                recapAsked = !!state.recapAsked;
 
                 while (messages.firstChild) messages.removeChild(messages.firstChild);
                 if (uiMessages.length) {
@@ -1872,8 +1882,6 @@
                 if (typeof state.scrollTop === "number") {
                     messages.scrollTop = state.scrollTop;
                 }
-                lastMessageAt = state.lastMessageAt || null;
-                recapAsked = !!state.recapAsked;
                 syncRecapButton();
 
                 // A question asked on the page we just left, whose answer died
@@ -1883,7 +1891,7 @@
                 // It comes before the staleness check on purpose. Both can be
                 // true at once — ask something, wander off for three hours,
                 // come back — and restarting first would wipe the thread and
-                // the unanswered question with it. The recap is not lost by
+                // the unanswered question with it. The restart is not lost by
                 // waiting; it happens on the next load, once this turn has
                 // somewhere to belong.
                 if (state.pending) {
