@@ -282,15 +282,15 @@
                                    aria-describedby="restart-interval-hint"
                                    {% if not restart_hours or settings_read_only %}disabled{% endif %}>
                         </label>
+                        <p class="settings-hint settings-group-hint" id="restart-interval-hint">Between
+                           1 and 24. Come back after this long without writing
+                           and Mykola opens a fresh conversation.</p>
                         <label class="settings-check">
                             <input type="checkbox" name="restart_never"
                                    {% if not restart_hours %}checked{% endif %}
                                    {% if settings_read_only %}disabled{% endif %}>
                             Never restart chat automatically
                         </label>
-                        <p class="settings-hint settings-group-hint" id="restart-interval-hint">Between
-                           1 and 24. Come back after this long without writing
-                           and Mykola opens a fresh conversation.</p>
                     </fieldset>
 
                     {# How fast a word is spoken (#268). A learner at B2 often
