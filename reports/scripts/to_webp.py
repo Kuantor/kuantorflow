@@ -11,6 +11,15 @@ the specification, and they were measured rather than assumed:
 slowest and smallest setting; these are build-time assets, so the seconds are
 free and the bytes are not.
 
+The JPEG originals are not kept in static/img once their WebP is made: an
+image there that nothing asks for is #361's dead weight, downloadable by
+anyone. They are in git history -- #517 converted main_image, the two
+backgrounds and Mykola's avatar. To re-export one, find the commit that
+deleted it and take the file from its parent:
+
+    git log --diff-filter=D --format=%h -- static/img/main_image.jpg
+    git show <that hash>^:static/img/main_image.jpg > main_image.jpg
+
 Usage:
     python reports/scripts/to_webp.py --tile     in.jpg src_dir/ out_dir/
     python reports/scripts/to_webp.py --banner   in.jpg out.webp
