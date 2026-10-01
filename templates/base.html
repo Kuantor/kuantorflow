@@ -48,8 +48,8 @@
                this is on every page and almost never opened. `loading="lazy"`
                was tried first and Chrome fetched the hidden image anyway. #}
             <img data-src="{{ static_url('img/main_image.webp') }}"
-                 data-srcset="{{ static_url('img/main_image-640.webp') }} 640w, {{ static_url('img/main_image.webp') }} 1254w"
-                 sizes="(max-width: 640px) 92vw, 900px"
+                 data-srcset="{{ static_url('img/main_image-640.webp') }} 640w, {{ static_url('img/main_image-960.webp') }} 960w, {{ static_url('img/main_image.webp') }} 1254w"
+                 sizes="(max-width: 640px) 85vw, min(900px, 72vh)"
                  alt="About KuantorFlow">
         </div>
     </div>
@@ -514,8 +514,8 @@
                    every home-page visit, and the popup opens once a session. #}
                 <img class="welcome-main-image"
                      data-src="{{ static_url('img/main_image.webp') }}"
-                     data-srcset="{{ static_url('img/main_image-640.webp') }} 640w, {{ static_url('img/main_image.webp') }} 1254w"
-                     sizes="(max-width: 640px) 92vw, 900px"
+                     data-srcset="{{ static_url('img/main_image-640.webp') }} 640w, {{ static_url('img/main_image-960.webp') }} 960w, {{ static_url('img/main_image.webp') }} 1254w"
+                     sizes="(max-width: 640px) 85vw, min(900px, 72vh)"
                      alt="Welcome to KuantorFlow">
                 <div class="welcome-actions next-only">
                     <button type="button" id="welcome-next" class="welcome-next">Next &gt;</button>
