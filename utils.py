@@ -716,6 +716,32 @@ def _write_schedule(cursor, user_id, word, pos, schedule):
         (user_id, word, pos) + values + values)
 
 
+def histories_answered_since(user_id, since):
+    """`{recall.word_key: [recall.Answer, ...]}` -- the **whole** history of
+    every word this learner has answered since `since` (#529).
+
+    Whole, because the date a word had before today is the replay of
+    everything before today (`recall.start_of_day_dates()`). Matched on the
+    word alone, as `refresh_schedule()` does, and split by part of speech in
+    Python through the same key. One query; the subquery reads this learner's
+    rows through `idx_recall_answers_learner`'s `user_id` prefix.
+    """
+    if not user_id:
+        return {}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        histories = _histories(
+            cursor,
+            "WHERE user_id = %s AND word IN (SELECT word FROM recall_answers "
+            "WHERE user_id = %s AND answered_at >= %s)",
+            (user_id, user_id, since))
+        cursor.close()
+    finally:
+        conn.close()
+    return {key[1:]: answers for key, (_w, _p, answers) in histories.items()}
+
+
 def refresh_schedule(user_id, words):
     """Recompute this learner's schedule for `words` from the log (#479).
 

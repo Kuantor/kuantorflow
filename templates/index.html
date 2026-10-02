@@ -120,10 +120,14 @@
         {# #92. Only when something is due: an empty badge is noise, and an
            anonymous visitor has no schedule to count. The number is words the
            learner can actually be dealt -- see rounds._due_for_review(). #}
+        {# #529: today's list stays all day, so the badge does too, and says
+           how far through it the learner is rather than vanishing. #}
         {% set due_words = due_for_review() %}
         {% if due_words %}
+            {% set total = due_words|length %}
+            {% set left = due_words | rejectattr(3) | list | length %}
             <a class="review-badge" href="{{ url_for('review_page') }}">Review
-               ({{ due_words|length }} due)</a>
+               ({% if left == total %}{{ total }} due{% elif left %}{{ left }} of {{ total }} left{% else %}{{ total }} done today{% endif %})</a>
         {% endif %}
         <div class="topic-tiles">
             {# The quiz first: it is the oldest activity here and the one a
