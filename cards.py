@@ -1468,9 +1468,13 @@ def stream_topic_fill():
         saved = skipped = failed = 0
         for index, word in enumerate(words, start=1):
             try:
+                # By keyword: `lookup_word()`'s second parameter is `topic`,
+                # and passed positionally the translator landed there and the
+                # dictionary in `translator` -- so a learner's Wiktionary was
+                # quietly Oxford, and the translator whichever came first.
                 entries = parsers.lookup_word(
-                    word, prefs.get("translator"),
-                    prefs.get("explanatory_dictionary"))
+                    word, translator=prefs.get("translator"),
+                    explanatory_dictionary=prefs.get("explanatory_dictionary"))
             except Exception as error:
                 failed += 1
                 applog.lookup_failed(word, error)
