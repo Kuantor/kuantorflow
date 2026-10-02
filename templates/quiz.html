@@ -37,32 +37,41 @@
         </div>
     {% else %}
 
-    <p class="lang-switch">
-        {% for code, name in langs.items() %}
-            {% if code == lang %}
-                <span>{{ name }}</span>
-            {% else %}
-                {# The name rides along so the confirmation below can say which
-                   language is being switched to, in either direction, without
-                   either one being named in the script. #}
-                <a href="{{ self_url(lang=code, dir=direction) }}" data-lang-name="{{ name }}"
-                   data-confirm="Do you want to switch to {{ name }} translations? The words will be chosen again at random, so this round starts over.">{{ name }}</a>
-            {% endif %}
-        {% endfor %}
-    </p>
-    {# #540: which way round. The same switch shape as the language's, and the
-       same confirmation, since it re-deals the round too. The choice is kept
-       for the visit, so the Quiz button opens this way next time. #}
-    <p class="lang-switch quiz-direction">
-        {% for code, label in [('from-en', 'English → ' ~ lang_name), ('to-en', lang_name ~ ' → English')] %}
-            {% if code == direction %}
-                <span>{{ label }}</span>
-            {% else %}
-                <a href="{{ self_url(lang=lang, dir=code) }}"
-                   data-confirm="Do you want to switch to {{ label }}? The words will be chosen again at random, so this round starts over.">{{ label }}</a>
-            {% endif %}
-        {% endfor %}
-    </p>
+    {# #540: what you see, a swap, and what you type -- one row, the way a
+       translator lays it out, in place of two rows of pills (Anton, 2 Oct).
+       The order of the two boxes *is* the direction, so neither needs a label.
+
+       The language is a small menu of plain links rather than a <select>, so
+       it works without JavaScript and goes through the same confirmation as
+       the swap: both re-deal the round. With one language visible (#46/#79)
+       it is a plain box with nothing to open. #}
+    {% macro lang_box() %}
+        {% if langs|length > 1 %}
+        <details class="quiz-lang">
+            <summary aria-label="Translation language: {{ lang_name }}">{{ lang_name }}</summary>
+            <div class="quiz-lang-menu">
+                {% for code, name in langs.items() if code != lang %}
+                    {# The name rides along so the confirmation can say which
+                       language is being switched to without the script naming
+                       either one. #}
+                    <a href="{{ self_url(lang=code, dir=direction) }}" data-lang-name="{{ name }}"
+                       data-confirm="Do you want to switch to {{ name }} translations? The words will be chosen again at random, so this round starts over.">{{ name }}</a>
+                {% endfor %}
+            </div>
+        </details>
+        {% else %}
+        <span class="quiz-side">{{ lang_name }}</span>
+        {% endif %}
+    {% endmacro %}
+    {% set other_way = 'from-en' if to_english else 'to-en' %}
+    {% set other_label = ('English → ' ~ lang_name) if to_english else (lang_name ~ ' → English') %}
+    <div class="quiz-pair" role="group" aria-label="What you see and what you type">
+        {% if to_english %}{{ lang_box() }}{% else %}<span class="quiz-side">English</span>{% endif %}
+        <a class="quiz-swap" href="{{ self_url(lang=lang, dir=other_way) }}"
+           aria-label="Swap: {{ other_label }}" title="Swap: {{ other_label }}"
+           data-confirm="Do you want to switch to {{ other_label }}? The words will be chosen again at random, so this round starts over.">&#8644;</a>
+        {% if to_english %}<span class="quiz-side">English</span>{% else %}{{ lang_box() }}{% endif %}
+    </div>
 
     {% if not cards %}
         <div class="panel">
@@ -154,9 +163,9 @@
 
     <script>
         (function () {
-            // Both switches -- language and direction (#540) -- re-deal the
-            // round, so both ask first; each link carries its own sentence.
-            var links = document.querySelectorAll(".lang-switch a[data-confirm]");
+            // The swap and the language menu (#540) both re-deal the round,
+            // so both ask first; each link carries its own sentence.
+            var links = document.querySelectorAll(".quiz-pair a[data-confirm]");
             if (!links.length) return;
 
             var overlay = document.getElementById("lang-switch-modal");
@@ -170,6 +179,8 @@
                 link.addEventListener("click", function (event) {
                     event.preventDefault();
                     target = link.href;
+                    var menu = link.closest("details");
+                    if (menu) menu.open = false;
                     text.textContent = link.dataset.confirm;
                     overlay.hidden = false;
                     go.focus();
@@ -185,6 +196,11 @@
             });
             document.addEventListener("keydown", function (event) {
                 if (event.key === "Escape" && !overlay.hidden) close();
+            });
+            // The language menu closes on a click anywhere else, as a menu does.
+            document.addEventListener("click", function (event) {
+                var menu = document.querySelector(".quiz-lang[open]");
+                if (menu && !menu.contains(event.target)) menu.open = false;
             });
         })();
     </script>
