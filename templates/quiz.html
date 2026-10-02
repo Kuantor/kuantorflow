@@ -88,8 +88,7 @@
         <div class="panel panel--tight">
             {% if to_english %}
             <p>Type the English word for each {{ lang_name }} translation ({{ cards|length }} question{{ '' if cards|length == 1 else 's' }}).
-               The part of speech and the first letter are a hint; any word in
-               these topics with the same translation counts.
+               Any word in these topics with the same translation counts.
             {% else %}
             <p>Type the {{ lang_name }} translation for each English word ({{ cards|length }} question{{ '' if cards|length == 1 else 's' }}).
             {% endif %}
@@ -108,7 +107,10 @@
                        question -- and #270's hint: the part of speech and the
                        first letter of the English word. #}
                     <div class="word">{{ loop.index }}. <span lang="{{ 'uk' if lang == 'ukr' else 'ru' }}">{{ card['translation_' ~ lang] }}</span>
-                        <span class="quiz-hint">({% if card.pos %}{{ card.pos }}, {% endif %}{{ card.word[:1] }}&hellip;)</span></div>
+                        {# Spelled out (Anton, 2 Oct): "r…" alone did not say what
+                           it was a hint about. Lower-case, because the answer
+                           is typed in lower case. #}
+                        <span class="quiz-hint">{% if card.pos %}{{ card.pos }} &middot; {% endif %}starts with &ldquo;{{ card.word[:1] | lower }}&rdquo;</span></div>
                     <input type="text" name="answer_{{ card.id }}" autocomplete="off"
                            autocapitalize="none" spellcheck="false" lang="en">
                     {% else %}
