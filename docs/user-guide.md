@@ -477,6 +477,8 @@ A card here is a **lexical entry**, not a word-and-translation pair. The transla
 
 ### Who made it, and how to get in touch
 
-KuantorFlow is made by **Anton Kuznietsov**. Questions, problems and ideas for the site are welcome at [anton.kuznietsov@gmail.com](mailto:anton.kuznietsov@gmail.com).
+KuantorFlow is made by **Anton Kuznietsov** using [Claude Code](https://claude.com/claude-code). Questions, problems and ideas for the site are welcome at [anton.kuznietsov@gmail.com](mailto:anton.kuznietsov@gmail.com).
+
+The source code is public on GitHub: [github.com/Kuantor/kuantorflow](https://github.com/Kuantor/kuantorflow).
 
 Anton's other projects and demos, and a short biography under *About Me*, are on his website: [kuantor.github.io](https://kuantor.github.io/).
