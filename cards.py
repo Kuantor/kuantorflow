@@ -1238,10 +1238,12 @@ def edit_card(topic, card_id):
 # and holding it is what lets the fill be a GET that EventSource can open.
 TOPIC_PLAN_KEY = "topic_plan"
 
-# A pause between words, `seed_topics.PAUSE`'s value and its reason: this fans
-# out at no dictionary and is in no hurry. Twenty words is a minute of somebody
-# else's bandwidth, which is why the page streams rather than waiting.
-TOPIC_FILL_PAUSE = 1.0
+# No pause between words (#524). There was one, `seed_topics.PAUSE`'s second,
+# copied with its reason -- but that script looks up 360 words in a row, and
+# this fill is at most twenty. Each lookup already takes about four seconds
+# (measured 2 Oct: two Claude translations of ~1.9 s each, one after the
+# other, then 0.35 s from Oxford or 0.7 s from Wiktionary), so the requests
+# are spaced by the work itself and the pause only added a quarter to the wait.
 
 
 def _lookup_budget(wanted):
@@ -1433,9 +1435,9 @@ def filling_topic():
 def stream_topic_fill():
     """Look each approved word up and save it, reporting as it goes.
 
-    **Streamed rather than waited on.** `seed_topics.py`'s docstring says why
-    twenty words is not a request: it pauses between lookups and fans out at no
-    dictionary, so this is a minute of work. `/mykola/chat/stream` proved SSE
+    **Streamed rather than waited on.** A lookup takes about four seconds, so
+    twenty words is over a minute of work -- not a request anybody should sit
+    on with nothing on the screen. `/mykola/chat/stream` proved SSE
     reaches the browser through PythonAnywhere's proxy unbuffered, and this
     reuses its headers for the same reason.
 
@@ -1480,7 +1482,6 @@ def stream_topic_fill():
                 applog.lookup_failed(word, error)
                 yield web._sse({"type": "word", "word": word, "index": index,
                             "total": len(words), "outcome": "failed"})
-                time.sleep(TOPIC_FILL_PAUSE)
                 continue
 
             added = 0
@@ -1494,7 +1495,6 @@ def stream_topic_fill():
             yield web._sse({"type": "word", "word": word, "index": index,
                         "total": len(words), "cards": added,
                         "outcome": "saved" if added else "skipped"})
-            time.sleep(TOPIC_FILL_PAUSE)
 
         if plan.get("extend"):
             # #524: the same run, adding to a topic that was already there.
