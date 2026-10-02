@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Building {{ plan.title }} | KuantorFlow{% endblock %}
+{% block title %}{{ "Adding words to" if plan.extend else "Building" }} {{ plan.title }} | KuantorFlow{% endblock %}
 
 {# #406's progress page. The lookups were claimed before this page was reached,
    so a refresh re-reads the held plan and does not pay twice (#237's shape) —
@@ -8,7 +8,8 @@
 {% block content %}
 <p class="crumbs"><a href="{{ url_for('index') }}">&larr; Back</a></p>
 
-<h1>Building &ldquo;{{ plan.title }}&rdquo;</h1>
+{# #524 reaches this page too, adding to a topic that already exists. #}
+<h1>{{ "Adding words to" if plan.extend else "Building" }} &ldquo;{{ plan.title }}&rdquo;</h1>
 
 <div class="panel">
   <p id="fill-status">Looking up {{ plan.words | length }} words. This takes

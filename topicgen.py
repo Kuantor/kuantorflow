@@ -120,7 +120,7 @@ def _prompt(idea, count):
     )
 
 
-def _parse(reply, count):
+def _parse(reply, count, exclude=()):
     """`(title, words)` out of the model's answer.
 
     Forgiving about the shape and strict about the content: a stray blank line,
@@ -128,8 +128,13 @@ def _parse(reply, count):
     alphabetic headword is dropped rather than sent to a dictionary. Duplicates
     go too -- #101 would skip the second one anyway, and a list showing the same
     word twice looks like a bug on the approve screen.
+
+    `exclude` is #524's: the words a topic already holds. The prompt asks the
+    model not to repeat them and it sometimes does anyway, so they are dropped
+    here as well -- a lookup of a word the topic has is a slot spent on a skip.
     """
-    title, words, seen = "", [], set()
+    title, words = "", []
+    seen = {str(word).strip().casefold() for word in exclude}
     for line in str(reply or "").splitlines():
         line = line.strip()
         if not line:
@@ -138,7 +143,7 @@ def _parse(reply, count):
             title = " ".join(line.split(":", 1)[1].split())[:TITLE_MAX_CHARS]
             continue
         candidate = line.lstrip("-*0123456789. \t").strip().lower()
-        if not HEADWORD.match(candidate) or candidate in seen:
+        if not HEADWORD.match(candidate) or candidate.casefold() in seen:
             continue
         seen.add(candidate)
         words.append(candidate)
@@ -184,3 +189,72 @@ def propose(idea, count):
     applog.topic_proposed(idea, title, len(words), wanted=count,
                           model=TOPIC_MODEL)
     return (title or None), words
+
+
+# --- more words for a topic that already exists (#524) ----------------------
+#
+# The same machine pointed at a topic that is already there: no title to
+# invent, and a list of words it must not hand back. `_parse()` and the rules
+# for a headword are shared, so a word that would be refused for a new topic
+# is refused here too.
+
+# One less than a new topic's default: a topic being grown already has its
+# core, and ten is a lesson's worth on top of it.
+EXTEND_DEFAULT_WORDS = 10
+
+# The existing headwords go into the prompt so the model can avoid them. A
+# topic holds up to about eighty, which is cheap; the cap is only there so a
+# topic somebody filled with hundreds does not become a prompt of thousands.
+EXTEND_MAX_EXISTING = 300
+
+
+def _extend_prompt(topic, existing, count, steer):
+    """The whole prompt for #524, in one place so it can be read as a unit.
+
+    `_prompt()`'s rules for the words, word for word, so a topic grown here
+    looks like a topic built there. The steer is optional; without it the model
+    is asked for more of the same.
+    """
+    have = ", ".join(existing[:EXTEND_MAX_EXISTING]) or "(none yet)"
+    wish = (f"The learner would like these in particular: {steer}\n\n"
+            if steer else "")
+    return (
+        "You are helping grow a vocabulary topic for an intermediate to "
+        "upper-intermediate (B2-C1) learner of English.\n\n"
+        f"The topic: {topic}\n\n"
+        f"Words it already has -- do not repeat any of these: {have}\n\n"
+        f"{wish}"
+        f"Reply with {count} lines, one new English word per line, and "
+        "nothing else.\n\n"
+        "Rules for the words:\n"
+        "- they belong to the topic above\n"
+        "- dictionary headwords only: singular, uninflected, lower case "
+        "(write 'tactic', not 'tactics'; 'apply', not 'applies')\n"
+        "- one word per line, no phrases, no numbering, no punctuation\n"
+        "- words a B2-C1 learner would want and might not know; avoid the "
+        "hundred commonest words in English\n"
+        "- every word must be a real English word with a dictionary entry\n"
+        f"- exactly {count} of them, all different, none from the list above"
+    )
+
+
+def extend(topic, existing, count, steer=""):
+    """New headwords for `topic`, or None on failure (#524).
+
+    `existing` is the topic's own words. They are named in the prompt *and*
+    dropped from the answer, because the instruction alone is a request the
+    model sometimes ignores. A short list is not a failure, for `propose()`'s
+    reason: the approve screen is where a learner notices it.
+    """
+    steer = clean_idea(steer)
+    existing = sorted({str(word).strip().lower() for word in existing if word})
+    try:
+        reply = _ask_claude(_extend_prompt(topic, existing, count, steer), count)
+    except Exception as error:
+        applog.topic_proposal_failed(f"more words for {topic}: {steer}", error)
+        return None
+
+    _, words = _parse(reply, count, exclude=existing)
+    applog.topic_extension_proposed(topic, steer, len(words), wanted=count,
+                                    model=TOPIC_MODEL)
+    return words

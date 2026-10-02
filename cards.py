@@ -685,7 +685,8 @@ def flashcards(topic):
         # Who may change it, which is not the same as who may see it: the
         # admin reads every topic (#382) and still does not own this one.
         can_set_visibility=(found["created_by_user_id"] is not None
-                            and found["created_by_user_id"] == web._current_user_id()))
+                            and found["created_by_user_id"] == web._current_user_id()),
+        can_extend=_may_extend(found))
 
 
 def _topic_and_cards(topic):
@@ -1491,14 +1492,188 @@ def stream_topic_fill():
                         "outcome": "saved" if added else "skipped"})
             time.sleep(TOPIC_FILL_PAUSE)
 
-        applog.topic_generated(title, len(words), saved, skipped=skipped,
-                               failed=failed, user=user)
+        if plan.get("extend"):
+            # #524: the same run, adding to a topic that was already there.
+            applog.topic_extended(title, len(words), saved,
+                                  proposed=plan.get("proposed") or len(words),
+                                  skipped=skipped, failed=failed, user=user)
+        else:
+            applog.topic_generated(title, len(words), saved, skipped=skipped,
+                                   failed=failed, user=user)
         yield web._sse({"type": "done", "title": title, "saved": saved,
                     "skipped": skipped, "failed": failed,
-                    "url": url_for("flashcards", topic=title)})
+                    "url": url_for("flashcards", topic=title,
+                                   t=plan.get("topic_id"))})
 
     return Response(
         stream_with_context(events()),
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# --- more words for a topic that already exists (#524) ----------------------
+#
+# #406's machine pointed at a topic that is already there. Two routes of its
+# own -- the form with its proposal, and the claim -- and then #406's progress
+# page and stream, which already file every card by name; the plan carries
+# `extend` so they can say which of the two they are doing.
+#
+#   GET  /flashcards/<topic>/add-words        the form
+#   POST /flashcards/<topic>/add-words        propose -- nothing written or spent
+#   POST /flashcards/<topic>/add-words/start  claim the lookups, hold the plan
+
+def _extend_refusal(found):
+    """Why this visitor may not add words to `found`, or None if they may.
+
+    #125's refusal first -- an account writes, nobody else. Then the two that
+    are about *this* topic:
+
+    * **a private topic is its creator's** (#382). The admin can see one and
+      still does not own it, the same line `can_set_visibility` draws;
+    * **the words must land where the page says.** A card is filed by name,
+      and `_get_or_create_topic()` puts it in the learner's own private topic
+      before a public one of the same name. A learner holding a private 'Work'
+      who opens the public one (`?t=`) would otherwise watch the words go into
+      the other topic, so that case is refused rather than misfiled.
+      `resolve_topic()` without an id asks exactly the filing question.
+    """
+    refusal = web.add_refusal()
+    if refusal:
+        return refusal
+    me = web._current_user_id()
+    if not found["is_public"] and found["created_by_user_id"] != me:
+        return "Only the learner who made this private topic can add words to it."
+    filing = utils.resolve_topic(found["name"], viewer_id=me)
+    if filing is None or filing["id"] != found["id"]:
+        return ("You have a private topic with the same name, so new words "
+                "would go there. Add them from that topic instead.")
+    return None
+
+
+def _may_extend(found):
+    """Whether the topic page offers *Add more words* -- the route's own rule,
+    asked the same way, so the button is never a door that refuses."""
+    return web._generation_available() and _extend_refusal(found) is None
+
+
+def _topic_words(found):
+    """The topic's headwords, **everybody's**, lower-cased and sorted.
+
+    Not #127's owner filter: that decides what a learner wants to look at, and
+    this is what the model must not repeat. A word somebody else saved here is
+    a #101 skip all the same, and a skip is a lookup slot spent on nothing.
+    """
+    try:
+        cards = utils.get_flashcards_by_topic(found["name"], None, **web.viewer())
+    except Exception:
+        app.logger.exception("Could not read the topic's words")
+        return []
+    return sorted({(card.get("word") or "").strip().lower()
+                   for card in cards if card.get("word")})
+
+
+def _extendable_topic(topic):
+    """The topic named in the URL, or a 404 -- `_topic_and_cards()`'s rule,
+    `?t=` included, without its owner-filtered card read."""
+    found = utils.resolve_topic(topic, topic_id=request.args.get("t", type=int),
+                                **web.viewer())
+    if found is None:
+        abort(404)
+    return found
+
+
+@app.route("/flashcards/<topic>/add-words", methods=["GET", "POST"])
+def extend_topic(topic):
+    """Propose more words for this topic. Writes nothing and spends no lookup.
+
+    `generate_topic()` with the title fixed: the refusals run before the model
+    call (#200), the generation ceiling is asked immediately before it, and the
+    approve screen is #406's, free checks done.
+    """
+    if not web._generation_available():
+        abort(404)
+    found = _extendable_topic(topic)
+    refusal = _extend_refusal(found)
+    status = 403 if refusal and web.can_add_cards() else 200
+    existing = _topic_words(found)
+    proposal, message = None, None
+    steer = topicgen.clean_idea(request.form.get("steer"))
+    count = topicgen.word_count(request.form.get("count"),
+                                default=topicgen.EXTEND_DEFAULT_WORDS)
+
+    if request.method == "POST" and not refusal:
+        spend = web._generation_refusal()
+        if spend:
+            message = spend["message"]
+        else:
+            words = topicgen.extend(found["name"], existing, count, steer)
+            if words is None:
+                message = ("New words could not be suggested just now. "
+                           "Please try again in a moment.")
+            elif not words:
+                message = ("Every word suggested is already in this topic. "
+                           "Try describing the kind of words you want.")
+            else:
+                proposal = _vet_proposal(found["name"], words, steer, count)
+
+    return render_template(
+        "add_words.html", topic=found["name"], topic_row=found,
+        existing=len(existing), proposal=proposal, message=message,
+        refusal=refusal, steer=request.form.get("steer", ""), count=count,
+        min_words=topicgen.MIN_WORDS, max_words=topicgen.MAX_WORDS,
+        steer_max=topicgen.IDEA_MAX_CHARS), status
+
+
+@app.route("/flashcards/<topic>/add-words/start", methods=["POST"])
+def start_topic_extension(topic):
+    """Claim the lookups for the approved words and hold them for the fill.
+
+    `start_topic_fill()` with the destination fixed: the refusals asked again
+    (a form can be posted from anywhere), the ticked words only, the claim all
+    or nothing, then #406's own progress page.
+    """
+    if not web._generation_available():
+        abort(404)
+    found = _extendable_topic(topic)
+    back = url_for("extend_topic", topic=found["name"], t=found["id"])
+    refusal = _extend_refusal(found)
+    if refusal:
+        flash((refusal, None))
+        return redirect(back)
+
+    have = set(_topic_words(found))
+    words, seen = [], set()
+    for word in request.form.getlist("word"):
+        word = (word or "").strip().lower()
+        if (word and word not in seen and word not in have
+                and topicgen.HEADWORD.match(word)):
+            seen.add(word)
+            words.append(word)
+    if not words:
+        flash(("Tick at least one word first.", None))
+        return redirect(back)
+
+    user_id = web._current_user_id()
+    try:
+        allowed, scope, used = utils.claim_word_lookups(
+            user_id, len(words), web.LOOKUP_USER_DAILY,
+            web.LOOKUP_ANON_DAILY, all_limit=web.LOOKUP_ALL_DAILY)
+    except Exception:
+        app.logger.exception("Could not claim the lookups for a topic")
+        allowed, scope = True, None
+
+    if not allowed:
+        limit = web.LOOKUP_USER_DAILY if scope == "user" else web.LOOKUP_ANON_DAILY
+        applog.anonymous_limit_hit(scope, used, limit, action="lookup")
+        flash((f"That would need {len(words)} lookups and you have "
+               f"{max(limit - used, 0)} left today. Untick a few words, or "
+               "come back tomorrow.", None))
+        return redirect(back)
+
+    proposed = request.form.get("proposed", type=int) or len(words)
+    session[TOPIC_PLAN_KEY] = {
+        "title": found["name"], "words": words, "extend": True,
+        "topic_id": found["id"],
+        "proposed": max(0, min(proposed, topicgen.MAX_WORDS))}
+    return redirect(url_for("filling_topic"))

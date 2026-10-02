@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Add words to {{ topic }} | KuantorFlow{% endblock %}
+
+{# #524. generate_topic.html with the title fixed: the form, and the form with a
+   proposal under it, so "not quite" is one line edited and one press. #}
+{% block content %}
+<p class="crumbs"><a href="{{ url_for('flashcards', topic=topic, t=topic_row.id) }}">&larr; Back to the topic</a></p>
+
+<h1>Add more words to &ldquo;{{ topic }}&rdquo;</h1>
+
+{% if refusal %}
+  <div class="panel notice">{{ refusal }}</div>
+{% else %}
+
+<form method="POST" class="panel" id="steer-form"
+      action="{{ url_for('extend_topic', topic=topic, t=topic_row.id) }}">
+  <p>This topic has {{ existing }} {{ "word" if existing == 1 else "words" }}.
+     New suggestions leave those out.</p>
+
+  <label for="count">Words to add</label>
+  <input type="number" id="count" name="count" value="{{ count }}"
+         min="{{ min_words }}" max="{{ max_words }}" data-default="{{ count }}">
+  <p class="settings-hint">Between {{ min_words }} and {{ max_words }}. Each
+     word costs one dictionary lookup when you approve the list &mdash; nothing
+     is spent until then.</p>
+
+  <label for="steer">What kind of words? <span class="optional">(optional)</span></label>
+  <input type="text" id="steer" name="steer" autocomplete="off"
+         maxlength="{{ steer_max }}" value="{{ steer }}"
+         placeholder="more verbs, or the paperwork side of it">
+
+  <div class="modal-actions">
+    <button type="submit" id="propose">Suggest words</button>
+  </div>
+</form>
+
+<script>
+  // #463's rule for a number box: a value typed out of range is pulled into
+  // it when the box is left, rather than refused at the button.
+  (function () {
+    var box = document.getElementById("count");
+    box.addEventListener("change", function () {
+      var low = Number(box.min), high = Number(box.max);
+      var value = parseInt(box.value, 10);
+      if (isNaN(value)) value = Number(box.dataset.default);
+      box.value = Math.min(high, Math.max(low, value));
+    });
+  })();
+</script>
+
+{% if message %}
+  <div class="panel notice">{{ message }}</div>
+{% endif %}
+
+{% if proposal %}
+  {# The approve step. The destination is this topic and is not offered for
+     editing; everything else is #406's screen. #}
+  <form method="POST" class="panel" id="approve"
+        action="{{ url_for('start_topic_extension', topic=topic, t=topic_row.id) }}">
+    <h2>Check the list</h2>
+    <input type="hidden" name="proposed" value="{{ proposal.entries | length }}">
+
+    {% include "_proposed_words.html" %}
+
+    <div class="modal-actions">
+      <button type="submit" id="build">Add to the topic</button>
+      <a class="secondary" href="{{ url_for('flashcards', topic=topic, t=topic_row.id) }}">Cancel</a>
+    </div>
+  </form>
+{% endif %}
+
+{% endif %}
+
+<style>
+  .optional { font-weight: 400; opacity: 0.75; }
+</style>
+{% endblock %}
