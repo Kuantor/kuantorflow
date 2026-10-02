@@ -2982,7 +2982,9 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
 .progress-filter { flex: 1 1 18rem; }
 .progress-filter summary { cursor: pointer; font-weight: 600; }
 .progress-topic-list { columns: 2 12rem; column-gap: 1.2rem; margin: 0.4rem 0; }
-.progress-topic-list label { display: block; margin: 0.15rem 0; break-inside: avoid;
+/* Padding, not margin: a margin at the top of a CSS column is kept in the
+   first column and dropped in the next, so the two rows sat out of line. */
+.progress-topic-list label { display: block; margin: 0; padding: 0.15rem 0; break-inside: avoid;
                              color: var(--ink); font-size: 0.95rem; }
 .progress-download { flex: 0 1 16rem; }
 .progress-dates { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin: 0.6rem 0 0; }

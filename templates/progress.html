@@ -57,7 +57,9 @@
 
     <div class="panel no-print progress-controls">
         <form method="GET" action="{{ url_for('progress_page') }}" class="progress-filter">
-            <details{% if chosen or since or until %} open{% endif %}>
+            {# Open from the start: closed, nothing said a date range was
+               there to use (Anton, 2 Oct). The summary line still folds it. #}
+            <details open>
                 <summary>Topics: {{ chosen | join(', ') if chosen else 'all' }}
                     &middot; Dates: {{ dates_label() }}</summary>
                 <p class="hint">Narrow the whole page &mdash; and the PDF &mdash;
