@@ -2968,6 +2968,10 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
 .review-list { list-style: none; margin: 0; padding: 0; columns: 2 14rem; column-gap: 1.5rem; }
 .review-list li { break-inside: avoid; padding: 0.2rem 0; }
 .review-word { font-weight: 600; margin-right: 0.3rem; }
+/* A word already reviewed today stays on the list (#529), ticked in the
+   colour the results pages use for a right answer, and its hint stops saying
+   how overdue it is -- it has been dealt with for today. */
+.review-done { color: var(--ok-ink); font-weight: 600; }
 .review-games { margin: 0.8rem 0; }
 .review-badge {
     display: inline-block; margin: 0 0 0.8rem; padding: 0.45rem 0.9rem;

@@ -44,7 +44,7 @@ is rather than what a flashcard is:
 
 import math
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import games
 
@@ -104,6 +104,39 @@ def today():
     return learner_day(datetime.now(timezone.utc).replace(tzinfo=None))
 
 
+def day_start(on_day):
+    """The UTC instant (naive, as the log stores it) at which the learner-day
+    `on_day` begins: 04:00 in Kyiv. `learner_day()` read backwards."""
+    local = datetime.combine(on_day, time()) + DAY_ROLLOVER
+    return (local.replace(tzinfo=LEARNERS_ZONE)
+            .astimezone(timezone.utc).replace(tzinfo=None))
+
+
+def start_of_day_dates(histories, on_day):
+    """Each word answered on `on_day`, with its due date **as the day began**
+    (#529). Returns `({word_key: due_on or None}, {word_keys answered})`.
+
+    Today's review list is the words due when the day started. Grading a round
+    moves an answered word to its next date at once, so the current schedule
+    alone would empty the list after one game. The date it had this morning is
+    the replay of its answers from before today -- `replay()` is pure, so it is
+    derived, never stored. None is a word first answered today, which had no
+    date to be due on. Only words answered on `on_day` need it: every other
+    word's current date is still the one it had this morning.
+
+    `histories` is `{word_key: [Answer, ...]}`, each word's whole history.
+    """
+    dates, answered = {}, set()
+    for key, answers in histories.items():
+        if not any(learner_day(a.answered_at) >= on_day for a in answers):
+            continue
+        answered.add(key)
+        before = replay([a for a in answers
+                         if learner_day(a.answered_at) < on_day])
+        dates[key] = before.due_on if before else None
+    return dates, answered
+
+
 def word_key(word, pos):
     """How the schedule tells two words apart: the way its primary key does.
 
@@ -148,7 +181,15 @@ def is_due(due_on, on_day):
     return due_on is not None and due_on <= on_day
 
 
-def review_weight(due_by_word, on_day):
+# A word already answered today, in a review (#529). Today's list stays the
+# same all day so it can be played in several games; this makes each new game
+# reach the words not yet answered first, so a list longer than a round is
+# covered before it repeats. #480's 0.2, for the same reason: a likelier draw,
+# never an exclusion.
+REVIEWED_TODAY_WEIGHT = 0.2
+
+
+def review_weight(due_by_word, on_day, answered_today=frozenset()):
     """A `weight(card)` for a review round (#92): **most overdue first**.
 
     Every card in a review is due, so plain `draw_weight()` would weigh them
@@ -157,12 +198,17 @@ def review_weight(due_by_word, on_day):
     left longest come first -- a word three weeks overdue is closer to being
     forgotten than one due this morning. A likelier draw, not a strict order,
     so a round is not the same ten words every time the learner falls behind.
+
+    `due_by_word` holds the dates **as the day began** (#529), and a word in
+    `answered_today` has already been reviewed today, so it weighs a fifth.
     """
     def weight(card):
-        due = due_by_word.get(word_key(card.get("word"), card.get("pos")))
+        key = word_key(card.get("word"), card.get("pos"))
+        due = due_by_word.get(key)
         if not is_due(due, on_day):
             return NOT_DUE_WEIGHT
-        return DUE_WEIGHT + (on_day - due).days
+        base = DUE_WEIGHT + (on_day - due).days
+        return base * REVIEWED_TODAY_WEIGHT if key in answered_today else base
     return weight
 
 

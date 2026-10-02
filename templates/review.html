@@ -14,6 +14,10 @@
    The list is counted against the learner's **visible deck**, not the schedule:
    a due word whose card was deleted, or whose topic has gone private, cannot be
    dealt, so it is not promised here.
+
+   **It is today's list and stays the same all day** (#529): the words due when
+   the day began, answered since or not, so it can be played in as many games
+   as the learner likes. A word answered today is ticked rather than removed.
 #}
 {% block content %}
     <p class="crumbs">
@@ -29,11 +33,16 @@
            words you answered come back here on the day they are due.</p>
     </div>
     {% elif due %}
+    {% set done = due | selectattr(3) | list | length %}
     <div class="panel">
         <p><strong>{{ due|length }} word{{ '' if due|length == 1 else 's' }}</strong>
-           {{ 'is' if due|length == 1 else 'are' }} due today. Pick a game to
-           review {{ 'it' if due|length == 1 else 'them' }} in &mdash; the round
-           is dealt only from these, the ones waiting longest first.</p>
+           to review today{% if done %}, {{ done }} already reviewed{% endif %}.
+           Pick a game &mdash; the round is dealt only from today's list, the
+           words you have not reviewed yet first.</p>
+        <p class="hint">The list stays the same until tomorrow, so you can
+           review it in as many games as you like. Only your first answer of
+           the day moves a word to its next date; playing it again today is
+           practice.</p>
         <div class="topic-tiles review-games">
             {% for activity in review_games %}
                 {% set icon = activity.slug | game_icon %}
@@ -55,13 +64,13 @@
     </div>
 
     <div class="panel">
-        <h2>Due today</h2>
+        <h2>Today's list</h2>
         <ul class="review-list">
-            {% for word, pos, due_on in due %}
+            {% for word, pos, due_on, reviewed in due %}
                 {% set late = (today - due_on).days %}
-                <li><span class="review-word">{{ word }}</span>
+                <li{% if reviewed %} class="reviewed"{% endif %}><span class="review-word">{{ word }}</span>
                     {% if pos %}<span class="pos">{{ pos }}</span>{% endif %}
-                    <span class="hint">{% if late == 0 %}due today{% elif late == 1 %}1 day overdue{% else %}{{ late }} days overdue{% endif %}</span></li>
+                    <span class="hint">{% if reviewed %}<span class="review-done">&#10003; reviewed today</span>{% elif late == 0 %}due today{% elif late == 1 %}1 day overdue{% else %}{{ late }} days overdue{% endif %}</span></li>
             {% endfor %}
         </ul>
     </div>

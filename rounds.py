@@ -530,7 +530,8 @@ def _draw_weight(on_card=None):
     if not due:
         return None
     if _reviewing():
-        weight = recall.review_weight(due, recall.today())
+        weight = recall.review_weight(_review_schedule(), recall.today(),
+                                      _review_day()[1])
     else:
         weight = recall.draw_weight(due, recall.today())
     if on_card is None:
@@ -563,6 +564,50 @@ def _schedule():
     return g.recall_schedule
 
 
+def _review_day():
+    """`({word_key: due_on as the day began}, {word_keys answered today})`
+    for the words this learner has answered today (#529), read once per
+    request.
+
+    Grading a round moves each answered word to its next date at once, so a
+    review list read from the current schedule emptied after one game. The
+    date a word had when the day began is the replay of its answers from
+    before today (`recall.start_of_day_dates()`), and only the words answered
+    today can differ from it. An unreadable log leaves both empty: the review
+    then behaves as it did before #529, which is a shorter list, not an error.
+    """
+    if "review_day" not in g:
+        found = ({}, set())
+        user_id = web._current_user_id()
+        if user_id:
+            today = recall.today()
+            try:
+                found = recall.start_of_day_dates(
+                    utils.histories_answered_since(user_id,
+                                                   recall.day_start(today)),
+                    today)
+            except Exception:
+                app.logger.exception("Could not read today's answers (#529); "
+                                     "the review list is the current schedule")
+        g.review_day = found
+    return g.review_day
+
+
+def _review_schedule():
+    """The dates a review reads: the schedule, with each word answered today
+    put back to the date it had when the day began (#529). So today's list is
+    the words due this morning, all day, however many games it is played in.
+
+    Scheduling itself is untouched -- only the day's first answer moves a word
+    (#479), so playing the list again is practice by the schedule's own rule.
+    """
+    if "review_schedule" not in g:
+        merged = dict(_schedule())
+        merged.update(_review_day()[0])
+        g.review_schedule = merged
+    return g.review_schedule
+
+
 # --- Review (N due) (#92) -----------------------------------------------------
 #
 # A review is **an ordinary round of an ordinary game**, dealt only from the
@@ -589,7 +634,8 @@ def _reviewing():
 
 def _round_cards(topics):
     """The cards a one-card round deals from: the selection, or in a review
-    only the ones due today.
+    only today's list -- the words due when the day began (#529), answered
+    since or not.
 
     Every round whose question is one card reads its deck through here, on the
     GET that deals it **and** the POST that grades it -- so the ids a review
@@ -602,28 +648,36 @@ def _round_cards(topics):
     if not _reviewing():
         return cards
     today = recall.today()
-    due = _schedule()
+    due = _review_schedule()
     return [card for card in cards
             if recall.is_due(due.get(recall.word_key(card.get("word"),
                                                      card.get("pos"))), today)]
 
 
 def _due_for_review():
-    """The words due today that this learner can actually be shown.
+    """Today's review list: the words due when the day began that this learner
+    can actually be shown (#92, #529).
 
-    `[(word, pos, due_on), ...]`, most overdue first. **Counted against the
-    visible deck**, not the schedule: the schedule is keyed on the word, but a
-    round needs a card, and a due word whose last card was deleted -- or whose
-    topic has since gone private -- cannot be dealt. Counting it would have the
-    badge promise a round it cannot deal. Duplicate cards are one word.
-    Cached in `g`, since the front page may ask more than once.
+    `[(word, pos, due_on, reviewed), ...]` -- `due_on` is the date the word
+    had this morning, and `reviewed` says it has been answered today. The list
+    **stays the same all day**: answering a word moves it to its next date at
+    once, but it was due this morning, so it stays on the list to be played
+    again in another game. Not yet reviewed first, then most overdue.
+
+    **Counted against the visible deck**, not the schedule: the schedule is
+    keyed on the word, but a round needs a card, and a due word whose last card
+    was deleted -- or whose topic has since gone private -- cannot be dealt.
+    Counting it would have the badge promise a round it cannot deal. Duplicate
+    cards are one word. Cached in `g`, since the front page may ask more than
+    once.
     """
     if "due_for_review" in g:
         return g.due_for_review
     found = []
-    due = _schedule()
+    due = _review_schedule()
     if due:
         today = recall.today()
+        answered = _review_day()[1]
         topics = games.visible_topic_names(_visible_sections())
         cards = utils.get_flashcards_by_topics(
             topics, web.cards_owner_filter(), **web.viewer()) if topics else []
@@ -633,8 +687,9 @@ def _due_for_review():
             if key in seen or not recall.is_due(due.get(key), today):
                 continue
             seen.add(key)
-            found.append((card["word"], card.get("pos"), due[key]))
-        found.sort(key=lambda row: (row[2], row[0].casefold()))
+            found.append((card["word"], card.get("pos"), due[key],
+                          key in answered))
+        found.sort(key=lambda row: (row[3], row[2], row[0].casefold()))
     g.due_for_review = found
     return found
 
