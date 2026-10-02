@@ -467,6 +467,18 @@ It asks first whether your cards should go with you or stay in the shared deck.
 
 There is no separate button yet for deleting only your saved conversations while keeping the account. If you want that, ask the site's owner and it will be done by hand.
 
+**To ask about your data, or to have something removed** — your conversations, or the activity log lines about you — write to the address under [Who made it, and how to get in touch](#who-made-it-and-how-to-get-in-touch), at the end of this guide.
+
 ## The idea behind it
 
 A card here is a **lexical entry**, not a word-and-translation pair. The translation is a fast bridge into memory; the English definition and a real dictionary example then make you handle the word in English, and both stay on the card long after the translation stops being necessary — which is why you can hide the translations once they are in the way. The deck is made of words *you* met, in the topics you chose, and vocabulary met in real life is remembered far better than somebody else's list.
+
+## About KuantorFlow
+
+### Who made it, and how to get in touch
+
+KuantorFlow is made by **Anton Kuznietsov** using [Claude Code](https://claude.com/claude-code). Questions, problems and ideas for the site are welcome at [anton.kuznietsov@gmail.com](mailto:anton.kuznietsov@gmail.com).
+
+The source code is public on GitHub: [github.com/Kuantor/kuantorflow](https://github.com/Kuantor/kuantorflow).
+
+Anton's other projects and demos, and a short biography under *About Me*, are on his website: [kuantor.github.io](https://kuantor.github.io/).
