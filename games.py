@@ -358,6 +358,10 @@ class Activity:
     # about its spelling has no translation in it at all. False by default so a
     # new game inherits no control it cannot explain.
     picks_language: bool = False
+    # The Quiz's direction (#540): English shown and the translation typed,
+    # or the other way round. Chosen in the picker beside the language, the
+    # moment before the words are drawn, so it needs no confirmation there.
+    picks_direction: bool = False
     # What the picker's number box counts, and between which bounds -- see
     # `Words` above. Questions asked, for everything that asks questions; #237
     # overrides it because its number is words of prose.
@@ -420,6 +424,7 @@ ACTIVITIES = {
             min_cards=1,
             too_small="Tick at least one topic to start the quiz.",
             picks_language=True,
+            picks_direction=True,
             tagline="Type the translation",
             needs="a translation in the language you chose",
         ),

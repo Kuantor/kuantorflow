@@ -116,9 +116,28 @@
                 </div>
             {% endif %}
 
+            {# #540: which way round the Quiz asks, beside its language and for
+               the same reason -- chosen before the words are drawn, so no
+               confirmation. The round page keeps a compact swap for changing
+               your mind, and for the doors that skip this page. #}
+            {% if with_language and activity.picks_direction %}
+                <div class="picker-langs">
+                    <span class="picker-langs-label">Which way:</span>
+                    {% for code, label in [('from-en', 'English → translation'), ('to-en', 'Translation → English')] %}
+                        <label class="picker-lang">
+                            <input type="radio" name="dir" value="{{ code }}"
+                                   {% if code == quiz_dir %}checked{% endif %}>
+                            {{ label }}
+                        </label>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
             {% if with_language and quiz_langs %}
                 <div class="picker-langs">
-                    <span class="picker-langs-label">Translation to:</span>
+                    {# "Translation to" reads wrong when the Quiz is played the
+                       other way round, so with a direction it is the language. #}
+                    <span class="picker-langs-label">{{ 'Language:' if activity.picks_direction else 'Translation to:' }}</span>
                     {% for code, name in quiz_langs.items() %}
                         <label class="picker-lang">
                             <input type="radio" name="lang" value="{{ code }}"

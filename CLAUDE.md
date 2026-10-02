@@ -813,6 +813,20 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   table covers it. A word's state is still **today's** — the schedule holds
   nothing else, so "how well do they know what they practised this term" is
   the question a range answers.
+- **The Quiz's two directions** (#540) — `?dir=from-en` (the English word
+  shown, its translation typed: the Quiz as it always was, and the default) or
+  `?dir=to-en` (the translation shown with #270's hint, the part of speech and
+  first letter, and the English word typed). `rounds._quiz_dir()` keeps the
+  choice in the **session**, so the Quiz button on any page opens the way the
+  learner last chose. The other direction is marked with `games.same_answer()`,
+  the comparison every typed English answer uses (#267), and accepts **any
+  word in the selection whose translation shares a variant** with the card's
+  (`_english_accepted()`, through the quiz's own `_answer_variants()`) —
+  *звільнення* is both *resignation* and *dismissal*, and taking only the drawn
+  card's word would be #258's failure. The selection, not the deck. Recall is
+  keyed on word + part of speech, not direction, so both move the same word;
+  the `ROUND` line carries `direction=`. `self_url` takes keywords (`lang=`,
+  `dir=`) and keeps `lang` first in the query, as every existing link has it.
 - **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
   a lexicon confirmed. The game invents with a trigram model trained on the
   deck, so it sometimes produces real English and marks the learner wrong for

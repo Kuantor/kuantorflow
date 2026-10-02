@@ -703,18 +703,37 @@ a.button-link { display: inline-block; text-decoration: none;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
     margin: 0.5rem 0 1.2rem;
 }
-.lang-switch { margin-bottom: 1.2rem; }
-.lang-switch a, .lang-switch span {
-    display: inline-block;
-    padding: 0.35rem 1.1rem;
-    margin-right: 0.5rem;
-    border-radius: 999px;
-    text-decoration: none;
-    font-size: 0.95rem;
+/* The Quiz's language and direction (#540): what you see, a swap, and what
+   you type, in one row -- the translator layout -- where two rows of pills
+   with a yellow highlight each used to compete with the title. Nothing here
+   is highlighted: the order of the boxes says which way round it is. */
+.quiz-pair { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+             margin-bottom: 1.2rem; }
+.quiz-side, .quiz-lang summary {
+    display: inline-flex; align-items: center; min-height: 36px;
+    padding: 0 0.9rem; border: 1px solid #c5d0da; border-radius: 8px;
+    background: rgba(255, 255, 255, 0.92); color: var(--ink); font-size: 0.95rem;
 }
-.lang-switch a { background: rgba(255, 255, 255, 0.85); color: var(--blue-dark); }
-.lang-switch a:hover { background: #fff; }
-.lang-switch span { background: var(--yellow); color: #4a3a00; font-weight: 600; }
+.quiz-lang { position: relative; }
+.quiz-lang summary { cursor: pointer; list-style: none; gap: 0.35rem; }
+.quiz-lang summary::-webkit-details-marker { display: none; }
+.quiz-lang summary::after { content: "\25BE"; color: var(--muted); font-size: 0.85em; }
+.quiz-lang summary:hover { background: #fff; border-color: var(--blue); }
+.quiz-lang-menu {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: 5; min-width: 100%;
+    background: #fff; border: 1px solid #c5d0da; border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15); padding: 0.25rem 0;
+}
+.quiz-lang-menu a { display: block; padding: 0.45rem 0.9rem; color: var(--ink);
+                    text-decoration: none; white-space: nowrap; }
+.quiz-lang-menu a:hover, .quiz-lang-menu a:focus-visible { background: #e3eef8; }
+.quiz-swap {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 50%; border: 1px solid #c5d0da;
+    background: rgba(255, 255, 255, 0.92); color: var(--blue-dark);
+    font-size: 1.15rem; text-decoration: none;
+}
+.quiz-swap:hover, .quiz-swap:focus-visible { background: #fff; border-color: var(--blue); }
 
 /* Breadcrumbs / small links above titles */
 /* Links menu shown as a blue rounded panel (#142).
@@ -2723,6 +2742,10 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
 .rewrite-row:last-child { border-bottom: none; }
 .rewrite-row input[type="checkbox"] { margin-top: 0.25rem; flex: none; }
 .rewrite-field { font-weight: 600; color: var(--blue-dark); }
+/* #540: the hint the other direction gives -- quieter than the question it
+   helps with. */
+.quiz-hint { color: var(--muted); font-weight: 400; font-size: 0.9em; }
+
 .rewrite-was, .rewrite-now { white-space: pre-wrap; font-size: 0.92rem; }
 .rewrite-was { color: var(--muted); text-decoration: line-through; }
 .rewrite-now { color: var(--ink); }

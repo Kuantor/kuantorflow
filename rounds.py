@@ -170,6 +170,9 @@ def _render_picker(activity, start_url):
         start_url=start_url,
         quiz_langs=quiz_langs,
         quiz_lang=quiz_lang,
+        # #540: the Quiz's direction, remembered for the visit like its
+        # language, so the picker opens on the way it was played last.
+        quiz_dir=_quiz_dir() if activity.picks_direction else None,
         # The hint mode, remembered like the selection and the round length so
         # the picker opens on what was played last. Each game keeps its own,
         # because the sets differ and asking for help in one must not silently
@@ -877,7 +880,7 @@ def _record_recall(activity, graded):
                              activity.slug)
 
 
-def _round_played(activity, topics, results, stage="graded"):
+def _round_played(activity, topics, results, stage="graded", direction=None):
     """Leave one `games.log` line for a finished round (#448).
 
     **Not inside `_graded_answers()`**, though that is the obvious seam, and
@@ -896,7 +899,7 @@ def _round_played(activity, topics, results, stage="graded"):
     correct = (sum(1 for r in results if r.get("correct"))
                if stage in ("graded", "self-marked") else None)
     applog.round_played(activity.slug, len(topics), len(results),
-                        correct=correct, stage=stage,
+                        correct=correct, stage=stage, direction=direction,
                         user=web._current_email())
 
 
@@ -2004,6 +2007,60 @@ def _quiz_lang(prefs, langs):
     return lang
 
 
+# The Quiz's two directions (#540). `from-en` is the Quiz as it always was --
+# the English word shown, its translation typed. `to-en` shows the
+# translation and asks for the English word: the productive direction, which
+# no other activity asks for (*Multiple choice* only offers it to choose from).
+QUIZ_DIRS = ("from-en", "to-en")
+QUIZ_DIR_KEY = "quiz_dir"
+
+
+def _quiz_dir():
+    """This quiz's direction: `?dir=` when the page's switch sent one, else
+    the one this visit last used, else English -> translation.
+
+    Remembered in the **session**, so the Quiz button -- on the front page, a
+    topic page or *Review*, none of which knows about directions -- opens the
+    way the learner last chose. A visit, not a setting: nothing to configure,
+    and a new visit starts from the Quiz everybody already knows.
+    """
+    asked = request.args.get("dir")
+    if asked in QUIZ_DIRS:
+        session[QUIZ_DIR_KEY] = asked
+        return asked
+    remembered = session.get(QUIZ_DIR_KEY)
+    return remembered if remembered in QUIZ_DIRS else QUIZ_DIRS[0]
+
+
+def _english_accepted(card, field, deck):
+    """The English words that answer `card` the other way round (#540).
+
+    Its own word, and the word of every other card in the round's selection
+    whose translation shares a variant with it: *vidstavka* is both
+    *resignation* and *dismissal*, and a quiz that took only the card it
+    happened to draw would mark the learner wrong for being right (#258's
+    failure). Variants are the Quiz's own (`_answer_variants()`), so the rule
+    that splits a stored list for the usual direction is the one that pairs
+    synonyms in this one. The selection, not the deck: a word the learner was
+    not practising is not an answer they could be expected to give.
+    """
+    mine = _answer_variants(card.get(field) or "")
+    words = [card["word"]]
+    for other in deck:
+        if other.get("id") == card.get("id") or not other.get(field):
+            continue
+        if mine & _answer_variants(other[field]) and other["word"] not in words:
+            words.append(other["word"])
+    return words
+
+
+def _english_matches(card, given, field, deck):
+    """`given` is right if it is any accepted English word, typed the way
+    every typed English answer is forgiven (#267)."""
+    return any(games.same_answer(given, word)
+               for word in _english_accepted(card, field, deck))
+
+
 # How many of a selection are named under a quiz's title before the rest
 # become an ellipsis. Three fits one line on a phone, which is the constraint;
 # the count in the title is what answers "how many" exactly.
@@ -2028,9 +2085,9 @@ def _topic_summary(topics):
 def _run_quiz(topics, heading, self_url, back, words):
     """Render or grade a quiz over `topics` — one of them or several (#250).
 
-    `self_url(lang=...)` builds this quiz's own URL, because the language
-    switch, the form action and "Try again" all need it and only the caller
-    knows which of the two route shapes it is. `back` is the crumb link, which
+    `self_url(lang=..., dir=...)` builds this quiz's own URL, because the
+    language and direction switches, the form action and "Try again" all need
+    it and only the caller knows which of the two route shapes it is. `back` is the crumb link, which
     is the topic page for one topic and the picker for a selection.
 
     Everything about the quiz itself is unchanged (#233 asked for exactly one
@@ -2057,6 +2114,8 @@ def _run_quiz(topics, heading, self_url, back, words):
 
     lang = _quiz_lang(prefs, langs)
     field = f"translation_{lang}"
+    direction = _quiz_dir()
+    to_english = direction == "to-en"
     # A card with no translation in this language cannot be asked, so it is
     # dropped *before* the draw — the sample can only contain answerable words.
     # How many were dropped is worth saying, though: the picker counts cards,
@@ -2081,24 +2140,41 @@ def _run_quiz(topics, heading, self_url, back, words):
         # synonyms (`_answer_variants()`) and can carry a Cyrillic `ё` — both
         # facts about a translation and neither one about an English headword,
         # so games.normalise_answer() has no business knowing them.
-        graded = _graded_answers(
-            games.ACTIVITIES["quiz"], cards,
-            lambda card, given: _matched_a_variant(card, given, field))
+        #
+        # The other direction (#540) compares against English words instead,
+        # through `games.same_answer()` -- the comparison every typed English
+        # answer uses -- and accepts a synonym from the selection.
+        deck = list(cards)
+        if to_english:
+            def check(card, given):
+                return _english_matches(card, given, field, deck)
+        else:
+            def check(card, given):
+                return _matched_a_variant(card, given, field)
+        graded = _graded_answers(games.ACTIVITIES["quiz"], cards, check)
         # Narrowed to what was actually asked, because the template's
         # empty-state guard reads `cards` and a POST that graded nothing is
         # not a quiz with questions on it.
         cards = [card for card, _given, _correct in graded]
         results = []
         for card, user_answer, correct in graded:
-            results.append({
-                "word": card["word"],
+            result = {
+                "prompt": card[field] if to_english else card["word"],
                 "pos": card.get("pos"),
                 "user_answer": user_answer,
-                "expected": card[field],
+                "expected": card["word"] if to_english else card[field],
                 "correct": correct,
-            })
+                "card_word": None,
+            }
+            # Right by a synonym: say which word the card was, so the learner
+            # leaves with both.
+            if (to_english and correct
+                    and not games.same_answer(user_answer, card["word"])):
+                result["card_word"] = card["word"]
+            results.append(result)
         score = sum(1 for r in results if r["correct"])
-        _round_played(games.ACTIVITIES["quiz"], topics, results)
+        _round_played(games.ACTIVITIES["quiz"], topics, results,
+                      direction=direction)
     else:
         # A round is `words` questions drawn uniformly from every card in the
         # selection — so a topic with 36 cards contributes more of them than
@@ -2109,6 +2185,7 @@ def _run_quiz(topics, heading, self_url, back, words):
 
     return render_template(
         "quiz.html", cards=cards, lang=lang, lang_name=QUIZ_LANGS[lang],
+        direction=direction, to_english=to_english,
         results=results, score=score, dropped=untranslated, **common)
 
 
@@ -2128,8 +2205,7 @@ def quiz(topic):
     return _run_quiz(
         [topic],
         heading=topic,
-        self_url=lambda lang: url_for("quiz", topic=topic, lang=lang,
-                                      words=words),
+        self_url=lambda **kw: url_for("quiz", topic=topic, **kw, words=words),
         back=(url_for("flashcards", topic=topic), f"Flashcards: {topic}"),
         words=words,
     )
@@ -2159,7 +2235,7 @@ def quiz_topics():
         return _run_quiz(
             topics,
             heading="Review",
-            self_url=lambda lang: url_for("quiz_topics", review=1, lang=lang,
+            self_url=lambda **kw: url_for("quiz_topics", review=1, **kw,
                                           words=words),
             back=(url_for("review_page"), "Back to review"),
             words=words,
@@ -2178,7 +2254,7 @@ def quiz_topics():
     return _run_quiz(
         topics,
         heading=heading,
-        self_url=lambda lang: url_for("quiz_topics", topic=topics, lang=lang,
+        self_url=lambda **kw: url_for("quiz_topics", topic=topics, **kw,
                                       words=words),
         back=(url_for("quiz_topics"), "Choose topics"),
         words=words,
