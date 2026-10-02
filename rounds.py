@@ -2202,7 +2202,7 @@ def quiz(topic):
     return _run_quiz(
         [topic],
         heading=topic,
-        self_url=lambda **kw: url_for("quiz", topic=topic, words=words, **kw),
+        self_url=lambda **kw: url_for("quiz", topic=topic, **kw, words=words),
         back=(url_for("flashcards", topic=topic), f"Flashcards: {topic}"),
         words=words,
     )
@@ -2232,8 +2232,8 @@ def quiz_topics():
         return _run_quiz(
             topics,
             heading="Review",
-            self_url=lambda **kw: url_for("quiz_topics", review=1,
-                                          words=words, **kw),
+            self_url=lambda **kw: url_for("quiz_topics", review=1, **kw,
+                                          words=words),
             back=(url_for("review_page"), "Back to review"),
             words=words,
         )
@@ -2251,8 +2251,8 @@ def quiz_topics():
     return _run_quiz(
         topics,
         heading=heading,
-        self_url=lambda **kw: url_for("quiz_topics", topic=topics,
-                                      words=words, **kw),
+        self_url=lambda **kw: url_for("quiz_topics", topic=topics, **kw,
+                                      words=words),
         back=(url_for("quiz_topics"), "Choose topics"),
         words=words,
     )
