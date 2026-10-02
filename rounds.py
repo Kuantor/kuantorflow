@@ -170,6 +170,9 @@ def _render_picker(activity, start_url):
         start_url=start_url,
         quiz_langs=quiz_langs,
         quiz_lang=quiz_lang,
+        # #540: the Quiz's direction, remembered for the visit like its
+        # language, so the picker opens on the way it was played last.
+        quiz_dir=_quiz_dir() if activity.picks_direction else None,
         # The hint mode, remembered like the selection and the round length so
         # the picker opens on what was played last. Each game keeps its own,
         # because the sets differ and asking for help in one must not silently
