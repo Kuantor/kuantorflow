@@ -59,7 +59,8 @@ def _round_key(answer):
     return answer["answered_at"], answer["game"]
 
 
-def build(schedule, answers, word_topics, today, topics=None):
+def build(schedule, answers, word_topics, today, topics=None, since=None,
+          until=None):
     """The whole report.
 
     `schedule` -- this learner's `recall_schedule` rows as dicts (`word`,
@@ -70,14 +71,29 @@ def build(schedule, answers, word_topics, today, topics=None):
     order; a word whose card is gone has none.
     `topics` -- the learner's filter, or None for everything. Every section
     narrows to the words of those topics.
+    `since`, `until` -- a date range in learner-days, either end open, or
+    neither for all time. The answers outside it are dropped first, so the
+    words are the ones **practised in the range**, counted by that period's
+    answers, and the activity table covers the range. A word's state stays
+    **as of today**: the schedule holds its current state and nothing else,
+    so "how well do they know the words they practised this term" is the
+    question a range answers -- not how well they knew them then.
     """
     wanted = set(topics) if topics else None
+    dated = since is not None or until is not None
 
     def kept(key):
         return wanted is None or bool(wanted & set(word_topics.get(key, ())))
 
+    def in_range(answer):
+        day = recall.learner_day(answer["answered_at"])
+        return ((since is None or day >= since)
+                and (until is None or day <= until))
+
+    period = [a for a in answers if in_range(a)] if dated else list(answers)
+
     answered = defaultdict(lambda: [0, 0])          # key -> [times, right]
-    for answer in answers:
+    for answer in period:
         key = recall.word_key(answer["word"], answer["pos"])
         answered[key][0] += 1
         answered[key][1] += bool(answer["correct"])
@@ -85,7 +101,7 @@ def build(schedule, answers, word_topics, today, topics=None):
     words = []
     for row in schedule:
         key = recall.word_key(row["word"], row["pos"])
-        if not kept(key):
+        if not kept(key) or (dated and key not in answered):
             continue
         times, right = answered.get(key, (0, 0))
         words.append({
@@ -117,27 +133,35 @@ def build(schedule, answers, word_topics, today, topics=None):
             by_topic[topic][word["status"]] += 1
             by_topic[topic]["due"] += word["due"]
 
-    kept_answers = [a for a in answers
+    kept_answers = [a for a in period
                     if kept(recall.word_key(a["word"], a["pos"]))]
+    first_day = min((recall.learner_day(a["answered_at"])
+                     for a in kept_answers), default=None)
+    if dated:
+        last = min(until or today, today)
+        first = since or first_day or last
+    else:
+        last, first = today, today - timedelta(days=ACTIVITY_DAYS - 1)
     return {
         "summary": summary,
         "words": words,
         "by_topic": [(topic, by_topic[topic]) for topic in order],
-        "activity": activity(kept_answers, today),
+        "activity": activity(kept_answers, first, last),
         "games": per_game(kept_answers),
-        "first_day": min((recall.learner_day(a["answered_at"])
-                          for a in kept_answers), default=None),
+        "first_day": first_day,
+        "dated": dated,
     }
 
 
-def activity(answers, today, days=ACTIVITY_DAYS):
-    """The last `days` learner-days with any answers, newest first:
-    `[{day, rounds, answers, right}, ...]`, plus how many days were active."""
-    first = today - timedelta(days=days - 1)
+def activity(answers, first, last):
+    """The learner-days from `first` to `last` with any answers, newest
+    first: `[{day, rounds, answers, right}, ...]`, plus how many days the
+    window holds and how many were active. The last 14 days by default; the
+    date range when one is chosen."""
     per_day = defaultdict(lambda: {"rounds": set(), "answers": 0, "right": 0})
     for answer in answers:
         day = recall.learner_day(answer["answered_at"])
-        if first <= day <= today:
+        if first <= day <= last:
             entry = per_day[day]
             entry["rounds"].add(_round_key(answer))
             entry["answers"] += 1
@@ -145,12 +169,13 @@ def activity(answers, today, days=ACTIVITY_DAYS):
     rows = [{"day": day, "rounds": len(entry["rounds"]),
              "answers": entry["answers"], "right": entry["right"]}
             for day, entry in sorted(per_day.items(), reverse=True)]
-    return {"days": days, "active": len(rows), "rows": rows}
+    return {"days": (last - first).days + 1, "active": len(rows),
+            "rows": rows, "first": first, "last": last}
 
 
 def per_game(answers):
-    """Rounds, answers and right answers per game, all time, most played
-    first. A self-marked game (*Fill the gap*) is flagged: its "right" is the
+    """Rounds, answers and right answers per game over the answers given --
+    all time, or the date range -- most played first. A self-marked game (*Fill the gap*) is flagged: its "right" is the
     learner's own tick, which the schedule already weighs lower (#484)."""
     totals = defaultdict(lambda: {"rounds": set(), "answers": 0, "right": 0})
     for answer in answers:
