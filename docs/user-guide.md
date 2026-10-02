@@ -167,7 +167,7 @@ Most of it comes from the games that mark your answer themselves: the **Quiz**, 
 
 *Odd one out* and *Real or fake* are not recorded, because their questions are about topics and invented words rather than about one of your cards. If you practise without signing in, nothing is recorded at all.
 
-The record is about you alone, and other learners cannot see it. **Deleting your account erases it** along with the account.
+The record is about you alone, and other learners cannot see it. You can — on **My progress**, described below. **Deleting your account erases it** along with the account.
 
 ### Words that are due come up first
 
@@ -186,6 +186,21 @@ Pick a game and you play an ordinary round of it, dealt **only from today's list
 A game can only use a word it has what it needs for — *Spell it* needs an English explanation, *Rebuild the sentence* an example sentence — so a review round may be shorter than the list, and says so. If none of the due words fits a game, the page says that and lets you pick another. Only words you can still see in your deck are counted, so a word whose card has been deleted is never promised.
 
 With nothing due, the button is not shown, and the review page tells you the day your next word comes due.
+
+### My progress: what you know, and a report for your teacher
+
+When you are signed in, **My progress** shows what you have done and which of your words you know. It is in the header beside *Help* on a computer, and on the front page beside *Review* everywhere, including on a phone. It is built from the record of your answers described above, so it covers what you have played while signed in.
+
+- **Summary.** How many of your words are **known** (you will be asked again in a week or more), **learning** (answered, with a shorter gap) and **struggling** (forgotten twice or more and not yet back to a week), and how many are **due today**.
+- **The last 14 days.** On which days you practised, how many rounds, and how many answers were right.
+- **By game and by topic.** Rounds and accuracy for each game, and known, learning, struggling and due words for each topic.
+- **Your words**, grouped as above, with how many times you have answered each and when it will next be asked.
+
+**Topics** at the top narrows the whole page to the topics you tick — for example only one course's topics before you send the report to that course's teacher.
+
+**Download as PDF** opens your browser's print dialog: choose *Save as PDF* as the destination. The file leaves off the site's menus and buttons, and adds your name, the dates it covers, the topics it was narrowed to, a one-line key to the words *known*, *learning* and *struggling*, and the site's address, so a teacher can read it without the site. **Nothing is shared unless you send the file yourself**: the site has no teacher accounts and shows your report to nobody else.
+
+It does not include what you did without signing in, or *Odd one out* and *Real or fake*, which record nothing. *Fill the gap* is included, but its "right" is your own tick, and the page says so.
 
 ### Quiz
 

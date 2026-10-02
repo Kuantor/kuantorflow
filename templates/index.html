@@ -129,6 +129,12 @@
             <a class="review-badge" href="{{ url_for('review_page') }}">Review
                ({% if left == total %}{{ total }} due{% elif left %}{{ left }} of {{ total }} left{% else %}{{ total }} done today{% endif %})</a>
         {% endif %}
+        {# #493: the learner's own report, beside the review. The header links
+           it too, but not on a phone, where a fourth link would wrap the row
+           #502 kept to one -- this is the way there at every width. #}
+        {% if current_user and current_user.id %}
+            <a class="progress-badge" href="{{ url_for('progress_page') }}">My progress</a>
+        {% endif %}
         <div class="topic-tiles">
             {# The quiz first: it is the oldest activity here and the one a
                returning learner is most likely to want, and until now it was

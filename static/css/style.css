@@ -105,9 +105,8 @@ body {
 @media (max-width: 640px) {
     .site-header { padding-left: 1rem; padding-right: 1rem; }
     .site-header nav a.nav-home { display: none; }
-    /* #493: "My progress" becomes "Progress" -- a fourth link has to fit. */
-    .site-header nav .nav-my { display: none; }
-    .site-header nav .nav-my + .nav-progress { text-transform: capitalize; }
+    /* #493: a fourth link wraps the row; the front page links it instead. */
+    .site-header nav a.nav-progress { display: none; }
     /* The greeting wrapped onto two lines here; the wordmark alone fits. */
     .brand .brand-greeting { display: none; }
 }
@@ -3023,6 +3022,15 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
     font-weight: 700; text-decoration: none;
 }
 .review-badge:hover, .review-badge:focus-visible { filter: brightness(0.95); text-decoration: underline; }
+/* #493's way in from the front page: beside the Review button, quieter than
+   it -- the review is something to do today, this is something to look at. */
+.progress-badge {
+    display: inline-block; margin: 0 0 0.8rem; padding: 0.45rem 0.9rem;
+    border-radius: 999px; border: 1px solid var(--blue); color: var(--blue);
+    background: #fff; font-weight: 600; text-decoration: none;
+}
+.progress-badge:hover, .progress-badge:focus-visible { background: #e3eef8; text-decoration: underline; }
+.review-badge + .progress-badge { margin-left: 0.5rem; }
 
 /* ---- Printing a page (#521) ------------------------------------------------
    Ctrl+P on a game printed the screen: the header, Mykola's widget covering
