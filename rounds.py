@@ -42,6 +42,7 @@ from flask import (
 import applog
 import games
 import parsers
+import progress
 import recall
 import textgen
 import utils
@@ -740,6 +741,69 @@ def _reachable_review(slug):
     """A game the review page may offer: the quiz always, a game only where
     this deployment can run it."""
     return slug == "quiz" or _reachable_activity(slug) is not None
+
+
+# --- My progress (#493) --------------------------------------------------------
+#
+# A learner's own report from the answer log and the schedule, readable on the
+# page and saved as a PDF through the browser's print dialog -- the worksheet's
+# way (#340), so the server needs no PDF library and keeps nothing. The student
+# sends it to whoever they choose, which is why there is no teacher role.
+
+def _word_topics():
+    """`{word_key: [topic, ...]}` over this visitor's **visible** deck, in page
+    order. Every card's owner, not #127's filter: a word is in a topic whoever
+    saved its card, and a private topic of somebody else's never appears."""
+    topics = games.visible_topic_names(_visible_sections())
+    cards = utils.get_flashcards_by_topics(topics, None, **web.viewer())         if topics else []
+    found = {}
+    for card in cards:
+        key = recall.word_key(card.get("word"), card.get("pos"))
+        named = found.setdefault(key, [])
+        if card.get("topic") and card["topic"] not in named:
+            named.append(card["topic"])
+    return found
+
+
+@app.route("/progress")
+def progress_page():
+    """*My progress* (#493): what this learner has done and which words they
+    know. Signed-in only -- an anonymous visitor has no log -- and only ever
+    their own rows: `utils.schedule_rows()` and `answer_rows()` filter on the
+    session's id, and nothing here takes a user from the request.
+    """
+    user_id = web._current_user_id()
+    if not user_id:
+        return render_template("progress.html", signed_in=False)
+    today = recall.today()
+    word_topics = _word_topics()
+    available = sorted({t for named in word_topics.values() for t in named},
+                       key=str.casefold)
+    chosen = [t for t in request.args.getlist("topic") if t in available]
+    try:
+        schedule = utils.schedule_rows(user_id)
+        answers = utils.answer_rows(user_id)
+    except Exception:
+        app.logger.exception("Could not read the learner's progress (#493)")
+        return render_template("progress.html", signed_in=True, failed=True)
+    # Only the topics the learner has words in are worth offering as a filter.
+    practised = {recall.word_key(r["word"], r["pos"]) for r in schedule}
+    offered = [t for t in available
+               if any(t in word_topics.get(k, ()) for k in practised)]
+    report = progress.build(schedule, answers, word_topics, today,
+                            topics=chosen or None)
+    user = session.get("user", {})
+    applog.progress_viewed(report["summary"]["words"], chosen,
+                           user=web._current_email())
+    return render_template(
+        "progress.html", signed_in=True, report=report, today=today,
+        offered=offered, chosen=chosen,
+        learner=user.get("preferred_name") or user.get("name") or "",
+        site=request.host_url.rstrip("/"),
+        status_key=progress.STATUS_KEY, percent=progress.percent,
+        game_name=lambda slug: (games.ACTIVITIES[slug].name
+                                if slug in games.ACTIVITIES else slug),
+        activity_days=progress.ACTIVITY_DAYS)
 
 
 def _record_recall(activity, graded):

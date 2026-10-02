@@ -105,6 +105,9 @@ body {
 @media (max-width: 640px) {
     .site-header { padding-left: 1rem; padding-right: 1rem; }
     .site-header nav a.nav-home { display: none; }
+    /* #493: "My progress" becomes "Progress" -- a fourth link has to fit. */
+    .site-header nav .nav-my { display: none; }
+    .site-header nav .nav-my + .nav-progress { text-transform: capitalize; }
     /* The greeting wrapped onto two lines here; the wordmark alone fits. */
     .brand .brand-greeting { display: none; }
 }
@@ -2972,6 +2975,47 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
    colour the results pages use for a right answer, and its hint stops saying
    how overdue it is -- it has been dealt with for today. */
 .review-done { color: var(--ok-ink); font-weight: 600; }
+
+/* My progress (#493). Four counts across the top, then plain tables -- a
+   report is read, and on paper a table is what survives. */
+.progress-controls { display: flex; flex-wrap: wrap; gap: 1rem 2rem;
+                     align-items: flex-start; justify-content: space-between; }
+.progress-filter { flex: 1 1 18rem; }
+.progress-filter summary { cursor: pointer; font-weight: 600; }
+.progress-topic-list { columns: 2 12rem; column-gap: 1.2rem; margin: 0.4rem 0; }
+.progress-topic-list label { display: block; margin: 0.15rem 0; break-inside: avoid;
+                             color: var(--ink); font-size: 0.95rem; }
+.progress-download { flex: 0 1 16rem; }
+.progress-download button { margin-top: 0; }
+.progress-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+                  gap: 0.6rem; margin: 0.4rem 0 0.8rem; }
+.progress-tile { border: 1px solid #dde4ea; border-left: 5px solid var(--blue);
+                 border-radius: 8px; padding: 0.5rem 0.7rem; background: #fff; }
+.progress-tile .n { display: block; font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+.progress-tile.known { border-left-color: var(--ok-border); }
+.progress-tile.struggling { border-left-color: var(--bad-border); }
+.progress-tile.due { border-left-color: var(--yellow); }
+.progress-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin: 0.3rem 0 0.8rem; }
+.progress-table th, .progress-table td { text-align: left; padding: 0.3rem 0.5rem;
+                                         border-bottom: 1px solid #dde4ea; vertical-align: top; }
+.progress-table th { font-weight: 600; color: var(--muted); font-size: 0.85rem; }
+.progress-group { margin: 1rem 0 0.2rem; font-size: 1rem; }
+.progress-limits { margin: 0; padding-left: 1.2rem; }
+.progress-print-head p { margin: 0 0 0.3rem; font-size: 10pt; }
+@media (max-width: 640px) {
+    /* The topic column goes on a phone: the word, its count and its date are
+       the report; the topic is in the filter and the By topic table. */
+    .progress-words th:last-child, .progress-words td:last-child { display: none; }
+}
+@media print {
+    /* A round's panels are kept whole on paper (#521); a report's sections
+       can be pages long, and keeping those whole leaves pages half empty.
+       Rows stay whole instead. */
+    section.panel { break-inside: auto; page-break-inside: auto; }
+    .progress-tile { border-color: #999; }
+    .progress-table tr { break-inside: avoid; page-break-inside: avoid; }
+    .progress-words th:last-child, .progress-words td:last-child { display: table-cell; }
+}
 .review-games { margin: 0.8rem 0; }
 .review-badge {
     display: inline-block; margin: 0 0 0.8rem; padding: 0.45rem 0.9rem;
