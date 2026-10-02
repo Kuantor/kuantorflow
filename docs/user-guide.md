@@ -70,6 +70,14 @@ When you press **Build the topic**, the words are looked up one at a time and th
 
 You need to be signed in, since only an account can save cards.
 
+### Adding more words to a topic
+
+A topic you like can grow. On its page, press **Add more words**, say how many you want (3 to 20, ten to start with) and, if you like, what kind: *"more verbs"*, *"the paperwork side of it"*, *"words a landlord would use"*. The app suggests new words that fit the topic and leaves out every word it already has.
+
+From there it works like building a topic from an idea: you see the list first, untick what you do not want, and see what the lookups will cost before anything is spent. **Add to the topic** looks the words up one at a time and puts the cards straight into this topic.
+
+Suggesting the words counts as one generated text towards your daily limit, and each word you keep is one dictionary lookup. You need to be signed in, and a private topic can only be grown by the learner who made it.
+
 ## Your deck
 
 ### Topics and sections
