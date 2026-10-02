@@ -758,6 +758,17 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   twice. `replay_url()` sends a review's *Play again* back to `/review`:
   rebuilding the URL from `topics` would name every visible topic, drop the flag
   and remember the whole deck as the learner's selection (#342).
+  **Today's list stays the same all day** (#529): it is the words due **when
+  the learner-day began**, answered since or not. Grading refreshes the
+  schedule at once, so reading the current dates emptied the list after one
+  game. A review reads `_review_schedule()` instead — the schedule with each
+  word answered today put back to its start-of-day date, which
+  `recall.start_of_day_dates()` derives by replaying only the answers before
+  `recall.day_start(today)` (`utils.histories_answered_since()` brings those
+  words' whole histories). Nothing is stored, and scheduling is untouched: a
+  second game is never a learner-day's first answer. Words already answered
+  today are ticked on the page and weigh `REVIEWED_TODAY_WEIGHT` in the draw;
+  the badge reads *N due* / *L of N left* / *N done today*.
   **#337 is the short clock beside it**: *Fill the gap*'s unticked cards come
   back in the next round. `_fill_the_gap_marked()` stores their `word_key`s in
   the **session** (`games.MISSED_KEY`, capped at `MISSED_CAP`, *replaced* each
