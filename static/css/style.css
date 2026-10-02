@@ -351,6 +351,18 @@ input[type="text"], input[type="file"] {
     font-size: 1rem;
     background: #fff;
 }
+/* A number box in a page's form -- #406's word count and #524's. It was the
+   browser's bare box, a third the height of the text box under it; this is the
+   game picker's Words box, the one number box already dressed. Settings is a
+   modal, not a .panel, so its boxes are untouched. */
+.panel input[type="number"] {
+    width: 5.5rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #c5d0da;
+    border-radius: 8px;
+    font-size: 1rem;
+    background: #fff;
+}
 input[type="text"]:focus {
     outline: 2px solid var(--blue);
     outline-offset: 0;
