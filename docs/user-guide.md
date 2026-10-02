@@ -112,7 +112,7 @@ The *Card deck* link at the top of a topic opens the same cards as a **deck**: o
 
 ### Printing or downloading a topic's words
 
-Every topic page has two buttons under its title. **Print word list** opens the topic's words as a handout: each word with its part of speech, its English explanation and its translations, ready to print, or to save as a PDF from your browser's print dialog. A box there adds one example sentence per word. The list shows the languages you have chosen to see in Settings.
+Under every topic's title are **Print word list** and **Download (.csv)** (and, when you are signed in, **Add more words**, described above). **Print word list** opens the topic's words as a handout: each word with its part of speech, its English explanation and its translations, ready to print, or to save as a PDF from your browser's print dialog. A box there adds one example sentence per word. The list shows the languages you have chosen to see in Settings.
 
 **Download (.csv)** saves the same words as a spreadsheet file that opens in Excel or Google Sheets, with every column kept, whichever languages you hide. It is yours to keep: nothing about it depends on the site staying up.
 
@@ -367,7 +367,9 @@ There are three of each, and it is worth knowing which one you have met, because
 | **Your account, per day** | 50 | 10 | 40 | 5 | 10 |
 | Everyone together, per day | 250 | 60 | 40 | 10 | 40 |
 
-**Signing in raises a limit rather than removing it.** That is true of all four, and it is deliberate: an account is not a licence to spend without end, it is a bigger allowance and a way for the site to tell you apart from a script.
+**Building a topic, or adding words to one, uses two of these.** Suggesting the words counts as one generated text, and each word you keep is one lookup. The page shows how many lookups you have left before you approve the list.
+
+**Signing in raises a limit rather than removing it.** That is true of every one of them, and it is deliberate: an account is not a licence to spend without end, it is a bigger allowance and a way for the site to tell you apart from a script.
 
 **Mykola's numbers are the small ones, and that is not arbitrary.** He answers with a much larger and more expensive model than anything else here — one message costs roughly what thirty generated texts cost. Forty messages a day is a comparable amount of money to sixty texts, not a lesser welcome.
 

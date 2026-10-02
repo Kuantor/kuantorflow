@@ -624,8 +624,8 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   covers all three chat pools and returns `_generation_refusal()`'s shape, so
   an exhausted **anonymous** pool still offers a sign-in while an exhausted
   account or site-wide pool says tomorrow.
-- **Per-account ceilings** (#447) — `CHAT_USER_DAILY` (150),
-  `RECAP_USER_DAILY` (20) and `UPLOAD_USER_DAILY` (20), all `_int_env` and 0 to
+- **Per-account ceilings** (#447) — `CHAT_USER_DAILY` (40),
+  `RECAP_USER_DAILY` (5) and `UPLOAD_USER_DAILY` (10), all `_int_env` and 0 to
   disable, claimed through `web.account_refusal()`. Mykola's chat, the
   welcome-back recap and the notes upload had **no account ceiling at all**:
   signing in removed the limit rather than raising it. That was right while the
