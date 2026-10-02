@@ -2723,6 +2723,11 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
 .rewrite-row:last-child { border-bottom: none; }
 .rewrite-row input[type="checkbox"] { margin-top: 0.25rem; flex: none; }
 .rewrite-field { font-weight: 600; color: var(--blue-dark); }
+/* #540: the Quiz's direction, under its language switch, and the hint the
+   other direction gives -- quieter than the question it helps with. */
+.quiz-direction { margin-top: -0.4rem; }
+.quiz-hint { color: var(--muted); font-weight: 400; font-size: 0.9em; }
+
 .rewrite-was, .rewrite-now { white-space: pre-wrap; font-size: 0.92rem; }
 .rewrite-was { color: var(--muted); text-decoration: line-through; }
 .rewrite-now { color: var(--ink); }

@@ -713,7 +713,7 @@ def text_generated(model=None, supplied=0, used=0, length=None, elapsed_ms=None,
 
 
 def round_played(game, topics, asked, correct=None, stage="graded",
-                 user=None):
+                 direction=None, user=None):
     """One round of a word game (#448). Nothing wrote one before: `rounds.py`
     held ten activities and a single `applog` call, and that one was about the
     Wiktionary vet rather than the round, so "what do people actually play?"
@@ -737,8 +737,12 @@ def round_played(game, topics, asked, correct=None, stage="graded",
     selection would make the line unreadable, and which topics exist is
     `cards.log`'s question.
     """
+    # `direction` is the Quiz's (#540), absent for every other game: which
+    # way round it was asked is the one thing about a quiz round its score
+    # cannot say.
     _write(GAMES, "ROUND", game=game, stage=stage, topics=topics,
-           asked=asked, correct=correct, user=_user(user))
+           asked=asked, correct=correct, direction=direction,
+           user=_user(user))
 
 
 class Timer:

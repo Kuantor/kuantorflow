@@ -45,7 +45,21 @@
                 {# The name rides along so the confirmation below can say which
                    language is being switched to, in either direction, without
                    either one being named in the script. #}
-                <a href="{{ self_url(code) }}" data-lang-name="{{ name }}">{{ name }}</a>
+                <a href="{{ self_url(lang=code, dir=direction) }}" data-lang-name="{{ name }}"
+                   data-confirm="Do you want to switch to {{ name }} translations? The words will be chosen again at random, so this round starts over.">{{ name }}</a>
+            {% endif %}
+        {% endfor %}
+    </p>
+    {# #540: which way round. The same switch shape as the language's, and the
+       same confirmation, since it re-deals the round too. The choice is kept
+       for the visit, so the Quiz button opens this way next time. #}
+    <p class="lang-switch quiz-direction">
+        {% for code, label in [('from-en', 'English → ' ~ lang_name), ('to-en', lang_name ~ ' → English')] %}
+            {% if code == direction %}
+                <span>{{ label }}</span>
+            {% else %}
+                <a href="{{ self_url(lang=lang, dir=code) }}"
+                   data-confirm="Do you want to switch to {{ label }}? The words will be chosen again at random, so this round starts over.">{{ label }}</a>
             {% endif %}
         {% endfor %}
     </p>
@@ -63,7 +77,13 @@
 
     {% elif results is none %}
         <div class="panel panel--tight">
+            {% if to_english %}
+            <p>Type the English word for each {{ lang_name }} translation ({{ cards|length }} question{{ '' if cards|length == 1 else 's' }}).
+               The part of speech and the first letter are a hint; any word in
+               these topics with the same translation counts.
+            {% else %}
             <p>Type the {{ lang_name }} translation for each English word ({{ cards|length }} question{{ '' if cards|length == 1 else 's' }}).
+            {% endif %}
             {# Why the round is shorter than the picker's card count implied.
                The picker counts cards; a card with no translation in this
                language cannot be asked, and without this the difference looks
@@ -71,11 +91,21 @@
             {% include "_shortfall.html" with context %}
             </p>
         </div>
-        <form method="POST" action="{{ self_url(lang) }}">
+        <form method="POST" action="{{ self_url(lang=lang, dir=direction) }}">
             {% for card in cards %}
                 <div class="panel question">
+                    {% if to_english %}
+                    {# The translation as stored -- a list reads fine as a
+                       question -- and #270's hint: the part of speech and the
+                       first letter of the English word. #}
+                    <div class="word">{{ loop.index }}. <span lang="{{ 'uk' if lang == 'ukr' else 'ru' }}">{{ card['translation_' ~ lang] }}</span>
+                        <span class="quiz-hint">({% if card.pos %}{{ card.pos }}, {% endif %}{{ card.word[:1] }}&hellip;)</span></div>
+                    <input type="text" name="answer_{{ card.id }}" autocomplete="off"
+                           autocapitalize="none" spellcheck="false" lang="en">
+                    {% else %}
                     <div class="word">{{ loop.index }}. {{ card.word }}{% if card.pos %} ({{ card.pos }}){% endif %}</div>
                     <input type="text" name="answer_{{ card.id }}" autocomplete="off" lang="{{ 'uk' if lang == 'ukr' else 'ru' }}">
+                    {% endif %}
                 </div>
             {% endfor %}
             <button type="submit">Check answers</button>
@@ -85,10 +115,14 @@
         <p class="score">Score: {{ score }} / {{ results|length }}</p>
         {% for r in results %}
             <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
-                <div class="word">{{ loop.index }}. {{ r.word }}{% if r.pos %} ({{ r.pos }}){% endif %}</div>
+                <div class="word">{{ loop.index }}. {{ r.prompt }}{% if r.pos %} ({{ r.pos }}){% endif %}</div>
                 <p>Your answer: {{ r.user_answer or '—' }}</p>
                 {% if not r.correct %}
                     <p class="expected">Correct answer: {{ r.expected }}</p>
+                {% elif r.card_word %}
+                    {# #540: right by a synonym from the selection -- say which
+                       word this card was, so the learner leaves with both. #}
+                    <p class="expected">Also right: {{ r.card_word }}</p>
                 {% endif %}
             </div>
         {% endfor %}
@@ -96,7 +130,7 @@
            back up after a set of graded answers. #}
         <p class="crumbs">
             <a href="{{ url_for('index') }}">&larr; Home</a>
-            <a href="{{ self_url(lang) }}">Try again</a>
+            <a href="{{ self_url(lang=lang, dir=direction) }}">Try again</a>
         </p>
     {% endif %}
 
@@ -120,8 +154,10 @@
 
     <script>
         (function () {
-            var links = document.querySelectorAll(".lang-switch a[data-lang-name]");
-            if (!links.length) return;   // only one language visible (#46/#79)
+            // Both switches -- language and direction (#540) -- re-deal the
+            // round, so both ask first; each link carries its own sentence.
+            var links = document.querySelectorAll(".lang-switch a[data-confirm]");
+            if (!links.length) return;
 
             var overlay = document.getElementById("lang-switch-modal");
             var text = document.getElementById("lang-switch-text");
@@ -134,9 +170,7 @@
                 link.addEventListener("click", function (event) {
                     event.preventDefault();
                     target = link.href;
-                    text.textContent = "Do you want to switch to " +
-                        link.dataset.langName + " translations? The words " +
-                        "will be chosen again at random, so this round starts over.";
+                    text.textContent = link.dataset.confirm;
                     overlay.hidden = false;
                     go.focus();
                 });
