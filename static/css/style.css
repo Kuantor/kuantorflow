@@ -351,6 +351,18 @@ input[type="text"], input[type="file"] {
     font-size: 1rem;
     background: #fff;
 }
+/* A number box in a page's form -- #406's word count and #524's. It was the
+   browser's bare box, a third the height of the text box under it; this is the
+   game picker's Words box, the one number box already dressed. Settings is a
+   modal, not a .panel, so its boxes are untouched. */
+.panel input[type="number"] {
+    width: 5.5rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #c5d0da;
+    border-radius: 8px;
+    font-size: 1rem;
+    background: #fff;
+}
 input[type="text"]:focus {
     outline: 2px solid var(--blue);
     outline-offset: 0;
@@ -1329,6 +1341,14 @@ body.welcome-active {
 .modal-dialog p { margin: 0 0 1.1rem; font-size: 1.05rem; }
 .modal-actions { display: flex; gap: 0.8rem; justify-content: flex-end; }
 .modal-actions button { margin-top: 0; }
+/* The same row at the foot of a page's form (#406's and #524's topic pages)
+   rather than a dialog: `.modal-actions button` takes away the margin every
+   button has, and a dialog's paragraph puts the space back -- a form ending in
+   a text box has nothing to, so the button sat against the box. A link in the
+   row is a button-link, and gives up the same margin its <button> neighbour
+   does, or the two sit at different heights. */
+form.panel .modal-actions { margin-top: 1.2rem; align-items: center; }
+.modal-actions a.button-link { margin-top: 0; line-height: normal; }
 /* A settings action that isn't available to this visitor — the admin's
    delete-account control (#165). aria-disabled, not :disabled, so it stays
    hoverable and its tooltip works; the hover state is suppressed so a control

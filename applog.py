@@ -226,6 +226,32 @@ def topic_generated(title, asked, saved, skipped=0, failed=0, user=None):
            skipped=skipped, failed=failed, user=_user(user))
 
 
+def topic_extension_proposed(topic, steer, words, wanted=0, model=None,
+                             user=None):
+    """A model proposed more words for an existing topic (#524).
+
+    `topic_proposed()`'s line for the other half of the machine: the steer is
+    the input nobody else records, and `words` against `wanted` shows a prompt
+    that habitually comes back short -- here also after the topic's own words
+    were dropped from the answer.
+    """
+    _write(CARDS, "TOPIC-EXTEND-PROPOSED", topic=topic, steer=steer,
+           words=words, wanted=wanted, model=model, user=_user(user))
+
+
+def topic_extended(topic, asked, saved, proposed=0, skipped=0, failed=0,
+                   user=None):
+    """Approved words were added to an existing topic (#524).
+
+    `topic_generated()`'s shape, plus `proposed`: how many the model offered
+    against how many the learner kept is the one number that says whether the
+    suggestions are any good.
+    """
+    _write(CARDS, "TOPIC-EXTENDED", topic=topic, asked=asked,
+           proposed=proposed, saved=saved, skipped=skipped, failed=failed,
+           user=_user(user))
+
+
 def word_list_exported(topic, count, fmt, user=None):
     """A topic's word list was downloaded or opened to print (#496).
 

@@ -382,6 +382,16 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   is not a ten-second script — and every card is committed as it arrives, so a
   dropped connection leaves what worked and #101 makes running it again the
   whole of the recovery. Every card still goes through `_save_and_log()`.
+  **#524 grows an existing topic with the same machine**: `topicgen.extend()`
+  names the topic and its words in the prompt *and* `_parse(exclude=)` drops
+  them from the answer, `/flashcards/<topic>/add-words` reuses
+  `_vet_proposal()` and `_proposed_words.html` (#406's approve list, shared),
+  and the plan carries `extend` so #406's progress page and stream log
+  `TOPIC-EXTENDED` instead. **`_extend_refusal()` is the one rule** for the
+  button and both routes: an account, a topic public or yours, and the
+  **filing check** — a card is filed by *name* and a private namesake wins, so
+  a public topic opened with `?t=` beside your private one of the same name is
+  refused rather than misfiled into the private one.
 - **The games chassis** — `/games/<slug>` is the picker and `/games/<slug>/play`
   a round, dispatched through `GAME_ROUNDS` in `rounds.py`; a game is one entry
   there plus one in `ACTIVITIES`. **`/quiz` is a separate endpoint from
