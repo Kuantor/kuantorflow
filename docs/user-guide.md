@@ -204,9 +204,12 @@ It does not include what you did without signing in, or *Odd one out* and *Real 
 
 ### Quiz
 
-You are shown a word and you **type the translation**. There is no multiple choice: producing a word is harder than recognising one, and it holds much better.
+You type the answer: there is no multiple choice, because producing a word is harder than recognising one, and it holds much better. The quiz works **both ways round**, chosen with a switch at the top of the page:
 
-Answers are marked generously — any accepted translation counts, case and spacing are ignored, and *ё* and *е* are treated alike — and a wrong answer shows you what was expected. A switch in the page takes the same quiz in your other language.
+- **English → Ukrainian (or Russian):** you see the English word and type its translation. Any accepted translation counts, case and spacing are ignored, and *ё* and *е* are treated alike.
+- **Ukrainian (or Russian) → English:** you see the translation and type the English word — the harder direction, and the one that speaking and writing need. The part of speech and the word's first letter are given as a hint. Case, extra spaces and hyphens don't matter (*well being* counts for *well-being*), and because one translation can belong to several English words, **any word in the topics you are playing that shares the translation counts**: answer *dismissal* where the card says *resignation* and it is marked right, with the card's own word shown beside it.
+
+A wrong answer shows you what was expected. Another switch takes the same quiz in your other language. Changing either switch deals a new set of words, and the direction you chose is kept while you stay on the site, so the Quiz button opens the same way next time.
 
 ### Multiple choice
 
