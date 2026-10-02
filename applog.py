@@ -252,6 +252,17 @@ def topic_extended(topic, asked, saved, proposed=0, skipped=0, failed=0,
            user=_user(user))
 
 
+def progress_viewed(words, topics, user=None):
+    """A learner opened *My progress* (#493).
+
+    Logged so "does anybody use this?" has an answer, as `EXPORT` is. What it
+    showed is not -- the report is the learner's own data, and this log is
+    read by the site's admin. `topics` is the filter, if one was applied.
+    """
+    _write(CARDS, "PROGRESS", words=words,
+           topics=", ".join(topics) if topics else None, user=_user(user))
+
+
 def word_list_exported(topic, count, fmt, user=None):
     """A topic's word list was downloaded or opened to print (#496).
 

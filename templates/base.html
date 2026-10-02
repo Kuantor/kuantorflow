@@ -37,6 +37,13 @@
             {# A real href, not `#`: About is a picture in an overlay, Help is a
                page a learner scrolls and may keep open in a tab (#460). #}
             <a href="{{ url_for('help_page') }}"{% if request.endpoint == 'help_page' %} aria-current="page"{% endif %}>Help</a>
+            {# #493: a learner's own report. Signed in only -- there is no log
+               without an account. Not on a phone: a fourth link wraps the row
+               #502 (item 5) kept to one, so there the front page's *My
+               progress* button is the way in. #}
+            {% if current_user and current_user.id %}
+            <a class="nav-progress" href="{{ url_for('progress_page') }}"{% if request.endpoint == 'progress_page' %} aria-current="page"{% endif %}>My progress</a>
+            {% endif %}
         </nav>
     </header>
 

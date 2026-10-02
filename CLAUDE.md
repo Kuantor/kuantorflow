@@ -787,6 +787,25 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   **The one browser-only part**: *Play again* waits for *Finish*'s POST (at most
   `REPLAY_WAIT_MS`, 1.5 s) before navigating, because the next deal reads what
   that POST stored; a plain click is intercepted, a new-tab click is not.
+- **My progress** (#493) — `/progress`, a signed-in learner's own report from
+  `recall_schedule` and `recall_answers`; nothing new is recorded. **`progress.py`
+  is pure** (rows in, report out) like `recall.py`, and holds the one
+  definition of the statuses: **known** is an interval of `KNOWN_INTERVAL`
+  (7) days or more, **struggling** is `STRUGGLING_LAPSES` (2) lapses *and* not
+  yet back to a week, so a word that recovered graduates, and **learning** is
+  the rest. **Due today is a count across them, not a fourth status**, or it
+  would disagree with the Review button, which counts every due word whatever
+  its state. `utils.schedule_rows()` / `answer_rows()` filter on the
+  **session's** id and nothing else, and that clause is the whole of the
+  privacy; a real-MySQL test proves it by breaking it. The topic filter
+  narrows every section through the visible deck's word→topics map
+  (`rounds._word_topics()`, every card's owner, never another learner's
+  private topic). **The PDF is the browser's** *Save as PDF* (#340's way, no
+  server library); base.html's #521 print rules drop the chrome, and a
+  `print-only` block adds what a teacher reading the file needs. The header
+  link is hidden on a phone, where a fourth link wraps #502's one-row header;
+  the front page's *My progress* button is the way in there. The student
+  sends the file, which is why there is no teacher role (#492 is that road).
 - **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
   a lexicon confirmed. The game invents with a trigram model trained on the
   deck, so it sometimes produces real English and marks the learner wrong for

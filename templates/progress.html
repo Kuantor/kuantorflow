@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}My progress | KuantorFlow{% endblock %}
+
+{#
+   *My progress* (#493): a learner's own report, from the answer log (#338) and
+   the schedule (#479). Nothing new is recorded for it.
+
+   **Saved as a PDF by the browser**, the worksheet's way (#340): *Download as
+   PDF* opens the print dialog, and base.html's print rules (#521) leave the
+   header, Mykola and every button off the paper. What a reader of the file
+   needs and the screen does not -- whose report it is, when it was made, the
+   filter, the key to the statuses, the site's address -- is `print-only`.
+
+   The student decides who sees it by sending the file; the site shares
+   nothing. That is the whole reason this needs no teacher role (#492).
+#}
+{% macro day(d) %}{{ d.day }} {{ d.strftime('%B') }} {{ d.year }}{% endmacro %}
+{% macro pct(right, total) %}{% set p = percent(right, total) %}{{ '—' if p is none else p ~ '%' }}{% endmacro %}
+
+{% block content %}
+    <p class="crumbs">
+        <a href="{{ url_for('index') }}">&larr; Home</a>
+    </p>
+    <h1 class="page-title">My progress</h1>
+
+    {% if not signed_in %}
+    <div class="panel">
+        <p>Your progress needs an account: the site keeps a record of the
+           answers you give while signed in, and this page is built from it.</p>
+        <p class="hint">Sign in from the header, play a few games, and come
+           back here to see which words you know.</p>
+    </div>
+    {% elif failed %}
+    <div class="panel notice">Your progress could not be read just now.
+        Please try again in a moment.</div>
+    {% elif not report.words and not chosen %}
+    <div class="panel">
+        <p><strong>Nothing recorded yet.</strong> Play a game while signed in
+           &mdash; the Quiz, Multiple choice, Spell it or any of the others
+           that check your answer &mdash; and your words appear here.</p>
+        <p><a href="{{ url_for('index') }}">Go to the games</a></p>
+    </div>
+    {% else %}
+
+    {# On paper only: the page's own heading is printed, and this says the rest. #}
+    <div class="print-only progress-print-head">
+        <p><strong>Progress report{% if learner %} &mdash; {{ learner }}{% endif %}</strong></p>
+        <p>{% if report.first_day %}Answers from {{ day(report.first_day) }} to {{ day(today) }}{% endif %}
+           &middot; made {{ day(today) }}
+           &middot; topics: {{ chosen | join(', ') if chosen else 'all' }}</p>
+        <p>{{ status_key }}</p>
+        <p>KuantorFlow &middot; {{ site }}</p>
+    </div>
+
+    <div class="panel no-print progress-controls">
+        <form method="GET" action="{{ url_for('progress_page') }}" class="progress-filter">
+            <details{% if chosen %} open{% endif %}>
+                <summary>Topics: {{ chosen | join(', ') if chosen else 'all' }}</summary>
+                <p class="hint">Narrow the whole page &mdash; and the PDF &mdash;
+                   to some topics, for example only one course's before you
+                   send it to that course's teacher.</p>
+                <div class="progress-topic-list">
+                    {% for topic in offered %}
+                        <label><input type="checkbox" name="topic" value="{{ topic }}"
+                               {% if topic in chosen %}checked{% endif %}> {{ topic }}</label>
+                    {% endfor %}
+                </div>
+                <div class="modal-actions">
+                    <button type="submit">Show these topics</button>
+                    {% if chosen %}<a class="button-link secondary" href="{{ url_for('progress_page') }}">All topics</a>{% endif %}
+                </div>
+            </details>
+        </form>
+        <div class="progress-download">
+            <button type="button" id="progress-pdf">Download as PDF</button>
+            <p class="hint">Opens your browser's print dialog: choose
+               <em>Save as PDF</em>. Nothing is shared unless you send the
+               file yourself.</p>
+        </div>
+    </div>
+
+    <section class="panel">
+        <h2>Summary</h2>
+        {% set s = report.summary %}
+        <div class="progress-tiles">
+            <div class="progress-tile known"><span class="n">{{ s.known }}</span> known</div>
+            <div class="progress-tile learning"><span class="n">{{ s.learning }}</span> learning</div>
+            <div class="progress-tile struggling"><span class="n">{{ s.struggling }}</span> struggling</div>
+            <div class="progress-tile due"><span class="n">{{ s.due }}</span> due today</div>
+        </div>
+        <p class="hint no-print">{{ status_key }}</p>
+        {% if report.first_day %}
+        <p class="hint">{{ s.words }} word{{ '' if s.words == 1 else 's' }}
+           answered since {{ day(report.first_day) }}.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel">
+        <h2>The last {{ activity_days }} days</h2>
+        {% set a = report.activity %}
+        <p>Active on <strong>{{ a.active }}</strong> of the last {{ a.days }} days.</p>
+        {% if a.rows %}
+        <table class="progress-table">
+            <thead><tr><th>Day</th><th>Rounds</th><th>Answers</th><th>Right</th></tr></thead>
+            <tbody>
+            {% for row in a.rows %}
+                <tr><td>{{ day(row.day) }}</td><td>{{ row.rounds }}</td>
+                    <td>{{ row.answers }}</td><td>{{ pct(row.right, row.answers) }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </section>
+
+    {% if report.games %}
+    <section class="panel">
+        <h2>By game</h2>
+        <table class="progress-table">
+            <thead><tr><th>Game</th><th>Rounds</th><th>Answers</th><th>Right</th></tr></thead>
+            <tbody>
+            {% for row in report.games %}
+                <tr><td>{{ game_name(row.game) }}{% if row.self_marked %} <span class="hint">(your own ticks)</span>{% endif %}</td>
+                    <td>{{ row.rounds }}</td><td>{{ row.answers }}</td>
+                    <td>{{ pct(row.right, row.answers) }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+
+    {% if report.by_topic %}
+    <section class="panel">
+        <h2>By topic</h2>
+        <table class="progress-table">
+            <thead><tr><th>Topic</th><th>Known</th><th>Learning</th><th>Struggling</th><th>Due today</th></tr></thead>
+            <tbody>
+            {% for topic, counts in report.by_topic %}
+                <tr><td>{{ topic }}</td><td>{{ counts.known }}</td><td>{{ counts.learning }}</td>
+                    <td>{{ counts.struggling }}</td><td>{{ counts.due }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+        <h2>Your words</h2>
+        {% for name in ['struggling', 'learning', 'known'] %}
+            {% set group = report.words | selectattr('status', 'equalto', name) | list %}
+            {% if group %}
+            <h3 class="progress-group">{{ name | capitalize }} ({{ group | length }})</h3>
+            <table class="progress-table progress-words">
+                <thead><tr><th>Word</th><th>Answered</th><th>Next asked</th><th>Topic</th></tr></thead>
+                <tbody>
+                {% for w in group %}
+                    <tr><td><span class="review-word">{{ w.word }}</span>{% if w.pos %} <span class="pos">{{ w.pos }}</span>{% endif %}</td>
+                        <td>{{ w.times }}&times;{% if w.times %}, {{ w.right }} right{% endif %}</td>
+                        <td>{% if w.due %}<strong>today</strong>{% else %}{{ day(w.due_on) }}{% endif %}</td>
+                        <td>{{ w.topics | join(', ') if w.topics else '—' }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        {% endfor %}
+        {% if not report.words %}<p>No answered words in these topics yet.</p>{% endif %}
+    </section>
+
+    <section class="panel">
+        <h2>What this does not include</h2>
+        <ul class="progress-limits">
+            <li>Anything done without signing in.</li>
+            <li><em>Odd one out</em> and <em>Real or fake</em>: they record nothing,
+                because their questions are not about one of your cards.</li>
+            <li><em>Fill the gap</em> is included, but its &ldquo;right&rdquo; is your
+                own tick, which counts for less than an answer the site checked.</li>
+        </ul>
+    </section>
+
+    <script>
+        document.getElementById("progress-pdf").addEventListener("click", function () {
+            window.print();
+        });
+    </script>
+    {% endif %}
+{% endblock %}

@@ -687,6 +687,46 @@ def due_dates(user_id):
         conn.close()
 
 
+def schedule_rows(user_id):
+    """This learner's whole `recall_schedule`, as dicts -- *My progress* (#493).
+
+    **The `user_id` filter is the whole of the privacy here**: the page shows
+    a learner their own words and nobody else's, and #493's test proves it by
+    breaking this clause. Empty for no learner.
+    """
+    if not user_id:
+        return []
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT word, pos, reps, lapses, ease, interval_days, "
+                       "due_on FROM recall_schedule WHERE user_id = %s",
+                       (user_id,))
+        rows = cursor.fetchall()
+        cursor.close()
+        return rows
+    finally:
+        conn.close()
+
+
+def answer_rows(user_id):
+    """This learner's whole `recall_answers` log, as dicts, oldest first --
+    *My progress* (#493). The same one-learner rule as `schedule_rows()`."""
+    if not user_id:
+        return []
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT word, pos, game, correct, answered_at "
+                       "FROM recall_answers WHERE user_id = %s "
+                       "ORDER BY answered_at, id", (user_id,))
+        rows = cursor.fetchall()
+        cursor.close()
+        return rows
+    finally:
+        conn.close()
+
+
 def _histories(cursor, where="", params=()):
     """`{key: (word, pos, [recall.Answer, ...])}` for the log rows matching
     `where`, keeping the first spelling seen for each key."""
