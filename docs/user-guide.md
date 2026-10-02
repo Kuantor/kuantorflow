@@ -196,7 +196,7 @@ When you are signed in, **My progress** shows what you have done and which of yo
 - **By game and by topic.** Rounds and accuracy for each game, and known, learning, struggling and due words for each topic.
 - **Your words**, grouped as above, with how many times you have answered each and when it will next be asked.
 
-**Topics** at the top narrows the whole page to the topics you tick — for example only one course's topics before you send the report to that course's teacher.
+**Topics and dates** at the top narrow the whole page. Tick some topics — for example only one course's — and, if you like, choose **From** and **To** dates, such as this term. With dates, the page lists the words you practised in that period, counts only that period's answers, and shows each word as you know it **today**; the activity table covers the dates instead of the last 14 days. Leave the dates empty for everything since your first answer.
 
 **Download as PDF** opens your browser's print dialog: choose *Save as PDF* as the destination. The file leaves off the site's menus and buttons, and adds your name, the dates it covers, the topics it was narrowed to, a one-line key to the words *known*, *learning* and *struggling*, and the site's address, so a teacher can read it without the site. **Nothing is shared unless you send the file yourself**: the site has no teacher accounts and shows your report to nobody else.
 

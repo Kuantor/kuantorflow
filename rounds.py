@@ -765,6 +765,30 @@ def _word_topics():
     return found
 
 
+def _date_range(raw_from, raw_to, today):
+    """`(since, until)` from the filter's two date boxes, either None.
+
+    Whatever is not a date is ignored rather than refused -- a hand-edited URL
+    gets the page without that end, not an error. A future end is today (the
+    log holds nothing later), and a range typed backwards is turned round
+    rather than shown empty.
+    """
+    def parse(raw):
+        try:
+            return datetime.date.fromisoformat((raw or "").strip())
+        except ValueError:
+            return None
+
+    since, until = parse(raw_from), parse(raw_to)
+    if since and since > today:
+        since = today
+    if until and until > today:
+        until = today
+    if since and until and since > until:
+        since, until = until, since
+    return since, until
+
+
 @app.route("/progress")
 def progress_page():
     """*My progress* (#493): what this learner has done and which words they
@@ -780,6 +804,8 @@ def progress_page():
     available = sorted({t for named in word_topics.values() for t in named},
                        key=str.casefold)
     chosen = [t for t in request.args.getlist("topic") if t in available]
+    since, until = _date_range(request.args.get("from"),
+                               request.args.get("to"), today)
     try:
         schedule = utils.schedule_rows(user_id)
         answers = utils.answer_rows(user_id)
@@ -791,15 +817,17 @@ def progress_page():
     offered = [t for t in available
                if any(t in word_topics.get(k, ()) for k in practised)]
     report = progress.build(schedule, answers, word_topics, today,
-                            topics=chosen or None)
+                            topics=chosen or None, since=since, until=until)
     user = session.get("user", {})
     applog.progress_viewed(report["summary"]["words"], chosen,
+                           since=since, until=until,
                            user=web._current_email())
     return render_template(
         "progress.html", signed_in=True, report=report, today=today,
         offered=offered, chosen=chosen,
         learner=user.get("preferred_name") or user.get("name") or "",
         site=request.host_url.rstrip("/"),
+        since=since, until=until,
         status_key=progress.STATUS_KEY, percent=progress.percent,
         game_name=lambda slug: (games.ACTIVITIES[slug].name
                                 if slug in games.ACTIVITIES else slug),

@@ -806,6 +806,13 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   link is hidden on a phone, where a fourth link wraps #502's one-row header;
   the front page's *My progress* button is the way in there. The student
   sends the file, which is why there is no teacher role (#492 is that road).
+  **A date range** (`from`/`to`, read by `rounds._date_range()`, which ignores
+  what is not a date, clamps the future to today and turns a backwards range
+  round) drops the answers outside it first: the words become those
+  practised in the range, counted by that period's answers, and the activity
+  table covers it. A word's state is still **today's** — the schedule holds
+  nothing else, so "how well do they know what they practised this term" is
+  the question a range answers.
 - **`confirmed_words`** (#258) — words a learner disputed in *Real or fake* and
   a lexicon confirmed. The game invents with a trigram model trained on the
   deck, so it sometimes produces real English and marks the learner wrong for
