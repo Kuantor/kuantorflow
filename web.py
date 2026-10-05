@@ -25,14 +25,17 @@ the ones #418 has not written yet.
 
 import hashlib
 import json
+import logging
 import os
 import secrets
 import sys
+import time
 import uuid
 from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, g, session, url_for
+from flask import Flask, g, request, session, url_for
+from flask.logging import default_handler
 from authlib.integrations.flask_client import OAuth
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -1031,3 +1034,105 @@ def _sse(payload) -> str:
     message into two malformed ones.
     """
     return "data: " + json.dumps(payload, ensure_ascii=True) + "\n\n"
+
+
+# --- the request log (#555) --------------------------------------------------
+# The action logs answer "what happened to this person's deck?"; nothing
+# answered "how is the site doing?" -- how long pages take for real learners,
+# or which lines belong to one request. These hooks give every request an id
+# (`g.request_id`, sent back as `X-Request-ID` so a learner can quote it) and
+# write one line per request to `requests.log`. applog adds the same id to
+# every line written while the request runs, and the server's own error lines
+# carry it too (`_RequestIdFilter` below).
+#
+# Here because the request is everybody's: every feature module's routes pass
+# through these hooks, and #418's admission rule puts what two or more of them
+# need in this module.
+#
+# **Logging never breaks a request**, applog's rule, so each hook swallows its
+# own failure: a page that cannot be logged is still served.
+
+# Flask's static files are not logged: a page brings its stylesheet, scripts
+# and images with it, and a line for each would bury the pages themselves.
+_UNLOGGED_ENDPOINTS = {"static"}
+
+
+def _new_request_id():
+    return uuid.uuid4().hex[:8]
+
+
+@app.before_request
+def _start_request_log():
+    try:
+        g.request_id = _new_request_id()
+        g.request_started = time.perf_counter()
+        g.db_connects = 0
+    except Exception:       # noqa: BLE001 - see the section comment
+        pass
+
+
+def _log_request(status, streamed=False):
+    """Write this request's line once, whichever hook gets there first."""
+    if g.get("request_logged") or request.endpoint in _UNLOGGED_ENDPOINTS:
+        return
+    g.request_logged = True
+    started = g.get("request_started")
+    ms = round((time.perf_counter() - started) * 1000, 1) if started else None
+    applog.request_served(
+        request.method, request.path, request.endpoint, status, ms,
+        g.get("db_connects", 0), _current_user_id(), streamed=streamed,
+        rid=g.get("request_id"))
+
+
+@app.after_request
+def _finish_request_log(response):
+    try:
+        if g.get("request_id"):
+            response.headers["X-Request-ID"] = g.request_id
+        _log_request(response.status_code, streamed=response.is_streamed)
+    except Exception:       # noqa: BLE001 - see the section comment
+        pass
+    return response
+
+
+@app.teardown_request
+def _request_log_fallback(error=None):
+    """A request that ended in an exception `after_request` never saw.
+
+    In production Flask turns an unhandled exception into a 500 and still runs
+    `after_request`; with exceptions propagated (debug, tests) it does not, and
+    the request would leave no line. This writes it as a 500 -- the status the
+    visitor got -- unless the line was already written.
+    """
+    try:
+        if error is not None:
+            _log_request(500)
+    except Exception:       # noqa: BLE001 - see the section comment
+        pass
+
+
+class _RequestIdFilter(logging.Filter):
+    """Put the request id on the server's own log lines (`app.logger`).
+
+    Those lines -- `app.logger.exception(...)` all over the feature modules --
+    go to the server's error log, and until #555 nothing tied one to the
+    request that wrote it. Outside a request the id is `-`.
+    """
+
+    def filter(self, record):
+        record.request_id = applog.request_id() or "-"
+        return True
+
+
+def _tag_server_log():
+    """Prefix Flask's default log format with the request id."""
+    try:
+        default_handler.addFilter(_RequestIdFilter())
+        default_handler.setFormatter(logging.Formatter(
+            "[%(asctime)s] rid=%(request_id)s %(levelname)s in %(module)s: "
+            "%(message)s"))
+    except Exception:       # noqa: BLE001 - see the section comment
+        pass
+
+
+_tag_server_log()

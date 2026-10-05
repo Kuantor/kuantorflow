@@ -34,7 +34,24 @@ def get_db_connection():
         database=os.environ.get("DB_NAME", f"{user}$default"),
         connection_timeout=5,
     )
+    _count_connection()
     return conn
+
+
+def _count_connection():
+    """Count one connection against the current request (#555).
+
+    `requests.log` writes the total as `db=`, which is how #554's change to
+    connection reuse is judged in production rather than on a laptop. Counted
+    after a successful connect, so a refused one is not a connection opened.
+    Outside a request (a script, the seed) there is nothing to count against.
+    """
+    try:
+        from flask import g, has_request_context
+        if has_request_context():
+            g.db_connects = g.get("db_connects", 0) + 1
+    except Exception:       # noqa: BLE001 - a count is never worth an error
+        pass
 
 
 ALL_ACCOUNTS = 0

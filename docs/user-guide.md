@@ -417,7 +417,7 @@ This is the whole picture, in plain words: what KuantorFlow keeps about you, who
 - **Your answers in the games**, so the site can bring words back before you forget them. This is described under *What the site remembers about your answers*.
 - **Your conversations with Mykola**, described below.
 
-**Activity logs, for everybody.** Like most websites, KuantorFlow writes a short line for each thing that happens, so that problems can be found and fixed. For example: a card saved, a word looked up, a file uploaded (its name, not its contents), the idea you typed to build a topic, a round played and its score, a topic's word list printed or downloaded, a setting changed. If you are signed in, **the line includes your email address**. The logs never contain what you say to Mykola. They are started afresh every 30 days, and **each one is deleted automatically after about a year**.
+**Activity logs, for everybody.** Like most websites, KuantorFlow writes a short line for each thing that happens, so that problems can be found and fixed. For example: a card saved, a word looked up, a file uploaded (its name, not its contents), the idea you typed to build a topic, a round played and its score, a topic's word list printed or downloaded, a setting changed. If you are signed in, **the line includes your email address**. There is also a short line for **each page you open**: which page, how long it took to load, and, if you are signed in, your account number, not your email address. The logs never contain what you say to Mykola. They are started afresh every 30 days, and **each one is deleted automatically after about a year**.
 
 ### Your conversations with Mykola
 

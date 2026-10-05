@@ -12,6 +12,9 @@ Action logs (issue #30) — a plain-text trail of what the app did, in `logs/`:
     logs/gen_texts.log     #237's generated texts, and the refusals of them
     logs/mykola.log        the companion's own events, including the chat
                            ceilings being reached
+    logs/requests.log      one line per page served (#555): how long it took,
+                           how many database connections it opened, and the
+                           account id -- never the email
 
 Each file is named after what it records, and #448 is what made that true.
 `dict.log` had become "anything that went and asked somebody else", so a
@@ -27,6 +30,14 @@ reads badly split across three files by category.
 
 Each line is `<timestamp> ACTION key=value …`, so the logs stay greppable
 (`grep "word='fount'" logs/*.log`). Values containing spaces are quoted.
+
+**A line written during a request ends with `rid=<id>`** (#555): the request's
+id, which `requests.log` and the `X-Request-ID` response header carry too. It
+is what ties lines together -- `lookup_started()`'s lines used to be "tied by
+the word and the timestamp", which two learners looking up one word in the
+same second would merge into one story. `grep rid=3f9a1c02 logs/*.log` is the
+whole of one request. A line with no request behind it (a script, the seed)
+has no `rid`.
 
 Files rotate every 30 days (Python's timed handler has no calendar-month
 unit, so a month is 30 days here) and 12 rotations are kept — a year of
@@ -57,6 +68,7 @@ PARSED_FILES = "parsed_files"
 MYKOLA = "mykola"
 GAMES = "games"
 GEN_TEXTS = "gen_texts"
+REQUESTS = "requests"
 
 _configured = {}  # logger name -> the directory it is currently writing to
 
@@ -90,15 +102,57 @@ def _value(value):
     return text
 
 
+def request_id():
+    """The current request's id (#555), or None outside a request.
+
+    Read from `flask.g`, where `web` puts it before the view runs. Imported
+    here rather than at the top: this module is also used by the console
+    scripts, which have no request and must not need one.
+    """
+    try:
+        from flask import g, has_request_context
+        if has_request_context():
+            return g.get("request_id")
+    except Exception:       # noqa: BLE001 - an id is never worth an error
+        pass
+    return None
+
+
 def _write(name, action, **fields):
     """Append one line; never raise — logging is not worth failing a request."""
     try:
         parts = [action] + [f"{key}={_value(value)}"
                             for key, value in fields.items()
                             if value is not None]
+        rid = request_id()
+        if rid and "rid" not in fields:
+            parts.append(f"rid={rid}")
         _logger(name).info(" ".join(parts))
     except Exception:       # noqa: BLE001 - a broken log must stay harmless
         pass
+
+
+# --- requests.log -----------------------------------------------------------
+
+def request_served(method, path, endpoint, status, ms, db, user_id,
+                   streamed=False, rid=None):
+    """One page served (#555). Written by `web`'s request hooks, never by a view.
+
+    **The account id, never the email**: this is a line per page, so it is the
+    one log that would otherwise be a complete record of somebody's browsing
+    under their address. The id is enough to join it to the other logs when a
+    problem needs finding, and it means nothing outside the database.
+
+    `path` is the path alone, without the query string, which can carry a
+    looked-up word or a topic name. `db` is how many database connections the
+    request opened -- what #554 changes. `streamed` marks a response written
+    after the line (the chat and the topic fill): its `ms` and `db` stop where
+    the stream starts.
+    """
+    _write(REQUESTS, "REQUEST", method=method, path=path,
+           endpoint=endpoint or "-", status=status, ms=ms, db=db,
+           user_id=user_id if user_id is not None else "anonymous",
+           streamed="yes" if streamed else None, rid=rid)
 
 
 def _user(user):
