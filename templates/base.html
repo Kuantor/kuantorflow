@@ -1118,7 +1118,12 @@
         </div>
         {% endif %}
         <form id="mykola-form" autocomplete="off">
-            <input type="text" id="mykola-input" placeholder="Type your question…" required>
+            {# #564: the server refuses a message over the cap; `maxlength`
+               from the same number means a learner meets it while typing
+               instead. The count appears only near the limit. #}
+            <input type="text" id="mykola-input" placeholder="Type your question…" required
+                   {% if mykola_message_max %}maxlength="{{ mykola_message_max }}"{% endif %}>
+            <span id="mykola-count" class="mykola-count" aria-live="polite" hidden></span>
             <button type="submit" id="mykola-send">Send</button>
         </form>
         {% if not current_user %}
@@ -1172,6 +1177,16 @@
             var form = document.getElementById("mykola-form");
             var input = document.getElementById("mykola-input");
             var send = document.getElementById("mykola-send");
+            var count = document.getElementById("mykola-count");
+            // #564: show "1,850 / 2,000" from 90% of the cap, nothing below it.
+            function syncCount() {
+                var max = input.maxLength;
+                if (!count || !(max > 0)) return;
+                var used = input.value.length;
+                count.hidden = used < max * 0.9;
+                count.textContent = used.toLocaleString("en") + " / " + max.toLocaleString("en");
+            }
+            input.addEventListener("input", syncCount);
             var newBtn = panel.querySelector(".mykola-new");
             var maxBtn = panel.querySelector(".mykola-max");
             var minBtn = panel.querySelector(".mykola-min");
@@ -2165,6 +2180,7 @@
                 pending = question;
                 addMessage("user", question);
                 input.value = "";
+                syncCount();
                 ask(question, true);
             });
 

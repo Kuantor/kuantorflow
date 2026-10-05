@@ -215,6 +215,11 @@ def _anonymous_quota_refusal():
     return None
 
 
+def chat_message_limit_notice(limit):
+    """What a learner is told when a message is over the cap (#564)."""
+    return f"Please keep a message to Mykola under {limit:,} characters."
+
+
 def _mykola_chat_inputs():
     """Every rule that decides whether a message may be answered at all.
 
@@ -252,6 +257,15 @@ def _mykola_chat_inputs():
     chat_id = _safe_chat_id(data.get("chat_id"))
     if not question:
         return None, (jsonify({"error": "Please type a question."}), 400)
+
+    # One message's length (#564), a free refusal, so it comes before both
+    # quotas below: a message refused for its length must not spend one of the
+    # day's messages, and it is never sent anywhere.
+    limit = web.MAX_CHAT_MESSAGE_CHARS
+    if limit and len(question) > limit:
+        applog.chat_message_too_long(len(question), limit,
+                                     user=web._current_email())
+        return None, (jsonify({"error": chat_message_limit_notice(limit)}), 400)
 
     # Anonymous quota (#164) — checked before the model is called, so a
     # refused message costs nothing.
@@ -763,6 +777,9 @@ def inject_mykola():
     """
     return {
         "mykola_enabled": MYKOLA_AVAILABLE and not web.is_blocked(),
+        # The widget's `maxlength` (#564): the server's cap, so the learner
+        # meets the limit while typing rather than as a refusal after sending.
+        "mykola_message_max": web.MAX_CHAT_MESSAGE_CHARS,
         "app_boot_id": web.APP_BOOT_ID,
         "mykola_identity": web._identity_token(),
     }

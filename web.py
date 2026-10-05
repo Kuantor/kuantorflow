@@ -213,6 +213,16 @@ if GOOGLE_AUTH_AVAILABLE:
 # (and much larger) .mht uploads on the index route. 1 MB is generous for text.
 MAX_MYKOLA_REQUEST_BYTES = 1024 * 1024
 
+# The longest single message to Mykola, in characters (#564). The request cap
+# above bounds the question *and* the history together, so on its own it let
+# one pasted message of close to a megabyte through -- sent to Opus and counted
+# as a single message against ceilings that count messages, not tokens.
+# Characters rather than bytes, so a Ukrainian learner gets the same allowance
+# as an English one (a Cyrillic letter is two bytes in UTF-8). A tutor's
+# questions are a sentence or two; this is for abuse and accidents, and the
+# widget's `maxlength` means a learner never meets the refusal. 0 turns it off.
+MAX_CHAT_MESSAGE_CHARS = _int_env("MAX_CHAT_MESSAGE_CHARS", 2000)
+
 # How much of Mykola an anonymous visitor gets before signing in (issue #164).
 # Every message costs Anthropic credits, and only /mykola/chat can reach the
 # model without an account — the recap endpoints return early without one.

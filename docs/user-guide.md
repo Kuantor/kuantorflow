@@ -339,6 +339,8 @@ Talking to Mykola costs money every time, and more than anything else here — h
 
 Signed out you get ten messages in a visit, and there is a shared daily allowance across everyone signed out. Signed in you have forty a day of your own, and there is a further allowance shared by everybody. Signing in **raises** the limit rather than removing it.
 
+One message can be up to **2,000 characters** long, which is plenty for a question or a paragraph you want to talk about. The box stops at that length and shows a count as you get near it.
+
 If he tells you he has answered a lot of questions today and asks you to try again tomorrow, that is the shared allowance rather than yours — you have done nothing wrong, and signing in will not get past that one. *Daily limits* below has all four features and explains which refusal is which.
 
 ### Recaps

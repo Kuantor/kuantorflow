@@ -655,6 +655,15 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   The chat claims in `_mykola_chat_inputs()` rather than in a route, so the
   widget's POST, ai_agent's `/api/chat` and the SSE stream share one allowance
   and a streamed message does not cost two.
+  **One message is capped too** (#564): `web.MAX_CHAT_MESSAGE_CHARS` (2,000,
+  `_int_env`, 0 to disable), checked in the same function **before** either
+  quota, because a refusal for length is free and must not spend a message.
+  The 1 MB request cap bounds the question and the history *together*, so
+  until then one pasted message of close to a megabyte went to Opus counted as
+  one message. Characters, not bytes, so Cyrillic gets the same allowance. The
+  widget's `maxlength` comes from the same constant (`mykola_message_max`), so
+  a learner meets the limit while typing; standalone Mykola has its own
+  `agent.MAX_QUESTION_CHARS` at the same value.
   A refusal carries `sign_in_required: False` — they already signed in, so
   there is nothing to offer and the answer is tomorrow.
   **The recap happens only when asked** (#495). It is `claude-opus-5` over up
