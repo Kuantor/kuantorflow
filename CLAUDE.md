@@ -282,6 +282,17 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   suite points it at a temp dir). A writer with no request behind it —
   `set_user_blocked()`, `place_topic()`, `seed_topics.py` — logs *beside the
   write* instead, because `_save_and_log()` reads the session and `g`.
+  **`requests.log` is one line per request** (#555), written by `web`'s
+  request hooks and never by a view: method, path (no query string), endpoint,
+  status, ms, `db=` (connections `utils.get_db_connection()` counted against
+  the request, which is how #554 is judged in production) and the **account
+  id, never the email**. Every request gets an id (`g.request_id`, returned as
+  `X-Request-ID`), and applog appends `rid=` to every line written while it
+  runs, as `app.logger`'s lines do through a filter on Flask's default handler,
+  so `grep rid=<id> logs/*.log` is one request's whole story. Static files are
+  not logged. A streamed response's line (`streamed=yes`) is written when the
+  stream starts, so its `ms` and `db` stop there. A request that raises is still
+  logged, as a 500, by the teardown hook. The guide's privacy section names it.
   `cards.log` is the **action** log rather than only a card log: `TOPIC`,
   `USER-BLOCK`, `ACCOUNT-DELETE`, `PREFERRED-NAME`, and since #161 `MOVE` and
   `SETTINGS`. A move is its own action, not an `EDIT changed=topic`, because the
