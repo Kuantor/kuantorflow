@@ -163,6 +163,18 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   translators can be down while Oxford is fine. That is the fallback, not the
   rule: a translator that answers still decides the cards, and only **both**
   halves empty is a failure.
+  **Every translator's answer passes an alphabet check** (#544),
+  `checked_translations()` inside `lookup_word()`'s translator loop, so no
+  provider has to remember it: each comma-separated variant whose **letters**
+  are not all Cyrillic, or that holds the other language's own letters
+  (ы ё ъ э in Ukrainian, є ї ґ і in Russian), is **dropped, never repaired**,
+  and logged as `TRANSLATE-DROPPED`. A model drifts mid-answer now and then:
+  语言学 in a Ukrainian field, or екзубeрантний with one Latin "e", which looks
+  right and marks a learner wrong for typing it correctly. **Letters only** --
+  `цікавий; дивний`, `шума.` and a stress mark are all in the deck and all
+  right, so punctuation is not policed; ʼ (U+02BC, which Unicode calls a letter)
+  is let through by name. An answer with nothing left counts as the translator
+  having found nothing, so the next one is asked (#353).
   Also the **notes-upload parsers**
   (`parse_notes_preview` dispatches on the extension: `.txt`, `.docx`, `.mht`)
   and the **Reverso copy-paste parser** they share — one state machine fed by
@@ -982,7 +994,7 @@ every paid action rather than a shared password. The local venv is Python 3.14.
   `reports/scripts/md_to_pdf.py`). Small PRs are exempt unless asked.
 - **The console one-offs live in `scripts/`** (#442) — `apply_schema.py`,
   `seed_topics.py` + `seed_words.py`, `claim_topics.py`, `claim_flashcards.py`,
-  `retopic.py`, `rebuild_schedule.py` (#479). They are run, never imported by the app, which is why they can
+  `retopic.py`, `rebuild_schedule.py` (#479), `find_bad_translations.py` (#544, report-only). They are run, never imported by the app, which is why they can
   sit in a directory of their own while the app's modules stay flat in the root
   (see #442 for why *those* have not moved: seven `Path(__file__)` sites that
   would fail **silently** one level down).
@@ -1262,6 +1274,15 @@ to the rules in `recall.py`.
 ```bash
 venv/bin/python scripts/rebuild_schedule.py --dry-run
 venv/bin/python scripts/rebuild_schedule.py
+```
+
+**#544 needs no schema step**, and one report afterwards: the saved cards
+from before the alphabet check are listed, not fixed, because only a person
+knows which letter was meant. Correct each in the card editor on the topic it
+names:
+
+```bash
+venv/bin/python scripts/find_bad_translations.py
 ```
 
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
