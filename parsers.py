@@ -238,7 +238,7 @@ def script_problem(variant, lang):
     for ch in variant:
         if not ch.isalpha() or ch in APOSTROPHE_LETTERS:
             continue                # punctuation, digits, stress marks, ʼ
-        if not "Ѐ" <= ch <= "ӿ":
+        if not "\u0400" <= ch <= "\u04ff":     # the Cyrillic block
             return f"not Cyrillic: {ch!r} (U+{ord(ch):04X})"
         if ch in foreign:
             return f"not a {SCRIPT_LANGUAGE_NAMES.get(lang, lang)} letter: {ch!r}"
