@@ -16,7 +16,7 @@ saved as a confident one. Correct each card in the card editor on its topic's
 page, which the report names, or delete the bad variant there.
 
 **ASCII output**, like the other console scripts: a Windows console is cp1252,
-so non-ASCII text is printed escaped (`е`) rather than risking an error
+so non-ASCII text is printed escaped (`\u0435` for a Cyrillic e) rather than risking an error
 halfway through the list. The reason names the offending character's code
 point, which is what makes a hidden Latin "e" visible at all.
 
