@@ -202,6 +202,77 @@ def _google_translate(text, source, target):
 GOOGLE_LANGS = {"ukr": "uk", "rus": "ru"}
 
 
+# --- the alphabet check (#544) ------------------------------------------------
+# A translation can come back in the wrong alphabet or the wrong language, and
+# nothing used to check: 语言学 in a Ukrainian field, языкознавство offered as
+# Ukrainian, and -- the invisible one -- екзубeрантний with one Latin "e". That
+# last one looks identical to the right word and is not equal to it, so a
+# learner who types it correctly in the Quiz is marked wrong. A model drifts
+# mid-answer now and then, and the check is the only thing that notices.
+#
+# Every **letter** of every comma-separated variant must be Cyrillic, and each
+# language must not hold the other's own letters. Only letters are checked:
+# the deck already holds `цікавий; дивний`, `последствий/шума.` and the stress
+# mark in `экзубе́рантный`, all of them right, and a list of permitted
+# punctuation would have dropped every one (the ticket proposed one; the
+# measurement against the 652 local cards is what changed it). A variant that
+# fails is **dropped, never repaired**: guessing which letter was meant is how
+# a wrong word gets saved as a confident one.
+FOREIGN_LETTERS = {
+    "ukr": frozenset("ыёъэЫЁЪЭ"),   # Russian only: Ukrainian has е and є, no э
+    "rus": frozenset("єїґіЄЇҐІ"),   # Ukrainian only
+}
+# ʼ (U+02BC) is the proper Ukrainian apostrophe (предʼявляти) and Unicode files
+# it as a letter, so it is let through by name.
+APOSTROPHE_LETTERS = frozenset("ʼ")
+SCRIPT_LANGUAGE_NAMES = {"ukr": "Ukrainian", "rus": "Russian"}
+
+
+def script_problem(variant, lang):
+    """Why one translation variant is in the wrong alphabet, or None if fine.
+
+    Pure, so the rule is tested on plain strings. `lang` is a `GOOGLE_LANGS`
+    key ("ukr" / "rus").
+    """
+    foreign = FOREIGN_LETTERS.get(lang, frozenset())
+    for ch in variant:
+        if not ch.isalpha() or ch in APOSTROPHE_LETTERS:
+            continue                # punctuation, digits, stress marks, ʼ
+        if not "Ѐ" <= ch <= "ӿ":
+            return f"not Cyrillic: {ch!r} (U+{ord(ch):04X})"
+        if ch in foreign:
+            return f"not a {SCRIPT_LANGUAGE_NAMES.get(lang, lang)} letter: {ch!r}"
+    return None
+
+
+def checked_translations(pos_translations, lang, provider, word):
+    """A translator's answer with every wrong-alphabet variant removed (#544).
+
+    `pos_translations` is a fetcher's `{pos: [term, ...]}`. A part of speech
+    left with no variants goes too, so an answer whose every variant failed
+    comes back empty -- which `lookup_word()` already treats as the translator
+    having found nothing, and moves on to the next one (#353). Each drop is a
+    `TRANSLATE-DROPPED` line in `dict.log`, so how often each provider does
+    this can be counted.
+    """
+    kept = {}
+    for pos, terms in (pos_translations or {}).items():
+        good = []
+        for term in terms:
+            problem = script_problem(term.strip(), lang)
+            if problem:
+                # Logged with the API code ("uk"), as the TRANSLATE line
+                # beside it is, so the two read alike in dict.log.
+                applog.translation_dropped(word, provider,
+                                           GOOGLE_LANGS.get(lang, lang), pos,
+                                           term, problem)
+            else:
+                good.append(term)
+        if good:
+            kept[pos] = good
+    return kept
+
+
 def _google_dictionary(word, target):
     """
     Fetch dictionary-style translations for an English word from Google
@@ -1480,6 +1551,10 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
                     # moved must degrade to the next one rather than 500.
                     pos_translations = {}
                     error = e
+            # #544: every provider's answer passes the alphabet check here, so
+            # none of them has to remember it.
+            pos_translations = checked_translations(pos_translations, key,
+                                                    primary, word)
             applog.translations_fetched(
                 word, primary, code, len(pos_translations), timer.ms,
                 error=error,

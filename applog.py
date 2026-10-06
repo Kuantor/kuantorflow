@@ -660,6 +660,14 @@ def translations_fetched(word, provider, lang, count, elapsed_ms,
            error=error)
 
 
+def translation_dropped(word, provider, lang, pos, variant, reason):
+    """One translation variant refused for its alphabet (#544): the provider,
+    the language and the variant itself, so which translator drifts, and how
+    often, can be counted."""
+    _write(DICT, "TRANSLATE-DROPPED", word=word, provider=provider, lang=lang,
+           pos=pos, variant=variant, reason=reason)
+
+
 def definitions_fetched(word, provider, count, elapsed_ms,
                         fallback_from=None, error=None):
     """One explanatory dictionary's answer (Oxford / Merriam-Webster /
