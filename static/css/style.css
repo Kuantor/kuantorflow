@@ -1945,6 +1945,9 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
 }
 #mykola-form button:hover { background: var(--blue-dark); }
 #mykola-form button:disabled { opacity: 0.6; cursor: default; }
+/* #564: how much of the message cap is used, shown only near it. */
+.mykola-count { align-self: center; color: var(--muted); font-size: 0.78rem;
+                white-space: nowrap; }
 /* #495: the recap, on request. A quiet outlined pill above the input --
    secondary to Send, and small enough not to crowd a phone-sized panel. */
 .mykola-tools {

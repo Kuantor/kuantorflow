@@ -697,6 +697,19 @@ def anonymous_limit_hit(kind, used, limit, log=DICT, action=None):
     _write(log, "LIMIT", feature=action, kind=kind, used=used, limit=limit)
 
 
+def chat_message_too_long(chars, limit, user=None):
+    """A message to Mykola refused for its length (#564).
+
+    A `LIMIT` line in `mykola.log` beside the chat's other refusals, with
+    `kind=length` where theirs name a pool: nothing was spent, and the widget's
+    `maxlength` means a learner should never reach this, so a line here is a
+    request made by hand or a widget that predates the cap. The message itself
+    is not logged, only how long it was.
+    """
+    _write(MYKOLA, "LIMIT", feature="chat", kind="length", chars=chars,
+           limit=limit, user=_user(user))
+
+
 def lookup_finished(word, cards, elapsed_ms):
     _write(DICT, "RESULT", word=word, cards=cards, ms=elapsed_ms)
 
