@@ -302,6 +302,22 @@ so `grep rid=<id> logs/*.log` is one request's whole story. Static files are
 not logged. A streamed response's line (`streamed=yes`) is written when the
 stream starts, so its `ms` and `db` stop there. A request that raises is still
 logged, as a 500, by the teardown hook. The guide's privacy section names it.
+**`model_usage.log` is what the AI bill is added up from** (#562). Every log
+recorded *that* a paid call happened, but only Mykola's lines (ai_agent's
+`mykola.usage`, in `mykola.log`) said what it used, so the four calls this repo
+makes itself -- the translator, the generated text, the topic builder and the
+notes splitter -- could not be totalled, and the cost figures in *Three pools
+per paid action* stayed a model. `applog.model_usage()` now writes one
+`MODEL-USAGE` line beside each call, read off the response's `usage`: feature,
+model, input/output/cache tokens, stop reason and ms, plus `rid=` inside a
+request. The features are the `USAGE_*` constants, written out because a typo
+would quietly start a new row in every report. A call that raised writes
+nothing (its feature line says it failed); a reply cut off at `max_tokens`
+*does* write, since it spent its tokens. `scripts/model_usage_report.py` totals
+these and Mykola's lines per day, feature and model, and prices them only from
+a `--rates` file -- rates change, so none are in code. Measured on the first
+live lookup: about 432 input and 43 output tokens per language, 1.6-2.1 s.
+
 `cards.log` is the **action** log rather than only a card log: `TOPIC`,
 `USER-BLOCK`, `ACCOUNT-DELETE`, `PREFERRED-NAME`, and since #161 `MOVE` and
 `SETTINGS`. A move is its own action, not an `EDIT changed=topic`, because the

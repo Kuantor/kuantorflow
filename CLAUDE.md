@@ -112,7 +112,10 @@ file holds what it is named for** (#448); a `LIMIT` line goes to the log of the
 thing refused; every game round writes one `ROUND` line. **`requests.log`** is
 one line per request from `web`'s hooks (#555): path without the query, `db=`
 connections, the **account id, never the email**, and `rid=` on every line the
-request writes.
+request writes. **Every paid model call this repo makes writes a `MODEL-USAGE`
+line** to `model_usage.log` (#562): feature (`applog.USAGE_*`), model, tokens,
+ms. A fifth paid call gets a constant and the line; `scripts/model_usage_report.py`
+totals it with Mykola's usage lines.
 
 **Paid calls and their ceilings** (*Three pools per paid action*, *Per-account
 ceilings*). Every paid call claims its ceiling **after every free refusal and
@@ -199,7 +202,7 @@ file is the source of truth and its test derives from it.
   `reports/scripts/md_to_pdf.py`). Small PRs are exempt unless asked.
 - **The console one-offs live in `scripts/`** (#442) — `apply_schema.py`,
   `seed_topics.py` + `seed_words.py`, `claim_topics.py`, `claim_flashcards.py`,
-  `retopic.py`, `rebuild_schedule.py` (#479), `find_bad_translations.py` (#544, report-only). They are run, never imported by the app, which is why they can
+  `retopic.py`, `rebuild_schedule.py` (#479), `find_bad_translations.py` (#544, report-only), `model_usage_report.py` (#562, read-only). They are run, never imported by the app, which is why they can
   sit in a directory of their own while the app's modules stay flat in the root
   (see #442 for why *those* have not moved: seven `Path(__file__)` sites that
   would fail **silently** one level down).

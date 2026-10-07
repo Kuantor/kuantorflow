@@ -729,13 +729,16 @@ def _claude_dictionary(word, target):
         "articles and no 'to' before a verb."
     )
     client = anthropic.Anthropic()
-    message = client.messages.create(
-        model=TRANSLATE_MODEL,
-        max_tokens=TRANSLATE_MAX_TOKENS,
-        messages=[{"role": "user", "content": prompt}],
-        output_config={"format": {"type": "json_schema",
-                                  "schema": TRANSLATE_SCHEMA}},
-    )
+    with applog.Timer() as timer:
+        message = client.messages.create(
+            model=TRANSLATE_MODEL,
+            max_tokens=TRANSLATE_MAX_TOKENS,
+            messages=[{"role": "user", "content": prompt}],
+            output_config={"format": {"type": "json_schema",
+                                      "schema": TRANSLATE_SCHEMA}},
+        )
+    applog.model_usage(applog.USAGE_TRANSLATE, TRANSLATE_MODEL, message,
+                       timer.ms)
     text = next((b.text for b in message.content if b.type == "text"), "")
     data = json.loads(text)
 
@@ -1978,10 +1981,12 @@ def _split_glued_translations(strings):
             '(as a string) to an array of terms, e.g. {"0": ["term1", '
             '"term2"]}.\n\n' + numbered
         )
-        msg = client.messages.create(
-            model=SPLIT_MODEL, max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        with applog.Timer() as timer:
+            msg = client.messages.create(
+                model=SPLIT_MODEL, max_tokens=2000,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        applog.model_usage(applog.USAGE_SPLIT, SPLIT_MODEL, msg, timer.ms)
         raw = "".join(b.text for b in msg.content if b.type == "text").strip()
         raw = re.sub(r"^```(?:json)?|```$", "", raw, flags=re.MULTILINE).strip()
         data = json.loads(raw)

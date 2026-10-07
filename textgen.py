@@ -256,11 +256,15 @@ def _ask_claude(prompt, length):
     import anthropic
 
     client = anthropic.Anthropic()
-    message = client.messages.create(
-        model=TEXT_MODEL,
-        max_tokens=max_tokens(length),
-        messages=[{"role": "user", "content": prompt}],
-    )
+    with applog.Timer() as timer:
+        message = client.messages.create(
+            model=TEXT_MODEL,
+            max_tokens=max_tokens(length),
+            messages=[{"role": "user", "content": prompt}],
+        )
+    # Before the truncation check: a reply cut off at max_tokens still spent
+    # its tokens, and those are exactly the calls worth seeing (#562).
+    applog.model_usage(applog.USAGE_GENERATE, TEXT_MODEL, message, timer.ms)
     text = "".join(
         block.text for block in message.content if block.type == "text").strip()
 
