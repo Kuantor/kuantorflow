@@ -81,8 +81,14 @@
             color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.4);
         }
         .deck-counter { font-weight: 600; }
+        /* Its own colour (#572): the toolbar's white is inherited, and the
+           global `label` rule in style.css sets `--muted` on the element
+           itself, which beats inheritance -- grey on this dark pill. The
+           margin is the same rule's, reset so the pill sits on the
+           toolbar's centre line. */
         .deck-anim-toggle {
             display: inline-flex; align-items: center; gap: 0.4rem;
+            color: #fff; margin: 0;
             font-size: 0.9rem; cursor: pointer;
             background: rgba(20,40,60,0.45); padding: 0.3rem 0.6rem; border-radius: 999px;
         }
