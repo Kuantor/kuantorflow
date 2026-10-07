@@ -15,6 +15,9 @@ Action logs (issue #30) — a plain-text trail of what the app did, in `logs/`:
     logs/requests.log      one line per page served (#555): how long it took,
                            how many database connections it opened, and the
                            account id -- never the email
+    logs/model_usage.log   one MODEL-USAGE line per paid model call this
+                           repo makes (#562): the feature, the model and the
+                           tokens it used; Mykola's own are in mykola.log
 
 Each file is named after what it records, and #448 is what made that true.
 `dict.log` had become "anything that went and asked somebody else", so a
@@ -69,6 +72,16 @@ MYKOLA = "mykola"
 GAMES = "games"
 GEN_TEXTS = "gen_texts"
 REQUESTS = "requests"
+MODEL_USAGE = "model_usage"
+
+# The four paid model calls this repo makes itself (#562), written out rather
+# than built from strings: a typo in a feature name would not fail, it would
+# quietly start a fifth row in every usage report.
+USAGE_TRANSLATE = "translate"     # parsers._claude_dictionary
+USAGE_GENERATE = "generate"       # textgen
+USAGE_TOPIC = "topic"             # topicgen, proposing and extending
+USAGE_SPLIT = "split"             # parsers._split_glued_translations
+USAGE_FEATURES = (USAGE_TRANSLATE, USAGE_GENERATE, USAGE_TOPIC, USAGE_SPLIT)
 
 _configured = {}  # logger name -> the directory it is currently writing to
 
@@ -153,6 +166,40 @@ def request_served(method, path, endpoint, status, ms, db, user_id,
            endpoint=endpoint or "-", status=status, ms=ms, db=db,
            user_id=user_id if user_id is not None else "anonymous",
            streamed="yes" if streamed else None, rid=rid)
+
+
+# --- model_usage.log --------------------------------------------------------
+
+def model_usage(feature, model, message, ms=None):
+    """What one paid model call used (#562), read off the API's response.
+
+    The feature's own line (TRANSLATE, GENERATE, TOPIC-PROPOSED, SPLIT) says
+    what happened; this says what it **used**, so the day's bill can be added
+    up from the logs instead of modelled. Mykola's calls already log the same
+    figures through ai_agent (`mykola.usage`, in `mykola.log`); these are the
+    four this repo makes itself. Inside a request the line carries `rid=`, so
+    it joins the page that caused it in `requests.log`.
+
+    Written beside each call, after the response, and **only when the response
+    carries usage** -- a call that raised has nothing to report, and its
+    feature line already says it failed. Never raises.
+    """
+    try:
+        usage = getattr(message, "usage", None)
+        if usage is None:
+            return
+        _write(MODEL_USAGE, "MODEL-USAGE", **{
+            "feature": feature,
+            "model": model,
+            "in": getattr(usage, "input_tokens", None),
+            "out": getattr(usage, "output_tokens", None),
+            "cache_write": getattr(usage, "cache_creation_input_tokens", None) or 0,
+            "cache_read": getattr(usage, "cache_read_input_tokens", None) or 0,
+            "stop": getattr(message, "stop_reason", None),
+            "ms": ms,
+        })
+    except Exception:       # noqa: BLE001 - a usage line is never worth an error
+        pass
 
 
 def _user(user):

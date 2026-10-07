@@ -155,11 +155,14 @@ def _ask_claude(prompt, count):
     import anthropic
 
     client = anthropic.Anthropic()
-    message = client.messages.create(
-        model=TOPIC_MODEL,
-        max_tokens=max_tokens(count),
-        messages=[{"role": "user", "content": prompt}],
-    )
+    with applog.Timer() as timer:
+        message = client.messages.create(
+            model=TOPIC_MODEL,
+            max_tokens=max_tokens(count),
+            messages=[{"role": "user", "content": prompt}],
+        )
+    # Proposing a topic and extending one are both this call (#562).
+    applog.model_usage(applog.USAGE_TOPIC, TOPIC_MODEL, message, timer.ms)
     return "".join(
         block.text for block in message.content if block.type == "text").strip()
 
