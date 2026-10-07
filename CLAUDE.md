@@ -39,8 +39,9 @@ RUN_DB_ROUNDTRIP=1 venv/Scripts/python -m pytest -q -rs tests/test_<x>_db.py   #
   silently** — "7 skipped" looks green — so keep `-rs` and read the summary.
 - **Mykola** (`../ai_agent`) has its own tests, plain scripts:
   `venv/Scripts/python test_<name>.py` in that repo, each printing its checks.
-- **Prove each new test fails** (see *Conventions*): commit the fix, break it,
-  run, watch it fail, restore. Break each piece a feature adds, not just one.
+- **Prove each new test fails** (see *Conventions*): one break per piece with
+  `venv/Scripts/python tools/prove_fails.py <spec.py> --markdown` in the test
+  repo, which restores from the saved text; paste its table into the PR.
 - **Browser behaviour is proved in a real browser** — the preview pane
   (`.claude/launch.json`, server `kuantorflow`) or headless Chrome — because the
   suite checks the HTML a route returns, not what a browser does with it.
@@ -176,20 +177,23 @@ file is the source of truth and its test derives from it.
 - **Tests are in a separate repo.** When you change app behaviour, open a
   **parallel test PR** in `kuantorflow_automation` (a `tests/…` branch),
   alongside the code PR here.
-- **Prove a regression test fails before trusting it.** Break the fix, run the
-  test, watch it fail, restore. A test written straight after a fix is written
-  against code that already works, so every assertion is satisfied by
-  construction and nothing in a green run separates "catches the bug" from
-  "cannot fail". This has caught vacuous tests repeatedly — #334's dedupe had
-  six of seven pass with the fix disabled.
-- **Commit the fix *before* you break it.** The restore step is
-  `git checkout -- <file>`, which discards **everything** uncommitted in that
-  file, not just the deliberate break. It has silently reverted finished work
-  three times in this repo: a button style, a Settings panel, and the change
-  that was being verified at the time. Commit first and the restore is a
-  no-op that cannot lose anything. Same shape as never running `reset --hard`
-  on a dirty tree: a destructive command used as an undo needs the work to be
-  somewhere else first.
+- **Prove each test fails before trusting it** (#569). A test written straight
+  after the code passes by construction, so nothing in a green run separates
+  "catches the bug" from "cannot fail" — #334's dedupe had six of seven pass
+  with the fix disabled.
+  - **A bug fix is test-first:** write the failing test from the ticket, watch
+    it fail, then fix.
+  - **A feature is test-first where natural, plus one break per piece**, run
+    with `tools/prove_fails.py` in the test repo. Before a feature exists every
+    test fails for the same trivial reason (a 404, a missing name), so a vacuous
+    assertion stays hidden; only per-piece breaks show what each assertion
+    guards (#561 had ten). A break nothing catches is a vacuous test or a wrong
+    break, and the tool says so.
+  - **Restore from the saved text, never `git checkout --`.** The tool does;
+    `git checkout` also throws away uncommitted work in the file, and has
+    silently reverted finished work three times here. Committing the fix first
+    is still good practice, but no longer the only thing between a break and
+    lost work.
 - **Significant PRs get a report** — a Markdown + PDF verification report
   committed under `kuantorflow_automation/test_reports/` (render with
   `reports/scripts/md_to_pdf.py`). Small PRs are exempt unless asked.
