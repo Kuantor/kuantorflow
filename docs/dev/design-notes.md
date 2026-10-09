@@ -118,9 +118,9 @@ anything opening with a year: if that ever changes, the app loses examples
 instead of gaining a licensing problem. Fragments go too — `spotless shirt`
 is true and useless, and #235 cannot gap a sentence that is not one.
 Examples are collected **only for a part of speech that also produced a
-definition**, because `lookup_word()`'s Reverso fallback replaces the
-definitions alone and Wiktionary examples must not outlive the credit that
-covers them.
+definition**, because Wiktionary examples must not outlive the credit that
+covers them (the rule was written for `lookup_word()`'s Reverso fallback,
+which replaced the definitions alone; that fallback is gone since #526).
 The licence is also why the text is copied **verbatim** — rewording or
 summarising a definition would make the card an *adaptation*, which
 share-alike binds, where copying with a credit is what the licence plainly
@@ -129,8 +129,9 @@ explanation**: a credit needs something that remembers what to credit, and
 once two sources are mixed in one column the rows already there are
 indistinguishable forever. `_attach_dictionary_text()` stamps
 `explanation_source` on exactly the cards it gives text to, from the provider
-that actually answered — which is not always the one that was asked, since
-Reverso still answers when the chosen dictionary has nothing.
+that answered. Until #526 that was not always the one that was asked, because
+Reverso answered when the chosen dictionary had nothing; cards from then keep
+their `reverso` credit, and `cards.EXPLANATION_SOURCES` still accepts it.
 Examples are **English only**: `examples_ukr`/`examples_rus` come from Reverso
 Context, which is IP-blocked from PythonAnywhere. A card is created per part of
 speech the **translator** found and gets its text from the part of speech the
@@ -181,8 +182,8 @@ Output stays **ASCII** (a Ukrainian translation on a cp1252 console raises,
 which would end a run that was saving fine). **Every word has a verified
 Oxford entry** — Oxford is the only explanatory dictionary reachable from
 PythonAnywhere, so a word it lacks reaches production with translations and no
-explanation, and locally you would never notice because Reverso covers the gap
-(that was #221). `--check-oxford` re-asks the dictionary about all 360 and
+explanation, and locally you would never notice because Reverso covered the gap
+(that was #221; #526 removed that fallback, so the gap now shows locally too). `--check-oxford` re-asks the dictionary about all 360 and
 exits non-zero naming any it cannot define; run it when changing a word, and
 use Oxford's **headword** (`tactic`, not `tactics`).
 
@@ -412,8 +413,8 @@ no topic, no lookup, no database — because the expensive half of #406 comes
 *after* the model call, when the learner approves the list. The prompt asks
 for **headwords**, singular and uninflected, because #221 is what an
 inflection costs: a word with no dictionary entry becomes a card carrying
-translations and no explanation, invisible locally because Reverso covers the
-gap. `_parse()` is where a model's output stops being trusted — anything that
+translations and no explanation, invisible locally because Reverso covered the
+gap until #526. `_parse()` is where a model's output stops being trusted — anything that
 is not a single alphabetic headword is dropped rather than sent to a
 dictionary, and duplicates go with it.
 The route does the rest. `_vet_proposal()` spends the **free** checks first

@@ -131,7 +131,9 @@ not reachable at all.
 declaration (#353); fetchers are held **by name** and resolved at call time, so
 tests can patch them. A dictionary backend returns `(definitions, examples)`
 (#225) and **that tuple is the seam tests stub** — stubbing underneath it lets
-the offline suite hit Oxford. **Wiktionary text is copied verbatim and
+the offline suite hit Oxford. **No dictionary fallback** (#526): a word the
+chosen dictionary cannot explain gets no explanation, locally as in production.
+**Wiktionary text is copied verbatim and
 credited** (#390); only its usage examples are used, never quotations. **Every
 translation passes the alphabet check** (#544): a variant with a non-Cyrillic
 letter, or the other language's own letters, is dropped and logged, never

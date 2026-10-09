@@ -8,8 +8,9 @@ needed something extra on its deploy day has its own paragraph after them.
 requirements into the app venv, run **`python scripts/apply_schema.py`** (idempotent —
 it prints what it changed and what was already in place; `--dry-run` to look
 first), reload the web app. Note: Reverso and
-Merriam-Webster are blocked from PythonAnywhere's IPs, so those paths fall
-back (Google / Reverso alternatives).
+Merriam-Webster are blocked from PythonAnywhere's IPs. The word lookup no
+longer falls back to Reverso's dictionary (#526), so a word the chosen
+dictionary cannot explain gets no explanation, locally as well.
 
 **`SECRET_KEY` is required, and the app refuses to start without it** (#445).
 The Flask session cookie is **signed, not encrypted**: the payload is plain
