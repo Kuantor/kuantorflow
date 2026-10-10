@@ -430,9 +430,11 @@ explanatory_dictionary)`, which dispatches to one fetcher per provider
   part-of-speech entry.
 
 The dispatch degrades gracefully: a translator backend that fails or returns
-nothing falls back to Google Translate, and a dictionary backend that fails
-or returns nothing falls back to Reverso's dictionary — a lookup without
-definitions is still useful, so definition failures never break a lookup.
+nothing falls back to the next configured translator, and a dictionary backend
+that fails or returns nothing leaves the card without an explanation — a lookup
+without definitions is still useful, so definition failures never break a
+lookup. There is no dictionary fallback (#526): Reverso's dictionary used to be
+one, but PythonAnywhere cannot reach it, so it filled gaps only locally.
 
 ---
 

@@ -108,8 +108,9 @@ def oxford_misses(words, pause=0.3, out=None):
     checks is easy to break by accident. Oxford is the **only** explanatory
     dictionary reachable from PythonAnywhere, so a word it does not have reaches
     production with translations and no explanation — and locally you would never
-    notice, since Reverso covers the gap from a developer's machine. #221 was
-    exactly that failure, hidden for months.
+    notice, since Reverso covered the gap from a developer's machine. #221 was
+    exactly that failure, hidden for months; #526 removed that fallback, so the
+    gap now shows locally too, and this check still finds it before a run.
     """
     out = out if out is not None else sys.stdout
     misses = []

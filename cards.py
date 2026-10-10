@@ -245,8 +245,8 @@ def _saved_mark(word, pos, state, hidden_matters, owner):
 
 
 # Every value `explanation_source` may hold (#390): the dictionaries the
-# registry knows about, plus Reverso, which `lookup_word()` still falls back to
-# for definitions without being a choice anybody can make.
+# registry knows about, plus Reverso, which `lookup_word()` fell back to until
+# #526. It is no longer written, but cards from then keep that credit.
 EXPLANATION_SOURCES = frozenset(parsers.DICTIONARY_SLUGS) | {"reverso"}
 
 
@@ -1280,7 +1280,7 @@ def _vet_proposal(title, words, idea, count):
     * **a word no lexicon has** is usually the model inflecting or inventing,
       and #221 is what it costs to find out afterwards -- a word with no
       dictionary entry becomes a card carrying translations and no explanation,
-      which is invisible locally because Reverso covers the gap.
+      which was invisible locally while Reverso covered the gap (#526).
       `parsers.wiktionary_pages()` answers the whole list in one request (#389),
       and an unreachable lexicon leaves them simply unflagged;
     * **a word the deck already holds** is worth saying out loud, because a

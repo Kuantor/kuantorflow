@@ -1507,8 +1507,9 @@ def _provider_name(backend):
         _fetch_oxford_entry: "oxford",
         _merriam_webster_entry: "merriam-webster",
         _wiktionary_entry: "wiktionary",
-        # The definitions-only fetchers, still reached directly: Reverso as
-        # lookup_word()'s fallback, Oxford by seed_topics.py --check-oxford.
+        # The definitions-only fetchers, still reached directly: Reverso by
+        # parse_reverso_word() (no longer lookup_word()'s fallback, #526),
+        # Oxford by seed_topics.py --check-oxford.
         _fetch_oxford_definitions: "oxford",
         _fetch_merriam_webster_definitions: "merriam-webster",
         _fetch_definitions: "reverso",
@@ -1524,9 +1525,10 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     Translations come from the chosen translator backend, falling back to
     Google Translate when that backend fails or returns nothing (e.g. the
     provider is unreachable from the server). English definitions come from
-    the chosen explanatory dictionary, with Reverso's dictionary as the
-    fallback; a lookup without definitions is still useful, so definition
-    failures never break the lookup.
+    the chosen explanatory dictionary and nowhere else (#526: Reverso's
+    dictionary was the fallback, and answered only off PythonAnywhere); a
+    lookup without definitions is still useful, so definition failures never
+    break the lookup.
     """
     overall = applog.Timer()
     # The chosen provider first, then the rest of what is configured (#353).
@@ -1580,10 +1582,10 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
     # answered perfectly). It now happens below, once both halves are in.
     fetch_defs = _dictionary_backend(explanatory_dictionary)
     dictionary = _provider_name(fetch_defs)
-    # Which dictionary the explanation ends up being *from*, which is not
-    # always the one that was asked (#390). Reverso answers below when the
-    # chosen one has nothing, and a card credited to a provider that returned
-    # nothing would be a wrong credit rather than a missing one.
+    # Which dictionary the explanation is *from* (#390). Since #526 that is
+    # always the one that was asked, because nothing else is; a card it could
+    # not explain carries no text, so `_attach_dictionary_text()` credits it to
+    # nobody.
     source = dictionary
     error = None
     examples = {}
@@ -1598,18 +1600,11 @@ def lookup_word(word, topic=None, translator="google", explanatory_dictionary="o
             error = e
     applog.definitions_fetched(word, dictionary, len(definitions), timer.ms,
                                error=error)
-    if not definitions:
-        error = None
-        with applog.Timer() as timer:
-            try:
-                definitions = _fetch_definitions(word)
-            except requests.RequestException as e:
-                definitions = {}  # Reverso blocks datacenter IPs — skip quietly
-                error = e
-        applog.definitions_fetched(word, "reverso", len(definitions), timer.ms,
-                                   fallback_from=dictionary, error=error)
-        if definitions:
-            source = "reverso"
+    # No fallback when the dictionary has nothing (#526). Reverso's dictionary
+    # used to answer here, but PythonAnywhere's IPs are blocked there, so it
+    # filled gaps only on a developer's machine -- a word the chosen dictionary
+    # cannot explain looked explained locally and arrived bare in production
+    # (#221). It now gets no explanation everywhere.
     # #349. No translator answered, but the dictionary did: build the cards
     # from the dictionary's parts of speech instead, and leave the translation
     # fields empty.
