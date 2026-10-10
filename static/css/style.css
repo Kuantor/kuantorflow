@@ -2692,6 +2692,23 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
     min-height: 0;
     max-height: none;   /* the flex row above bounds it now, not a fixed 65vh */
 }
+/* #576. The upload variant's two panes split the row half and half. The rule
+   above gives the cards pane a basis of `auto`, its content's width, and with
+   the same specificity and a later place it beat the earlier `flex: 1 1 0`, so
+   the file's text was squeezed into what was left (measured 265px against
+   598px at 1280px). Both bases are half, here, after that rule: 50% rather
+   than 0, because a zero basis splits the row *before* the cards pane's own
+   side padding is added, which left it 13px wider. Two equal bases shrink
+   equally to make room for the gap, so the outer widths are equal. */
+.proposal-dialog--source .proposal-source,
+.proposal-dialog--source .proposal-cards-pane { flex: 1 1 50%; min-width: 0; }
+/* And the phone stack, restated after the row direction above, which had
+   silently overridden the earlier media query's column (#576). */
+@media (max-width: 640px) {
+    .proposal-dialog--source .proposal-body { flex-direction: column; }
+    .proposal-dialog--source .proposal-source { flex: 0 0 auto; max-height: 30vh; }
+    .proposal-dialog--source .proposal-cards-pane { flex: 1 1 auto; }
+}
 
 /* #353 — the note beside a translator that returns no part of speech. It
    qualifies the label it follows; on its own line it would read as a second
