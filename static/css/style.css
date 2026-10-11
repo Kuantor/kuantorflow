@@ -570,13 +570,17 @@ a.button-link { display: inline-block; text-decoration: none;
    Save changes 17px past the dialog's left margin (#238's spill, again). Two
    rows instead, every label on one line: Look up & update across the top,
    beside the fields it fills, and Save changes | Cancel as the closing row,
-   Save on the left as on a computer. Measured from 320px up. */
+   Save on the left as on a computer. Measured from 320px up.
+
+   And at every width, room above the row: it sat directly on the scrolling
+   fields' bottom edge (measured 0px at 1280px), so the buttons looked glued
+   to the panel. */
+.edit-dialog .modal-actions { margin-top: 1rem; }
 @media (max-width: 640px) {
     .edit-dialog .modal-actions {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 0.6rem;
-        margin-top: 0.8rem;
     }
     .edit-dialog #edit-lookup { grid-row: 1; grid-column: 1 / -1; }
     .edit-dialog #edit-save { grid-row: 2; grid-column: 1; }
