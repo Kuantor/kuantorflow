@@ -345,18 +345,24 @@
             </form>
             <p id="edit-error" class="settings-error" hidden></p>
             <div class="modal-actions">
-                <button type="submit" form="edit-form" id="edit-save">Save changes</button>
                 {# #191. A fetch-and-fill, never a write: it puts what the
                    providers return into the fields above and stops there, so
                    Save changes stays the only thing that touches the row.
                    Beside Save rather than in the field area because it acts on
                    the whole dialog, and because the word it looks up is the one
                    currently typed -- fixing a typo and re-fetching is one
-                   action. #}
+                   action.
+
+                   First in the row and at its left edge (#580): it fills the
+                   fields and keeps the dialog open, so it stands apart from
+                   Save and Cancel, the pair that close it. First in the DOM
+                   too, so Tab reaches it where the eye does; Enter in a field
+                   still saves, Save being the form's only submit button. #}
                 <button type="button" class="secondary" id="edit-lookup"
                         title="Fill these fields from your translator and dictionary. Nothing is saved until you press Save changes.">
                     Look up &amp; update
                 </button>
+                <button type="submit" form="edit-form" id="edit-save">Save changes</button>
                 <button type="button" class="secondary" id="edit-cancel">Cancel</button>
             </div>
         </div>
