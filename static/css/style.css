@@ -2808,6 +2808,16 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
 }
 .proposal-actions .add-btn { margin-top: 0.8rem; }
 .proposal-lookup { margin-top: 0.8rem; }
+/* #578. On a phone the card is ~245px inside, and the site's 25.6px button
+   padding left *Look up & update* 157px for 125px of text: it broke onto two
+   lines and stood 54px tall beside a 36px Add. Slimmer padding fits both on
+   one row from 360px up (measured), and where it still cannot (340px and
+   narrower) the row wraps rather than the text. */
+@media (max-width: 640px) {
+    .proposal-actions { flex-wrap: wrap; }
+    .proposal-actions .add-btn,
+    .proposal-actions .proposal-lookup { padding-inline: 1rem; white-space: nowrap; }
+}
 
 /* Look up & update's popups open **on top of another dialog** — the edit
    dialog, or the review popup — so they need a layer above `.modal-overlay`'s
