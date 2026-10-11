@@ -546,6 +546,45 @@ a.button-link { display: inline-block; text-decoration: none;
 .edit-fields label { display: block; margin-top: 0.55rem; font-weight: 600; }
 .edit-fields label small { font-weight: 400; color: var(--muted); }
 .edit-fields input, .edit-fields textarea { width: 100%; }
+/* #580. The text inputs had the site's box and the textareas had nothing, so
+   the explanation and examples rendered in the browser's own default --
+   monospace at 13px, 2px padding, a square grey border -- beside rounded 16px
+   inputs. The same box as `input[type="text"]` above, and the font the upload
+   popup's textareas already inherit (`.proposal-card textarea`). */
+.edit-fields textarea {
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #c5d0da;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 1rem;
+    background: #fff;
+    resize: vertical;
+}
+.edit-fields textarea:focus {
+    outline: 2px solid var(--blue);
+    outline-offset: 0;
+    border-color: var(--blue);
+}
+/* #580. On a phone the three buttons did not fit one row: Look up & update
+   broke onto three lines (72px tall), and `.modal-actions`'s flex-end spilled
+   Save changes 17px past the dialog's left margin (#238's spill, again). Two
+   rows instead, every label on one line: Look up & update across the top,
+   beside the fields it fills, and Save changes | Cancel as the closing row,
+   Save on the left as on a computer. Measured from 320px up. */
+@media (max-width: 640px) {
+    .edit-dialog .modal-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.6rem;
+        margin-top: 0.8rem;
+    }
+    .edit-dialog #edit-lookup { grid-row: 1; grid-column: 1 / -1; }
+    .edit-dialog #edit-save { grid-row: 2; grid-column: 1; }
+    .edit-dialog #edit-cancel { grid-row: 2; grid-column: 2; }
+    .edit-dialog #edit-save,
+    .edit-dialog #edit-lookup,
+    .edit-dialog #edit-cancel { padding-inline: 0.8rem; white-space: nowrap; }
+}
 
 .word { font-size: 1.3rem; font-weight: 700; }
 
