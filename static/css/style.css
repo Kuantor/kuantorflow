@@ -574,8 +574,17 @@ a.button-link { display: inline-block; text-decoration: none;
 
    And at every width, room above the row: it sat directly on the scrolling
    fields' bottom edge (measured 0px at 1280px), so the buttons looked glued
-   to the panel. */
-.edit-dialog .modal-actions { margin-top: 1rem; }
+   to the panel. A hairline marks where the scrolling stops, since a field cut
+   off mid-line reads as a glitch rather than as "more below" -- the line the
+   upload popup's `.proposal-footer` draws. One shade darker than the site's
+   usual divider #e4e9ee, which is barely there over a white dialog (Anton
+   asked for a line thin but seeable); still lighter than a field's #c5d0da
+   border, so it does not compete with the fields. */
+.edit-dialog .modal-actions {
+    margin-top: 1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid #d5dde5;
+}
 @media (max-width: 640px) {
     .edit-dialog .modal-actions {
         display: grid;
