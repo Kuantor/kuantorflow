@@ -585,13 +585,17 @@ a.button-link { display: inline-block; text-decoration: none;
     padding-top: 0.9rem;
     border-top: 1px solid #d5dde5;
 }
+/* Look up & update at the row's left edge, apart from Save and Cancel: it
+   fills the fields and keeps the dialog open, where they close it (#580). It
+   is first in the DOM, so `auto` pushes the closing pair to the right. */
+.edit-dialog #edit-lookup { margin-right: auto; }
 @media (max-width: 640px) {
     .edit-dialog .modal-actions {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 0.6rem;
     }
-    .edit-dialog #edit-lookup { grid-row: 1; grid-column: 1 / -1; }
+    .edit-dialog #edit-lookup { grid-row: 1; grid-column: 1 / -1; margin-right: 0; }
     .edit-dialog #edit-save { grid-row: 2; grid-column: 1; }
     .edit-dialog #edit-cancel { grid-row: 2; grid-column: 2; }
     .edit-dialog #edit-save,
