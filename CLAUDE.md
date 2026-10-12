@@ -198,7 +198,8 @@ file is the source of truth and its test derives from it.
     `git checkout` also throws away uncommitted work in the file, and has
     silently reverted finished work three times here. Committing the fix first
     is still good practice, but no longer the only thing between a break and
-    lost work.
+    lost work. A user-level hook (#582, `~/.claude/hooks/git_guard.py`) now
+    refuses `checkout --`, `restore`, `reset --hard` and `clean -f` outright.
 - **Significant PRs get a report** — a Markdown + PDF verification report
   committed under `kuantorflow_automation/test_reports/` (render with
   `reports/scripts/md_to_pdf.py`). Small PRs are exempt unless asked.
