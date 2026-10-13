@@ -32,8 +32,9 @@ python reports/scripts/to_webp.py --width 1600 src/wide.png static/img/games/wid
 ## How it works
 
 - `md_to_docx.py` — parses the report Markdown (headings, bullets, numbered
-  lists, tables, `**bold**` / `*italic*` / `` `code` `` / links) and emits the
-  document with python-docx. The parser is importable (`parse_markdown`), and
+  lists, tables, fenced code blocks, `**bold**` / `*italic*` / `` `code` `` /
+  links) and emits the document with python-docx. The parser is importable
+  (`parse_markdown`), and
   **`md_to_pdf.py` imports it** — so this file stays even though weekly reports
   no longer render a DOCX. Deleting it takes the PDF converter with it.
 - `md_to_pdf.py` — reuses that same parser, emits styled HTML, and prints it
