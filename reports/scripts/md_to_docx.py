@@ -1,4 +1,4 @@
-"""
+r"""
 Convert a KuantorFlow report written in Markdown into a styled .docx.
 
 Usage:
@@ -12,6 +12,7 @@ Supported Markdown (the subset our reports use):
     - bullets          1. numbered items           | tables | with | header |
     **bold**  *italic*  `code`  [link text](url)   (link text kept, shown in blue)
     fenced code blocks (``` or ~~~, labelled or not), kept line for line (#586)
+    a pipe inside a table cell written as \| (#588), as GitHub reads it
 Hard-wrapped lines are joined; list continuation lines (indented) are appended
 to their item. A code block's lines are never joined.
 """
@@ -72,6 +73,27 @@ def _closes(line, marker):
             and stripped == marker[0] * len(stripped))
 
 
+# An unescaped pipe: one not preceded by a backslash (#588).
+CELL_SEPARATOR = re.compile(r"(?<!\\)\|")
+
+
+def _table_cells(line):
+    r"""A table row's cells, the way GitHub reads them (#588).
+
+    Every `|` used to split, so a cell could not hold one: `\|`, GitHub's way
+    of writing a pipe in a cell, split too and left a stray backslash. Now only
+    an unescaped `|` separates cells, and `\|` becomes a literal `|`, inside
+    backticks as well. An unescaped pipe inside backticks still splits, as it
+    does on GitHub, so a file reads the same there and in a PDF.
+    """
+    row = line.strip()
+    if row.startswith("|"):
+        row = row[1:]
+    if row.endswith("|") and not row.endswith("\\|"):
+        row = row[:-1]
+    return [cell.strip().replace("\\|", "|") for cell in CELL_SEPARATOR.split(row)]
+
+
 def parse_markdown(text):
     """Parse report markdown into a list of blocks:
     ('title'|'h1'|'h2'|'p'|'bullet'|'num', runs) | ('table', rows) | ('hr',)
@@ -129,7 +151,7 @@ def parse_markdown(text):
             flush_para()
             rows = []
             while i < len(lines) and lines[i].strip().startswith("|"):
-                cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+                cells = _table_cells(lines[i])
                 if not all(re.fullmatch(r":?-{3,}:?", c) for c in cells):
                     rows.append([parse_inline(c) for c in cells])
                 i += 1
