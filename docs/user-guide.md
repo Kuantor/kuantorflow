@@ -26,6 +26,10 @@ The header carries **Home**, **About**, **Help** and **Settings**, and Settings 
 
 *Delete account* removes your account, and asks first whether your cards should go with you or stay in the shared deck for other learners. The record of your answers in the games goes with it either way. It is not reversible.
 
+### If your account is blocked
+
+An account can be blocked, for example for spam in the chat. A blocked account can still **read and practise everything**: the flashcards, the card deck, the games and word lookups, and its own settings still save. What it cannot do is change the shared deck (adding, editing, moving or deleting cards, uploading notes) or talk to Mykola, whose chat button disappears. **A short notice at the top of every page says so**, with the address to write to for access back. It goes away on the first page you open after the block is lifted.
+
 ### Help: this guide on the site
 
 **Help** in the header opens this guide as a page on the site, with the sections listed at the top so you can jump to the one you need. The same guide is also there as a PDF to download, if you would rather keep a copy. Mykola reads this same guide, so the Help page and what he tells you always agree.
