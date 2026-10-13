@@ -11,8 +11,9 @@ Supported Markdown (the subset our reports use):
     ---                horizontal rule (yellow underline)
     - bullets          1. numbered items           | tables | with | header |
     **bold**  *italic*  `code`  [link text](url)   (link text kept, shown in blue)
+    fenced code blocks (``` or ~~~, labelled or not), kept line for line (#586)
 Hard-wrapped lines are joined; list continuation lines (indented) are appended
-to their item.
+to their item. A code block's lines are never joined.
 """
 
 import re
@@ -60,10 +61,23 @@ def parse_inline(text):
     return runs
 
 
+FENCE = re.compile(r"^( {0,3})(`{3,}|~{3,})")
+
+
+def _closes(line, marker):
+    """Whether `line` closes a block opened by `marker`: the same character, at
+    least as many of it, and nothing else on the line."""
+    stripped = line.strip()
+    return (stripped.startswith(marker)
+            and stripped == marker[0] * len(stripped))
+
+
 def parse_markdown(text):
     """Parse report markdown into a list of blocks:
     ('title'|'h1'|'h2'|'p'|'bullet'|'num', runs) | ('table', rows) | ('hr',)
-    where table rows are lists of run-lists (first row = header)."""
+    | ('code', lines)
+    where table rows are lists of run-lists (first row = header), and a code
+    block's lines are its text exactly: no inline parsing, no label."""
     blocks = []
     lines = text.splitlines()
     i, para = 0, []
@@ -76,6 +90,26 @@ def parse_markdown(text):
     while i < len(lines):
         line = lines[i]
         stripped = line.strip()
+
+        # #586. A fenced block was read as a paragraph: its lines were joined
+        # with spaces, its label ("bash") became the first word, and its
+        # backticks were read as inline code -- so a report printed two
+        # commands as one, wrong to copy. It is checked first because nothing
+        # inside it is Markdown.
+        fence = FENCE.match(line)
+        if fence:
+            flush_para()
+            marker, indent = fence.group(2), len(fence.group(1))
+            code = []
+            i += 1
+            while i < len(lines) and not _closes(lines[i], marker):
+                body = lines[i]
+                # CommonMark: the fence's own indent is removed from each line.
+                code.append(body[min(indent, len(body) - len(body.lstrip(" "))):])
+                i += 1
+            blocks.append(("code", code))
+            i += 1          # past the closing fence (or the end)
+            continue
 
         if not stripped:
             flush_para()
@@ -187,6 +221,26 @@ def add_table(doc, rows):
     doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
 
+def add_code(doc, lines):
+    """A code block (#586): one shaded Consolas paragraph per line, so every
+    line stays its own line and nothing is joined."""
+    for n, line in enumerate(lines or [""]):
+        par = doc.add_paragraph()
+        fmt = par.paragraph_format
+        fmt.space_before = Pt(0)
+        fmt.space_after = Pt(6) if n == len(lines) - 1 else Pt(0)
+        fmt.left_indent = Inches(0.1)
+        pPr = par._p.get_or_add_pPr()
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:fill"), "F2F5F8")
+        pPr.append(shd)
+        run = par.add_run(line)
+        run.font.name = "Consolas"
+        run.font.size = Pt(9.5)
+        run.font.color.rgb = DARK
+
+
 def build_docx(blocks, out_path):
     doc = Document()
     normal = doc.styles["Normal"]
@@ -231,6 +285,8 @@ def build_docx(blocks, out_path):
             add_runs(par, block[1])
         elif kind == "table":
             add_table(doc, block[1])
+        elif kind == "code":
+            add_code(doc, block[1])
     doc.save(out_path)
 
 

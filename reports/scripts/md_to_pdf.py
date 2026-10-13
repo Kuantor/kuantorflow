@@ -57,6 +57,10 @@ table { border-collapse: collapse; margin: 4pt 0 12pt; width: 100%; }
 th { background: #2E6BA0; color: #fff; text-align: left; }
 th, td { border: 1px solid #B9C6D2; padding: 4pt 7pt; font-size: 10pt; }
 code { font-family: Consolas, monospace; font-size: 10pt; }
+pre { font-family: Consolas, monospace; font-size: 9.5pt; line-height: 1.35;
+      background: #F2F5F8; border: 1px solid #D5DDE5; border-radius: 4pt;
+      padding: 6pt 8pt; margin: 0 0 9pt; white-space: pre-wrap;
+      overflow-wrap: anywhere; }
 a.linkish { color: #2E6BA0; text-decoration: none; }
 * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 """
@@ -108,6 +112,10 @@ def blocks_to_html(blocks):
             parts.append("<hr>")
         elif kind == "p":
             parts.append(f"<p>{runs_to_html(block[1])}</p>")
+        elif kind == "code":
+            # #586: the lines as written. `pre-wrap` keeps each line break
+            # and wraps a long line rather than cutting it at the margin.
+            parts.append(f"<pre>{html.escape(chr(10).join(block[1]))}</pre>")
         elif kind == "table":
             rows = block[1]
             parts.append("<table>")
