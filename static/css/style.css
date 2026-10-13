@@ -435,6 +435,11 @@ a.button-link { display: inline-block; text-decoration: none;
 .banner a { font-weight: 600; }
 .confirmation { background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok-ink); }
 .error { background: var(--bad-bg); border: 1px solid var(--bad-border); color: var(--bad-ink); }
+/* #584. The blocked notice on every page: the error banner, made compact so
+   its one sentence fits one line in the page column on a computer (measured:
+   two lines, 70px, at the full banner's size). It is there on every page for
+   as long as the block lasts, so it should inform without crowding. */
+.blocked-banner { padding: 0.55rem 0.9rem; font-size: 0.9rem; }
 
 /* Flashcards */
 

@@ -575,6 +575,14 @@
     {% endif %}
 
     <main class="page">
+        {# #584. A blocked account (#126) loses Mykola's widget, and after a
+           refresh the chat button simply vanished with nothing saying why --
+           the notice was shown only when a save was refused, and in Settings.
+           So it is the first thing on every page while the block lasts: the
+           same sentence the refusals use, from web.blocked_notice(). No close
+           button, since dismissing it would not lift the block; it is gone on
+           the first page after an unblock, the block being read live. #}
+        {% if is_blocked %}<div class="banner error blocked-banner" role="status">{{ blocked_notice }}</div>{% endif %}
         {% for text, topic in get_flashed_messages() %}
             <div class="banner confirmation">
                 {{ text }}
