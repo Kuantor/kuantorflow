@@ -75,7 +75,7 @@ Each item names its section in [`docs/dev/design-notes.md`](docs/dev/design-note
 
 Its sections, in order: *The split (#418)*, *`app.py`*, *`parsers.py`*,
 *`seed_topics.py` + `seed_words.py`*, *`utils.py`*, *`settings_store.py`*, *Who
-may do what*, *`applog.py`*, *`games.py`*, *`templates/deck.html`*,
+may do what*, *`applog.py`*, *`notify.py`*, *`games.py`*, *`templates/deck.html`*,
 *`textgen.py`*, *`topicgen.py`*, *The games chassis*, *Mykola widget*, *A
 topic's word list*, *`schema.sql` + `apply_schema.py`*,
 *`text_generation_usage`*, *`word_lookup_usage`*, *`action_usage`*, *The gate
@@ -115,7 +115,9 @@ connections, the **account id, never the email**, and `rid=` on every line the
 request writes. **Every paid model call this repo makes writes a `MODEL-USAGE`
 line** to `model_usage.log` (#562): feature (`applog.USAGE_*`), model, tokens,
 ms. A fifth paid call gets a constant and the line; `scripts/model_usage_report.py`
-totals it with Mykola's usage lines.
+totals it with Mykola's usage lines. **Admin emails go through
+`notify.send_admin_email()`** (*`notify.py`*, #591): off unless `SMTP_*` is
+set, never raises, one `NOTIFY` line in `notify.log`, never the body.
 
 **Paid calls and their ceilings** (*Three pools per paid action*, *Per-account
 ceilings*). Every paid call claims its ceiling **after every free refusal and
@@ -205,7 +207,7 @@ file is the source of truth and its test derives from it.
   `reports/scripts/md_to_pdf.py`). Small PRs are exempt unless asked.
 - **The console one-offs live in `scripts/`** (#442) — `apply_schema.py`,
   `seed_topics.py` + `seed_words.py`, `claim_topics.py`, `claim_flashcards.py`,
-  `retopic.py`, `rebuild_schedule.py` (#479), `find_bad_translations.py` (#544, report-only), `model_usage_report.py` (#562, read-only). They are run, never imported by the app, which is why they can
+  `retopic.py`, `rebuild_schedule.py` (#479), `find_bad_translations.py` (#544, report-only), `model_usage_report.py` (#562, read-only), `send_test_email.py` (#591). They are run, never imported by the app, which is why they can
   sit in a directory of their own while the app's modules stay flat in the root
   (see #442 for why *those* have not moved: seven `Path(__file__)` sites that
   would fail **silently** one level down).
