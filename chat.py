@@ -401,14 +401,20 @@ def _user_log_files() -> list[Path]:
                   reverse=True)
 
 
-def _read_user_logs(max_chars: int = 12000, max_files: int = 3) -> str:
+def _read_user_logs(max_chars: int = 12000, max_files: int = 3,
+                    exclude_chat_id: str | None = None) -> str:
     """Most recent chat-log text of the signed-in user, chronological order.
 
     Capped at max_files logs (ai_agent#39: keep the model's context focused —
     a future settings scheme may widen this) with max_chars as the secondary
-    guard. Empty string for anonymous users or no history."""
+    guard. Empty string for anonymous users or no history.
+
+    `exclude_chat_id` leaves one conversation out: the recap's, which reads
+    only *earlier* chats, not the one it is asked from (#590)."""
+    skip = f"chat_{exclude_chat_id}.txt" if exclude_chat_id else None
+    files = [p for p in _user_log_files() if p.name != skip]
     collected, total = [], 0
-    for path in _user_log_files()[:max_files]:  # newest first
+    for path in files[:max_files]:  # newest first
         try:
             text = path.read_text(encoding="utf-8")
         except OSError:
@@ -418,6 +424,24 @@ def _read_user_logs(max_chars: int = 12000, max_files: int = 3) -> str:
         if total >= max_chars:
             break
     return "\n".join(reversed(collected))[-max_chars:]
+
+
+def _logged_chats() -> dict:
+    """How many conversations the signed-in learner has saved, and which one
+    when there is only one (#590): `{"count": n, "only": chat_id or None}`.
+
+    What the widget needs to show *Recap our last chats* only when there is an
+    **earlier** chat. Two or more means one at least is not the conversation in
+    progress; with exactly one, only the widget knows whether that one is it,
+    so the page names it. A directory listing, never a read. Anonymous
+    visitors, and any failure, count none.
+    """
+    try:
+        files = _user_log_files() if session.get("user") else []
+    except OSError:
+        files = []
+    only = files[0].stem[len("chat_"):] if len(files) == 1 else None
+    return {"count": len(files), "only": only}
 
 
 # Farewell phrases that, in today's last message, mean the learner already
@@ -782,6 +806,7 @@ def inject_mykola():
         "mykola_message_max": web.MAX_CHAT_MESSAGE_CHARS,
         "app_boot_id": web.APP_BOOT_ID,
         "mykola_identity": web._identity_token(),
+        "mykola_logged_chats": _logged_chats(),
     }
 
 
@@ -940,7 +965,12 @@ def mykola_recap():
     agent = get_mykola()
     if not hasattr(agent, "recap"):  # older ai_agent checkout
         return jsonify({"recap": None, "notice": RECAP_FAILED, "retry": True})
-    logs = _read_user_logs()
+    # Earlier chats only (#590): the widget names the conversation it is in,
+    # and that one is left out. A page from before #590 names none, and then
+    # every saved conversation is read, as it was.
+    current = body.get("chat_id")
+    logs = _read_user_logs(
+        exclude_chat_id=_safe_chat_id(current) if current else None)
     if not logs:
         return jsonify({"recap": None, "notice": RECAP_NOTHING_YET})
 
