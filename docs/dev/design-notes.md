@@ -366,6 +366,22 @@ letters, always fewer than the name has), shared with #593 and #594. A
 failed count or send is caught in `app._notify_new_account()`; the sign-in
 goes on. The guide's privacy section says the owner is emailed, and that
 Gmail carries it.
+**The near-the-limit warning** (#594) lives in `utils.claim_pools()`, the
+one place every account ceiling is claimed (scope `user`): after a claim
+succeeds, `_warn_near_limit()` sends when **this claim crossed**
+`notify.limit_threshold(limit)` -- `ceil(NOTIFY_LIMIT_PERCENT x limit)`,
+default 80, 0 off -- i.e. `used - amount < threshold <= used`. So it fires
+once per account, ceiling and day, a batch claim that jumps the line
+included, with no state of its own. `used` is read after the commit, so two
+claims by one account racing past the line can both see the later count and
+neither fire: a missed warning, never a doubled one. The shared pools are
+left out: `CHAT_ALL_DAILY` equals one account's chat limit, so one heavy
+learner would send two emails at once. An admin address is skipped through
+`notify.admin_addresses()`, which reads `ADMIN_EMAILS` as `web._admin_emails()`
+does (`utils` cannot import `web`; a test holds the two together). The
+words for each ceiling are `utils.LIMIT_WORDS`, and a test derives the
+ceilings from the action names, so a new one cannot ship without them.
+`notify.BLOCK_HINT` ends both this and #592's notice.
 
 ## `games.py`
 

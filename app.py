@@ -173,14 +173,6 @@ def _record_sign_in(info):
         return None, None, False
 
 
-BLOCK_HINT = (
-    "To block it, in a PythonAnywhere console:\n"
-    "  cd ~/kuantorflow_automation\n"
-    "  venv/bin/python maintenance/block_user.py --list\n"
-    "  venv/bin/python maintenance/block_user.py <its address from --list> "
-    "--reason \"...\"\n")
-
-
 def _notify_new_account(user_id, info):
     """Email the admin that an account was just made (#592).
 
@@ -209,7 +201,7 @@ def _notify_new_account(user_id, info):
         lines.append(f"When:     {when}, Kyiv time")
         if total is not None:
             lines.append(f"Accounts: {total} in all")
-        body = "\n".join(lines) + "\n\n" + BLOCK_HINT
+        body = "\n".join(lines) + "\n\n" + notify.BLOCK_HINT
         notify.send_admin_email(notify.KIND_NEW_ACCOUNT,
                                 f"KuantorFlow: new account #{user_id}", body)
     except Exception:

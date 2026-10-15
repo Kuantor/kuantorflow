@@ -57,11 +57,23 @@ DEFAULT_PORT = 587
 SSL_PORT = 465
 SENDER_NAME = "KuantorFlow"
 MAX_ERROR_CHARS = 200
+DEFAULT_LIMIT_PERCENT = 80  # #594; NOTIFY_LIMIT_PERCENT overrides, 0 = off
 
 # The kinds of notice, written out like applog's USAGE_* constants: a typo in
 # one would not fail, it would quietly start a new kind in the log.
 KIND_TEST = "test"          # scripts/send_test_email.py
 KIND_NEW_ACCOUNT = "new-account"    # app.auth_google_callback, #592
+KIND_NEAR_LIMIT = "near-limit"      # utils.claim_pools, #594
+
+# The end of every notice about a learner (#592, #594): how to block them
+# (#126), from the test repo's maintenance script. The address is the one
+# thing to fill in, from `--list`, because the notices show it masked.
+BLOCK_HINT = (
+    "To block it, in a PythonAnywhere console:\n"
+    "  cd ~/kuantorflow_automation\n"
+    "  venv/bin/python maintenance/block_user.py --list\n"
+    "  venv/bin/python maintenance/block_user.py <its address from --list> "
+    "--reason \"...\"\n")
 
 
 def _setting(name):
@@ -75,6 +87,38 @@ def recipient():
         return explicit
     admins = [a.strip() for a in _setting("ADMIN_EMAILS").split(",") if a.strip()]
     return admins[0] if admins else None
+
+
+def admin_addresses(raw=None):
+    """`ADMIN_EMAILS`, read as `web._admin_emails()` reads it: lowercased,
+    blanks dropped. Here as well because `utils` cannot import `web` (#594);
+    a test holds the two to the same answers."""
+    if raw is None:
+        raw = os.environ.get("ADMIN_EMAILS", "")
+    return frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
+
+
+def limit_percent():
+    """`NOTIFY_LIMIT_PERCENT` (#594): default 80, at most 100, 0 = off. A value
+    that is not a whole number keeps the default rather than silencing it."""
+    raw = _setting("NOTIFY_LIMIT_PERCENT")
+    try:
+        return min(int(raw), 100) if raw else DEFAULT_LIMIT_PERCENT
+    except ValueError:
+        return DEFAULT_LIMIT_PERCENT
+
+
+def limit_threshold(limit):
+    """The count at which a learner is "near" a daily `limit` (#594), or None
+    when the warning is off.
+
+    `ceil(percent x limit)`, from the limit the claim was given, so a ceiling
+    changed in `.env` moves its warning with it.
+    """
+    percent = limit_percent()
+    if percent <= 0 or not limit or limit <= 0:
+        return None
+    return -(-limit * percent // 100)
 
 
 def mask_email(email):
