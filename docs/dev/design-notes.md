@@ -354,6 +354,18 @@ settings: the live check that the notices will arrive.
 The test suite cannot send one by accident: `conftest.no_admin_mail` clears
 the settings for every test, because the app loads a developer's `.env` on
 import.
+**The new-account notice** (#592) is sent from the Google callback when
+`upsert_user()` reports `created` — MySQL's rowcount for `INSERT ... ON
+DUPLICATE KEY UPDATE` is 1 for an insert, 2 for an update and 0 for an
+unchanged row, **because the connection does not ask for "found rows"**
+(mysql-connector's default); with that flag an unchanged row counts 1 and a
+returning learner would look new, which `test_new_account_email_db.py`
+guards on a real server. Never for an `ADMIN_EMAILS` address. A learner is
+named by id and **`notify.mask_email()`** (`an***@gmail.com`: at most two
+letters, always fewer than the name has), shared with #593 and #594. A
+failed count or send is caught in `app._notify_new_account()`; the sign-in
+goes on. The guide's privacy section says the owner is emailed, and that
+Gmail carries it.
 
 ## `games.py`
 

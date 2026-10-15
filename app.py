@@ -29,6 +29,8 @@ from markupsafe import Markup
 
 import applog
 import games
+import notify
+import recall
 import topicgen
 import settings_store
 import utils
@@ -145,9 +147,10 @@ from web import (
 
 
 def _record_sign_in(info):
-    """Persist the signed-in identity (#148); return (user_id, preferred_name).
+    """Persist the signed-in identity (#148); return (user_id, preferred_name,
+    created), `created` meaning this sign-in made the account (#592).
 
-    Returns (None, None) if the row can't be written — an unreachable database
+    Returns (None, None, False) if the row can't be written — an unreachable database
     must not cost the user their login, the same way utils.get_topics() and
     _word_already_saved() already tolerate one.
     """
@@ -157,7 +160,7 @@ def _record_sign_in(info):
         # sub is mandatory in OIDC, so this means something is badly wrong —
         # sign in anyway, without a row.
         app.logger.warning("Google sign-in without sub/email; not recording it")
-        return None, None
+        return None, None, False
     try:
         return utils.upsert_user(
             google_sub, email,
@@ -167,7 +170,50 @@ def _record_sign_in(info):
         )
     except Exception:
         app.logger.exception("Could not record the Google sign-in")
-        return None, None
+        return None, None, False
+
+
+BLOCK_HINT = (
+    "To block it, in a PythonAnywhere console:\n"
+    "  cd ~/kuantorflow_automation\n"
+    "  venv/bin/python maintenance/block_user.py --list\n"
+    "  venv/bin/python maintenance/block_user.py <its address from --list> "
+    "--reason \"...\"\n")
+
+
+def _notify_new_account(user_id, info):
+    """Email the admin that an account was just made (#592).
+
+    Called only when `upsert_user()` inserted the row, so a returning sign-in
+    sends nothing, and never for an admin's own address. The account is named
+    by id and `notify.mask_email()`, never the full address. Never raises:
+    a failed count or a failed send must not cost the person their sign-in.
+    """
+    try:
+        email = (info.get("email") or "").strip()
+        if email.lower() in web.ADMIN_EMAILS:
+            return
+        try:
+            total = utils.count_users()
+        except Exception:
+            app.logger.exception("Could not count the accounts for #592's notice")
+            total = None
+        first_name = (_claim(info, "given_name") or _claim(info, "name") or "").split()
+        when = datetime.now(recall.LEARNERS_ZONE).strftime("%d %b %Y, %H:%M").lstrip("0")
+        lines = ["Somebody signed in to KuantorFlow with Google for the first time.",
+                 "",
+                 f"Account:  #{user_id}",
+                 f"Email:    {notify.mask_email(email)}"]
+        if first_name:
+            lines.append(f"Name:     {first_name[0]}")
+        lines.append(f"When:     {when}, Kyiv time")
+        if total is not None:
+            lines.append(f"Accounts: {total} in all")
+        body = "\n".join(lines) + "\n\n" + BLOCK_HINT
+        notify.send_admin_email(notify.KIND_NEW_ACCOUNT,
+                                f"KuantorFlow: new account #{user_id}", body)
+    except Exception:
+        app.logger.exception("The new-account notice failed")
 
 
 def _claim(info, key):
@@ -352,7 +398,9 @@ def auth_google_callback():
         app.logger.exception("Google OAuth callback failed")
         return redirect(url_for("index"))
     info = token.get("userinfo") or {}
-    user_id, preferred_name = _record_sign_in(info)
+    user_id, preferred_name, created = _record_sign_in(info)
+    if created:
+        _notify_new_account(user_id, info)
     # Persist the signed-in session across browser restarts (30 days, see
     # app.permanent_session_lifetime). Anonymous sessions stay non-permanent.
     session.permanent = True
