@@ -327,6 +327,34 @@ destination. `SETTINGS` records `set=`, `rejected=` and `unknown=` separately:
 the store silently replaces an invalid value with the default, so what was
 asked for and what stuck are different questions.
 
+## `notify.py`
+
+**`notify.py`** — emails to the admin (#591), the one sender #592's new
+account, #593's daily report and #594's near-the-limit warning share:
+`send_admin_email(kind, subject, body)` returns `sent`, `failed`, `skipped`
+or `dry-run`, and **never raises**. A notice is a convenience, so no sign-in,
+save or claim may fail because of one; every error is caught and logged, and
+the connection has a five-second `TIMEOUT`. It sends **inline, not from a
+thread**: PythonAnywhere does not support threads in web apps, so a background
+send would simply never happen there. **Off unless configured**: the
+`SMTP_*` settings and a recipient (`NOTIFY_EMAIL`, else the first
+`ADMIN_EMAILS` address) are read **at call time**, and with any missing it
+sends nothing and logs `skipped` with `missing=` naming them — names, never
+values. `NOTIFY_DRY_RUN=1` logs and sends nothing, and needs no server, which
+is what local development wants. **One `NOTIFY` line per attempt** in
+`notify.log` (`applog.notify`): kind, result, subject and error — **never the
+body**, since the notices are about learners and the log outlives the email,
+and never the password, which is blanked from an error even when the server's
+reply repeats it. The subject is flattened to one line, so a line break in
+it cannot add a header. It imports only `applog` (and loads `.env` itself,
+for a script that imports nothing else), so `utils` can import it for #594
+without a cycle. `KIND_*` constants name the notices, written out like
+`USAGE_*`. `scripts/send_test_email.py` sends one with the server's own
+settings: the live check that the notices will arrive.
+The test suite cannot send one by accident: `conftest.no_admin_mail` clears
+the settings for every test, because the app loads a developer's `.env` on
+import.
+
 ## `games.py`
 
 **`games.py`** — the word games (#233). Holds **one declaration**,

@@ -18,6 +18,9 @@ Action logs (issue #30) — a plain-text trail of what the app did, in `logs/`:
     logs/model_usage.log   one MODEL-USAGE line per paid model call this
                            repo makes (#562): the feature, the model and the
                            tokens it used; Mykola's own are in mykola.log
+    logs/notify.log        one NOTIFY line per email to the admin (#591):
+                           the kind, sent / failed / skipped, and why --
+                           never the body
 
 Each file is named after what it records, and #448 is what made that true.
 `dict.log` had become "anything that went and asked somebody else", so a
@@ -73,6 +76,7 @@ GAMES = "games"
 GEN_TEXTS = "gen_texts"
 REQUESTS = "requests"
 MODEL_USAGE = "model_usage"
+NOTIFY = "notify"
 
 # The four paid model calls this repo makes itself (#562), written out rather
 # than built from strings: a typo in a feature name would not fail, it would
@@ -200,6 +204,21 @@ def model_usage(feature, model, message, ms=None):
         })
     except Exception:       # noqa: BLE001 - a usage line is never worth an error
         pass
+
+
+# --- notify.log -------------------------------------------------------------
+
+def notify(kind, result, subject, ms=None, error=None, missing=None,
+           chars=None):
+    """One attempt to email the admin (#591), written by `notify` alone.
+
+    `result` is `sent`, `failed`, `skipped` (not configured; `missing` names
+    the settings) or `dry-run` (`chars` is the body's length). **Never the
+    body**: the notices are about learners, and the log outlives the email.
+    The subject is kept -- it says which notice, by account number.
+    """
+    _write(NOTIFY, "NOTIFY", kind=kind, result=result, subject=subject,
+           ms=ms, chars=chars, missing=missing, error=error)
 
 
 def _user(user):

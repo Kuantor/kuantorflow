@@ -276,6 +276,32 @@ names:
 venv/bin/python scripts/find_bad_translations.py
 ```
 
+**#591 needs no schema step**, only settings, and nothing happens without
+them: with `SMTP_HOST` empty the mailer is off and writes one `skipped` line
+to `logs/notify.log` per notice. To turn it on, add to `kuantorflow/.env` on
+the server (the slots are in `.env.example`):
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=<the sending Gmail address, chosen on #591>
+SMTP_PASSWORD=<the Gmail app password, typed here and nowhere else>
+NOTIFY_EMAIL=<who receives them; empty means the first ADMIN_EMAILS address>
+```
+
+then reload the web app, and send one test email with exactly those settings:
+
+```bash
+venv/bin/python scripts/send_test_email.py
+```
+
+`SENT to …` means the notices will arrive too; anything else prints the
+reason's place, the last line of `logs/notify.log`. Gmail's SMTP on 587 and
+465 is reachable from this account (checked 14 Oct 2026). `NOTIFY_DRY_RUN=1`
+logs each notice instead of sending it, for a first look at what would go
+out. Rotating the app password is the same drill as any key: revoke it in the
+Google account, make a new one, change this one line, reload.
+
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
 a brand-new table, so the `schema.sql` pass creates it on an existing database
 and no migration is needed (the same shape as #237's counter). The dry run
