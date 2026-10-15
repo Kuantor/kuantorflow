@@ -6,6 +6,7 @@ import mysql.connector
 from dotenv import load_dotenv
 
 import applog
+import notify
 import recall
 
 # Load settings from a .env file next to this module (gitignored).
@@ -81,6 +82,17 @@ RECAP = "recap"
 RECAP_ALL = "recap:all"
 UPLOAD = "upload"
 UPLOAD_ALL = "upload:all"
+
+# Each account ceiling in words, for #594's warning: (the subject's, the
+# body's). Keyed on the names above; a test derives the account ceilings from
+# them and fails if one has no words here.
+LIMIT_WORDS = {
+    CHAT: ("chat", "messages to Mykola"),
+    LOOKUP: ("lookup", "word lookups"),
+    GENERATE: ("text", "generated texts and topics"),
+    RECAP: ("recap", "recaps"),
+    UPLOAD: ("upload", "note uploads"),
+}
 
 
 def _claim(cursor, action, user_id, limit, amount=1):
@@ -187,7 +199,78 @@ def claim_pools(pools, amount=1):
         claimed, used = claim_action(action, user_id, limit, amount=amount)
         if not claimed:
             return False, scope, used
+        if scope == "user":
+            _warn_near_limit(action, user_id, limit, used, amount)
     return True, None, 0
+
+
+def _warn_near_limit(action, user_id, limit, used, amount):
+    """Email the admin when this claim took an account across 80% of a daily
+    limit (#594): a red flag for blocking (#126).
+
+    **Only the claim that crosses** -- the count was below the threshold
+    before it and is at or above it after -- so it fires once per account,
+    per ceiling, per day, a batch claim that jumps the line included, and
+    needs no state of its own. `used` is read after the claim commits, so two
+    claims by one account racing past the line can both see the later count
+    and neither fire: a missed warning, never a doubled one.
+
+    Account ceilings only (scope `user`): the shared pools are the site's, and
+    `CHAT_ALL_DAILY` equals one account's chat limit, so one heavy learner would
+    send both at once. Not for an admin address. **Never raises**: a claim's
+    answer is decided before this runs and nothing here may change it.
+    """
+    try:
+        threshold = notify.limit_threshold(limit)
+        if threshold is None or not used - amount < threshold <= used:
+            return
+        account = _account_today(user_id)
+        if account is None:
+            return
+        email, created_at, counters = account
+        if (email or "").strip().lower() in notify.admin_addresses():
+            return
+        short, words = LIMIT_WORDS.get(action, (action, action))
+        lines = [f"Account #{user_id} ({notify.mask_email(email)}) has used "
+                 f"{notify.limit_percent()}% of its daily limit on {words}.",
+                 "",
+                 f"Today:    {used} of {limit} {words}"]
+        if created_at:
+            lines.append("Created:  " + created_at.strftime("%d %b %Y").lstrip("0"))
+        others = [f"  {LIMIT_WORDS.get(name, (name, name))[1]}: {count}"
+                  for name, count in sorted(counters.items()) if count]
+        if others:
+            lines += ["", "Its counters today:"] + others
+        body = "\n".join(lines) + "\n\n" + notify.BLOCK_HINT
+        notify.send_admin_email(
+            notify.KIND_NEAR_LIMIT,
+            f"KuantorFlow: account #{user_id} at {notify.limit_percent()}% "
+            f"of its {short} limit", body)
+    except Exception as exc:    # noqa: BLE001 - never in the claim's way
+        applog.notify(notify.KIND_NEAR_LIMIT, "failed", None,
+                      error=" ".join(f"{type(exc).__name__}: {exc}".split())[:200])
+
+
+def _account_today(user_id):
+    """(email, created_at, {action: used today}) for #594's warning, or None
+    when there is no such account."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT email, created_at FROM users WHERE id = %s",
+                       (user_id,))
+        row = cursor.fetchone()
+        if row is None:
+            cursor.close()
+            return None
+        cursor.execute(
+            "SELECT action, used FROM action_usage "
+            "WHERE day = CURDATE() AND user_id = %s", (user_id,))
+        counters = {action: used for action, used in cursor.fetchall()}
+        cursor.close()
+        return row[0], row[1], counters
+    finally:
+        conn.close()
 
 
 def _pools(action, anon_action, all_action, user_id,

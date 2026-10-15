@@ -437,7 +437,7 @@ Either way, Mykola's answers are written by **Claude**, an AI made by Anthropic,
 
 **The person who runs the site can read everything stored on the server**, including saved conversations with Mykola. They read it to fix problems and to improve the app, not to watch anybody. **Nobody else can**, and **nothing is sold, shared for advertising or used to show you adverts**. There are no adverts.
 
-**When you first sign in**, the site's owner is sent a short email saying that a new account was made: its number, your first name, the time, and a shortened form of your address, such as `an***@gmail.com`. It is sent once, not each time you come back.
+**When you first sign in**, the site's owner is sent a short email saying that a new account was made: its number, your first name, the time, and a shortened form of your address, such as `an***@gmail.com`. It is sent once, not each time you come back. **When an account uses most of one of its daily limits** (80% of the Mykola messages, word lookups, generated texts, recaps or note uploads allowed in a day), the owner is emailed the account's number, its shortened address and that day's counts, so that misuse can be noticed early. It is sent at most once a day for each limit.
 
 Other learners never see your answers, your conversations or your settings. They see only the cards you added to public topics.
 

@@ -306,6 +306,11 @@ Google account, make a new one, change this one line, reload.
 emails you "KuantorFlow: new account #N". A returning sign-in, and your own,
 never do. Each attempt is a `kind=new-account` line in `logs/notify.log`.
 
+**#594 needs nothing**: the next account to reach 80% of a daily limit emails
+"KuantorFlow: account #N at 80% of its chat limit" (or lookup, text, recap,
+upload), once per limit per day. `NOTIFY_LIMIT_PERCENT` in `.env` changes the
+percent, and 0 turns it off.
+
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
 a brand-new table, so the `schema.sql` pass creates it on an existing database
 and no migration is needed (the same shape as #237's counter). The dry run
