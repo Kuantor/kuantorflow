@@ -437,6 +437,8 @@ Either way, Mykola's answers are written by **Claude**, an AI made by Anthropic,
 
 **The person who runs the site can read everything stored on the server**, including saved conversations with Mykola. They read it to fix problems and to improve the app, not to watch anybody. **Nobody else can**, and **nothing is sold, shared for advertising or used to show you adverts**. There are no adverts.
 
+**When you first sign in**, the site's owner is sent a short email saying that a new account was made: its number, your first name, the time, and a shortened form of your address, such as `an***@gmail.com`. It is sent once, not each time you come back.
+
 Other learners never see your answers, your conversations or your settings. They see only the cards you added to public topics.
 
 **Teachers cannot see your progress**, either: there is no teacher view.
@@ -452,7 +454,7 @@ To do its work, the site passes some things to a few services:
   - lines from notes you upload that need splitting.
 
   Anthropic uses them to produce the answer.
-- **Google** handles signing in. It knows you signed in to KuantorFlow; the site receives only your name, email address and account number.
+- **Google** handles signing in. It knows you signed in to KuantorFlow; the site receives only your name, email address and account number. Google's Gmail also delivers the site's emails to its owner, described under *Who can read it*.
 - **Oxford Learner's Dictionaries** and **Wiktionary** receive the word being looked up, and nothing else.
 
 The site itself runs on PythonAnywhere, which stores the database and the files described above.

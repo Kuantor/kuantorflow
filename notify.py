@@ -61,6 +61,7 @@ MAX_ERROR_CHARS = 200
 # The kinds of notice, written out like applog's USAGE_* constants: a typo in
 # one would not fail, it would quietly start a new kind in the log.
 KIND_TEST = "test"          # scripts/send_test_email.py
+KIND_NEW_ACCOUNT = "new-account"    # app.auth_google_callback, #592
 
 
 def _setting(name):
@@ -74,6 +75,20 @@ def recipient():
         return explicit
     admins = [a.strip() for a in _setting("ADMIN_EMAILS").split(",") if a.strip()]
     return admins[0] if admins else None
+
+
+def mask_email(email):
+    """An address shortened for a notice (#592): `an***@gmail.com`.
+
+    The notices name a learner by account number and this, never the full
+    address, as Anton asked. At most two letters of the local part are kept,
+    and always fewer than it has, so a one- or two-letter name still hides
+    something; the domain is kept whole. Not an address at all: `***`.
+    """
+    local, at, domain = (email or "").strip().lower().partition("@")
+    if not at or not local or not domain:
+        return "***"
+    return local[:min(2, len(local) - 1)] + "***@" + domain
 
 
 def _dry_run():

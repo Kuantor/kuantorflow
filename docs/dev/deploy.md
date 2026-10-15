@@ -302,6 +302,10 @@ logs each notice instead of sending it, for a first look at what would go
 out. Rotating the app password is the same drill as any key: revoke it in the
 Google account, make a new one, change this one line, reload.
 
+**#592 needs nothing**: with #591's settings in place, the next first sign-in
+emails you "KuantorFlow: new account #N". A returning sign-in, and your own,
+never do. Each attempt is a `kind=new-account` line in `logs/notify.log`.
+
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
 a brand-new table, so the `schema.sql` pass creates it on an existing database
 and no migration is needed (the same shape as #237's counter). The dry run

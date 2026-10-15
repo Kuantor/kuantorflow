@@ -303,7 +303,8 @@ def existing_words(owner_id=None):
 def upsert_user(google_sub, email, display_name=None, given_name=None,
                 family_name=None):
     """
-    Record a Google sign-in (issue #148) and return (user_id, preferred_name).
+    Record a Google sign-in (issue #148) and return
+    (user_id, preferred_name, created).
 
     Keyed on `google_sub` — Google's OIDC subject, which is unique per account
     and never changes. An email change therefore updates the existing row
@@ -313,6 +314,12 @@ def upsert_user(google_sub, email, display_name=None, given_name=None,
     choice of what Mykola calls them, not something Google supplies, so a
     sign-in must not overwrite it. It is read back so the caller can put it in
     the session without a second query.
+
+    `created` is True only when this sign-in made the row (#592): MySQL counts
+    an `INSERT ... ON DUPLICATE KEY UPDATE` as 1 row for an insert, 2 for an
+    update and 0 for an existing row left as it was. That holds because the
+    connection does not ask for "found rows" (mysql-connector's default),
+    under which an unchanged row would also count 1.
     """
     conn = get_db_connection()
     try:
@@ -335,11 +342,25 @@ def upsert_user(google_sub, email, display_name=None, given_name=None,
             (google_sub, email, display_name, given_name, family_name),
         )
         user_id = cursor.lastrowid
+        created = cursor.rowcount == 1
         cursor.execute("SELECT preferred_name FROM users WHERE id = %s", (user_id,))
         row = cursor.fetchone()
         conn.commit()
         cursor.close()
-        return user_id, (row[0] if row else None)
+        return user_id, (row[0] if row else None), created
+    finally:
+        conn.close()
+
+
+def count_users():
+    """How many accounts exist, for the new-account notice (#592)."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        (count,) = cursor.fetchone()
+        cursor.close()
+        return count
     finally:
         conn.close()
 
