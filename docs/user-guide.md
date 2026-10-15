@@ -349,13 +349,13 @@ If he tells you he has answered a lot of questions today and asks you to try aga
 
 ### Recaps
 
-When you are signed in, Mykola can look back over your last few conversations and remind you where you left off. Press **Recap our last chats**, just above the message box, whenever you want one. He does not do it by himself: a recap is written by the same paid AI as his answers, so it happens only when you ask. The button goes away once you have pressed it, since one recap per conversation is enough, and comes back when you start a new chat.
+When you are signed in, Mykola can look back over your last few conversations and remind you where you left off. Press **Recap our last chats**, just above the message box, whenever you want one. The button appears once there is an earlier conversation to look back on, so not during your very first one; the conversation you are in does not count, and the recap reads only the ones before it. He does not do it by himself: a recap is written by the same paid AI as his answers, so it happens only when you ask. The button goes away once you have pressed it, since one recap per conversation is enough, and comes back when you start a new chat.
 
 The recap is typed out as he writes it, like his answers. With *Fast thinking* on (the default) it is a short one, a sentence or two and two ideas for what to do next; turn it off for a fuller look back.
 
 If you have been away for a few hours, he starts a fresh conversation, so a new day does not open in the middle of an old one. How long that silence has to be is yours to set. The fresh conversation begins with his ordinary greeting, and the recap button is there if you want to pick up the thread.
 
-A recap is a paid answer like any other, so there are five a day. If there is nothing to look back on yet, or you have used the day's five, he says so — nothing is broken, and nothing is lost.
+A recap is a paid answer like any other, so there are five a day. If you have used the day's five, he says so — nothing is broken, and nothing is lost.
 
 ## Settings
 

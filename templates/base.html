@@ -1121,7 +1121,10 @@
            the most expensive thing this app does -- so it happens when the
            learner asks and not before. Signed-in only: an anonymous visitor
            has no saved conversations to look back on (#163). #}
-        <div class="mykola-tools">
+        {# #590: only when there is an *earlier* chat. Two saved ones means one
+           at least is not the current conversation; with fewer the widget
+           decides (`hasEarlierChats()`), since only it knows which one it is in. #}
+        <div class="mykola-tools"{% if mykola_logged_chats.count < 2 %} hidden{% endif %}>
             <button type="button" id="mykola-recap" class="mykola-recap">Recap our last chats</button>
         </div>
         {% endif %}
@@ -1236,9 +1239,24 @@
             // a break). Saved with the thread so a page change does not bring
             // it back.
             var recapAsked = false;
+            // The saved conversations when the page was drawn (#590), and
+            // whether this page has since started a new chat after one.
+            var RECAP_LOGS = {{ mykola_logged_chats|tojson }};
+            var earlierHere = false;
+            // Whether there is an *earlier* chat to recap (#590). The button
+            // means earlier chats, so the one in progress does not count.
+            // Two saved means one at least is not it; with one, it depends on
+            // whether that one is this conversation; and a New chat or a
+            // restart on this page makes the conversation before it earlier.
+            function hasEarlierChats(logged, currentChatId, startedAnother) {
+                if (startedAnother) return true;
+                if (!logged || !logged.count) return false;
+                if (logged.count >= 2) return true;
+                return logged.only !== currentChatId;
+            }
             function syncRecapButton() {
                 var tools = document.querySelector(".mykola-tools");
-                if (tools) tools.hidden = recapAsked;
+                if (tools) tools.hidden = recapAsked || !hasEarlierChats(RECAP_LOGS, chatId, earlierHere);
             }
 
             function hasStorage() {
@@ -1583,7 +1601,7 @@
                 fetch("{{ url_for('mykola_recap') }}", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ requested: true, stream: canStream }),
+                    body: JSON.stringify({ requested: true, stream: canStream, chat_id: chatId }),
                 }).then(function (resp) {
                     var type = resp.headers.get("Content-Type") || "";
                     if (type.indexOf("text/event-stream") === 0) {
@@ -1648,6 +1666,7 @@
             // server restarted a stale chat) follows it as his first message.
             function startFreshChat(newChatId, recap) {
                 history = [];
+                if (chatId) earlierHere = true;   // the chat just left is earlier now (#590)
                 chatId = newChatId;
                 uiMessages = [];
                 while (messages.firstChild) messages.removeChild(messages.firstChild);
@@ -1870,6 +1889,7 @@
                     if (greeting) {
                         uiMessages.push({ kind: "mykola", text: greeting.textContent || greeting.innerText || "", sources: [] });
                     }
+                    syncRecapButton();   // a fresh widget: is a saved chat earlier? (#590)
                     saveWidgetState();
                     return;
                 }

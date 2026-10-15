@@ -572,6 +572,16 @@ artefact**, offered as a download: regenerate it with
 month stale — still telling learners to type the keyword — before #460, and
 `automation/tests/test_help_page.py` now fails when any guide heading is
 missing from it.
+**The recap button means *earlier* chats** (#590, Anton's option 1): the
+conversation in progress counts neither for showing it nor for what the recap
+reads. The page passes `chat._logged_chats()` -- how many `chat_*.txt` the
+learner has, and the id when there is exactly one -- and renders the button
+`hidden` below two; the widget's `hasEarlierChats()` decides the rest, since
+only it knows its `chatId`, and a New chat or restart on the page counts the
+chat it left as earlier. The recap request sends `chat_id`, and
+`_read_user_logs(exclude_chat_id=)` leaves that file out; a page from before
+#590 sends none and reads everything, as it did. With nothing left the answer
+is still `RECAP_NOTHING_YET`, before any ceiling or model call.
 **The privacy notice lives there too** (#90, #56): `## Privacy: what the
 site keeps` in the guide, linked from a small *Privacy* link in every page's
 footer and from Mykola's sign-in popup. It states facts about the code — what
