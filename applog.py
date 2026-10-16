@@ -209,7 +209,7 @@ def model_usage(feature, model, message, ms=None):
 # --- notify.log -------------------------------------------------------------
 
 def notify(kind, result, subject, ms=None, error=None, missing=None,
-           chars=None):
+           chars=None, reason=None):
     """One attempt to email the admin (#591), written by `notify` alone.
 
     `result` is `sent`, `failed`, `skipped` (not configured; `missing` names
@@ -218,7 +218,7 @@ def notify(kind, result, subject, ms=None, error=None, missing=None,
     The subject is kept -- it says which notice, by account number.
     """
     _write(NOTIFY, "NOTIFY", kind=kind, result=result, subject=subject,
-           ms=ms, chars=chars, missing=missing, error=error)
+           ms=ms, chars=chars, missing=missing, reason=reason, error=error)
 
 
 def _user(user):

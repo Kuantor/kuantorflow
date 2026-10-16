@@ -398,6 +398,20 @@ does (`utils` cannot import `web`; a test holds the two together). The
 words for each ceiling are `utils.LIMIT_WORDS`, and a test derives the
 ceilings from the action names, so a new one cannot ship without them.
 `notify.BLOCK_HINT` ends both this and #592's notice.
+**The daily report** (#593) is `scripts/daily_report.py`, run from
+PythonAnywhere's Tasks tab, for the Kyiv day before (`recall.day_start`, 04:00
+to 04:00). It reads the database -- new accounts, cards added, answers, and
+`action_usage` for the paid actions -- and, read-only, `games.log` for rounds
+(every game and anonymous visitors; *Fill the gap*'s `self-marked` line is the
+same round as its `dealt` one) and `cards.log` for blocks. **Its connection
+sets `time_zone = '+00:00'`**: `TIMESTAMP` columns come back in the session's
+zone, which is Kyiv locally, and the window is UTC; the real-MySQL test puts
+rows a minute either side of both edges. `action_usage` counts per
+`CURDATE()`, the server's day, and the email says so rather than pretending
+otherwise. **`ADMIN_EMAILS` accounts are left out entirely**, and blocks are
+not activity, so a day of only Anton sends nothing and logs `result=skipped
+reason=no-activity`. Learners are named by id and `mask_email()`; nothing from
+a card or a chat is read at all, only counted in SQL.
 
 ## `games.py`
 
