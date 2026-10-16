@@ -311,6 +311,31 @@ never do. Each attempt is a `kind=new-account` line in `logs/notify.log`.
 upload), once per limit per day. `NOTIFY_LIMIT_PERCENT` in `.env` changes the
 percent, and 0 turns it off.
 
+**#593 needs one scheduled task**, and nothing on the deploy itself. The daily
+report runs once a day from the **Tasks** tab (Dashboard → Tasks →
+*Scheduled tasks*), with #591's settings already in `.env`. Check it first by
+hand, in a Bash console:
+
+```bash
+cd ~/kuantorflow && venv/bin/python scripts/daily_report.py --dry-run
+```
+
+It prints yesterday's email, or "Nothing to report". Then create a **daily**
+task with this command, `<username>` being the PythonAnywhere user name (the
+`/home/<username>` in the Files tab):
+
+```
+/home/<username>/kuantorflow/venv/bin/python /home/<username>/kuantorflow/scripts/daily_report.py
+```
+
+**The Tasks tab's times are UTC.** The report covers the Kyiv day ending at
+04:00, so any time after 02:00 UTC works; **06:00 UTC** is 09:00 in Kyiv until
+25 Oct 2026 and 08:00 after the clocks change. Each run's output is under the
+task's log link. A day with activity is one "KuantorFlow: activity on …"
+email; a day without is a `kind=daily result=skipped reason=no-activity`
+line in `logs/notify.log`; a failed send exits 1, which the task log shows.
+`--date YYYY-MM-DD` reports another day.
+
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
 a brand-new table, so the `schema.sql` pass creates it on an existing database
 and no migration is needed (the same shape as #237's counter). The dry run

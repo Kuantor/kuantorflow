@@ -64,6 +64,7 @@ DEFAULT_LIMIT_PERCENT = 80  # #594; NOTIFY_LIMIT_PERCENT overrides, 0 = off
 KIND_TEST = "test"          # scripts/send_test_email.py
 KIND_NEW_ACCOUNT = "new-account"    # app.auth_google_callback, #592
 KIND_NEAR_LIMIT = "near-limit"      # utils.claim_pools, #594
+KIND_DAILY = "daily"                # scripts/daily_report.py, #593
 
 # The end of every notice about a learner (#592, #594): how to block them
 # (#126), from the test repo's maintenance script. The address is the one
