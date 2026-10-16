@@ -125,7 +125,8 @@ immediately before the call**; claims are all or nothing (`utils.claim_action()`
 `claim_pools()`), three pools per action, and every `*_ANON_DAILY` stays well
 below its `*_ALL_DAILY`. Mykola answers on Opus, everything this repo calls on
 Haiku, so the chat ceilings are the tight ones. One chat message is capped at
-`web.MAX_CHAT_MESSAGE_CHARS`, checked before either quota (#564). **The recap
+`web.MAX_CHAT_MESSAGE_CHARS`, checked before either quota (#564). **Visitor
+text reaches a prompt only through `promptdata.wrap()`** (*`parsers.py`*, #602). **The recap
 happens only when asked** (#495). With no `ANTHROPIC_API_KEY` a paid activity is
 not reachable at all.
 

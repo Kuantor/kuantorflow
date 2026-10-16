@@ -20,6 +20,7 @@ import requests
 from bs4 import BeautifulSoup
 
 import applog
+import promptdata
 
 REVERSO_URL = "https://context.reverso.net/translation/english-{lang}/{word}"
 REVERSO_LANGS = {"ukr": "ukrainian", "rus": "russian"}
@@ -719,14 +720,15 @@ def _claude_dictionary(word, target):
     prompt = (
         f"Translate the English word or expression below into {language}, for "
         "a B2-C1 learner's flashcard.\n\n"
-        f"    {word}\n\n"
+        f"    {promptdata.wrap('word', word)}\n\n"
         "Group the translations by the part of speech the English word has in "
         f"that sense, at most {MAX_TRANSLATIONS} per part of speech, most "
         "common first. Give only the parts of speech this word actually has: "
         "one entry is the normal answer and several is unusual. Use 'phrase' "
         "for a multi-word expression and 'other' only when nothing else fits. "
         "Translate the word itself -- no explanations, no transliteration, no "
-        "articles and no 'to' before a verb."
+        "articles and no 'to' before a verb.\n\n"
+        f"{promptdata.rule('word')}"
     )
     client = anthropic.Anthropic()
     with applog.Timer() as timer:
@@ -1952,6 +1954,11 @@ def _detect_cyrillic_lang(*texts):
     return None
 
 
+def _spaced(text):
+    """`text` with its whitespace collapsed, for the splitter's check (#602)."""
+    return " ".join(text.split())
+
+
 def _split_glued_translations(strings):
     """Split each glued Reverso translation string into its terms with Claude
     (#134) — multi-word phrases stay together. Any failure (no API key,
@@ -1974,7 +1981,8 @@ def _split_glued_translations(strings):
             "invent, translate, reorder or drop anything; only insert the "
             "boundaries. Reply with ONLY a JSON object mapping each line number "
             '(as a string) to an array of terms, e.g. {"0": ["term1", '
-            '"term2"]}.\n\n' + numbered
+            '"term2"]}.\n\n' + promptdata.rule("lines") + "\n\n"
+            + promptdata.wrap("lines", numbered, block=True)
         )
         with applog.Timer() as timer:
             msg = client.messages.create(
@@ -1985,13 +1993,21 @@ def _split_glued_translations(strings):
         raw = "".join(b.text for b in msg.content if b.type == "text").strip()
         raw = re.sub(r"^```(?:json)?|```$", "", raw, flags=re.MULTILINE).strip()
         data = json.loads(raw)
-        result = dict(fallback)
+        result, rejected = dict(fallback), 0
         for k, v in data.items():
             terms = [t.strip() for t in v if isinstance(t, str) and t.strip()]
             if terms and 0 <= int(k) < len(strings):
-                result[strings[int(k)]] = terms
+                line = strings[int(k)]
+                # Only boundaries may be inserted (#602): a term that is not
+                # part of its own line was invented, or steered there by a
+                # line written as an instruction, and must not reach a card.
+                # Spacing is forgiven; the line then keeps its whole text.
+                if all(_spaced(t) in _spaced(line) for t in terms):
+                    result[line] = terms
+                else:
+                    rejected += 1
         applog.terms_split(len(strings), sum(len(t) for t in result.values()),
-                           model=SPLIT_MODEL)
+                           model=SPLIT_MODEL, rejected=rejected or None)
         return result
     except Exception as e:
         # The whole line is kept as one term; log why, since the fallback is
