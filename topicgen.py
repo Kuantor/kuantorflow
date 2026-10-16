@@ -31,6 +31,7 @@ what comes back against a lexicon before spending anything on it (#389's
 import re
 
 import applog
+import promptdata
 
 # The same model `textgen.py` uses, and its own constant for the same reason
 # given there: two features that agree on a model today are still two
@@ -105,7 +106,8 @@ def _prompt(idea, count):
     return (
         "You are helping build a vocabulary topic for an intermediate to "
         "upper-intermediate (B2-C1) learner of English.\n\n"
-        f"Their idea for the topic: {idea}\n\n"
+        f"Their idea for the topic: {promptdata.wrap('idea', idea)}\n\n"
+        f"{promptdata.rule('idea')}\n\n"
         f"Reply with exactly this shape and nothing else:\n"
         f"TITLE: <a short topic name, at most {TITLE_MAX_WORDS} words>\n"
         f"then {count} lines, one English word per line.\n\n"
@@ -219,14 +221,17 @@ def _extend_prompt(topic, existing, count, steer):
     is asked for more of the same.
     """
     have = ", ".join(existing[:EXTEND_MAX_EXISTING]) or "(none yet)"
-    wish = (f"The learner would like these in particular: {steer}\n\n"
-            if steer else "")
+    wish = (f"The learner would like these in particular: "
+            f"{promptdata.wrap('request', steer)}\n\n" if steer else "")
+    tags = ("topic", "existing_words") + (("request",) if steer else ())
     return (
         "You are helping grow a vocabulary topic for an intermediate to "
         "upper-intermediate (B2-C1) learner of English.\n\n"
-        f"The topic: {topic}\n\n"
-        f"Words it already has -- do not repeat any of these: {have}\n\n"
+        f"The topic: {promptdata.wrap('topic', topic)}\n\n"
+        "Words it already has -- do not repeat any of these: "
+        f"{promptdata.wrap('existing_words', have)}\n\n"
         f"{wish}"
+        f"{promptdata.rule(*tags)}\n\n"
         f"Reply with {count} lines, one new English word per line, and "
         "nothing else.\n\n"
         "Rules for the words:\n"

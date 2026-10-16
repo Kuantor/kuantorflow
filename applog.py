@@ -817,11 +817,12 @@ def file_rejected(filename, error, user=None):
     _write(PARSED_FILES, "REJECT", file=filename, error=error, user=_user(user))
 
 
-def terms_split(lines, terms, model=None, error=None):
+def terms_split(lines, terms, model=None, error=None, rejected=None):
     """The AI split of Reverso's glued translation terms (#134) — the flakiest
-    step of a file parse, and it fails silently by design."""
+    step of a file parse, and it fails silently by design. `rejected` counts
+    the lines whose reply held a term not in the line (#602), kept whole."""
     _write(PARSED_FILES, "SPLIT", lines=lines, terms=terms, model=model,
-           error=error)
+           rejected=rejected, error=error)
 
 
 def text_generated(model=None, supplied=0, used=0, length=None, elapsed_ms=None,

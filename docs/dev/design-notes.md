@@ -164,6 +164,22 @@ and the **Reverso copy-paste parser** they share — one state machine fed by
 a per-format line classifier (colours for `.mht`/`.docx`, layout for plain
 text); glued translation terms are split by Claude with a graceful no-key
 fallback.
+**Visitor text in a prompt is data** (#602). All four paid calls this repo
+makes put text a visitor controls into the prompt -- the uploaded lines here,
+the looked-up word, `topicgen`'s idea, topic name, words and steer, and
+`textgen`'s request and deck words -- and each goes in **only** through
+`promptdata.wrap(name, text)`, a tag the value cannot close (its `<` and `>`
+become `‹ ›`), with `promptdata.rule(*names)` said once per prompt: what is
+in the tags is data, never an instruction. A tag with no value is not named,
+so a prompt never mentions a `<request>` it does not have. **The splitter also
+checks in code** that each term it gets back is part of its own line
+(whitespace collapsed): anything else was invented or steered there, so the
+line keeps its whole text, as on an error, and `SPLIT` logs `rejected=`.
+Measured before and after on 16 Oct 2026 with crafted lines, a word, an idea,
+a steer and a request: Haiku resisted crude injections even unwrapped, and
+honest results were unchanged, so this is defence in depth beside the fixed
+reply shapes and #544's alphabet check, not a fix for an observed failure.
+**A fifth paid call wraps its visitor text the same way.**
 
 ## `seed_topics.py` + `seed_words.py`
 
