@@ -346,6 +346,9 @@ email; a day without is a `kind=daily result=skipped reason=no-activity`
 line in `logs/notify.log`; a failed send exits 1, which the task log shows.
 `--date YYYY-MM-DD` reports another day.
 
+**#600 needs nothing**: the daily report gains its visitors paragraph from the
+`visits` table #598 created, on the next run of the same task.
+
 **#258 needs `apply_schema.py` too, and it is one step**: `confirmed_words` is
 a brand-new table, so the `schema.sql` pass creates it on an existing database
 and no migration is needed (the same shape as #237's counter). The dry run

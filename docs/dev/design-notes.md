@@ -412,6 +412,12 @@ otherwise. **`ADMIN_EMAILS` accounts are left out entirely**, and blocks are
 not activity, so a day of only Anton sends nothing and logs `result=skipped
 reason=no-activity`. Learners are named by id and `mask_email()`; nothing from
 a card or a chat is read at all, only counted in SQL.
+**It also counts visitors** (#600, from #598's `visits`): people (an account
+once on any device, else a browser session's random number), visits, active
+minutes, pages, the busiest Kyiv hour, and the totals since counting began.
+The admin's visits are counted apart and are not activity, like the rest of
+the report, so a day of only his visits still sends nothing; a day of only
+anonymous visitors does send, since they are someone else.
 
 ## `games.py`
 

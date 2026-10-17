@@ -25,7 +25,12 @@ What it reads, all read-only:
   by an hour or two; the email says so;
 * **the logs:** rounds played, from `games.log` (one line per round, so it
   counts anonymous visitors and every game), and blocks and unblocks from
-  `cards.log`. Rotated files are read too.
+  `cards.log`. Rotated files are read too;
+* **visits** (#598, counted here since #600): how many people visited, the
+  visits, the minutes the pages were actually on screen, the busiest hour,
+  and the totals since visits were first recorded. A signed-in learner is one
+  person on any device; an anonymous visitor is a browser session's random
+  number. Robots were left out when the visits were recorded.
 
 A learner is named by account number and `notify.mask_email()`, never the full
 address, and nothing from a card or a conversation is ever included.
@@ -149,9 +154,21 @@ def gather_db(day, start, end, emails=()):
         cursor.execute("SELECT user_id, action, used FROM action_usage WHERE day = %s",
                        (day,))
         usage = {(user_id, action): used for user_id, action, used in cursor.fetchall()}
+        # #600: the day's visits, one row each, and per account (NULL for the
+        # anonymous) the visits and distinct browsers since counting began.
+        # DATETIMEs in UTC, like the window, so no zone to convert.
+        cursor.execute(
+            "SELECT visitor, user_id, started_at, active_seconds, pages FROM visits "
+            "WHERE started_at >= %s AND started_at < %s", (start, end))
+        visits = [tuple(row) for row in cursor.fetchall()]
+        cursor.execute("SELECT user_id, COUNT(*), COUNT(DISTINCT visitor) FROM visits "
+                       "GROUP BY user_id")
+        visit_totals = [tuple(row) for row in cursor.fetchall()]
 
         ids = (new | set(cards) | set(answers)
-               | {uid for uid, _ in usage if uid != utils.ALL_ACCOUNTS})
+               | {uid for uid, _ in usage if uid != utils.ALL_ACCOUNTS}
+               | {row[1] for row in visits if row[1] is not None}
+               | {row[0] for row in visit_totals if row[0] is not None})
         emails = sorted({e.lower() for e in emails if e and e != "anonymous"})
         accounts = {}
         if ids or emails:
@@ -171,7 +188,7 @@ def gather_db(day, start, end, emails=()):
     finally:
         conn.close()
     return {"accounts": accounts, "new": new, "cards": cards, "answers": answers,
-            "usage": usage,
+            "usage": usage, "visits": visits, "visit_totals": visit_totals,
             "emails": {a["email"].lower(): uid for uid, a in accounts.items() if a["email"]}}
 
 
@@ -226,12 +243,56 @@ def build(db, logs, admins, limits):
                  notify.mask_email(e.get("email")), e.get("reason")) for e in entries]
 
     return {"learners": learners, "anonymous": anonymous,
+            "visitors": _visitors(db, admins),
             "blocks": named(logs["blocks"]), "unblocks": named(logs["unblocks"])}
+
+
+def _visitors(db, admins):
+    """The day's visitors (#600), with the admin's own visits counted apart.
+
+    A person is an account on any device, or else a browser session's random
+    number. The busiest hour is the Kyiv hour in which most visits began.
+    """
+    def is_admin(uid):
+        email = (db["accounts"].get(uid, {}).get("email") or "").strip().lower()
+        return uid is not None and email in admins
+
+    people, anonymous, signed_in, hours = set(), set(), set(), Counter()
+    visits = seconds = pages = yours = 0
+    for visitor, uid, started, active, opened in db.get("visits", []):
+        if is_admin(uid):
+            yours += 1
+            continue
+        if uid is None:
+            anonymous.add(visitor)
+            people.add(("browser", visitor))
+        else:
+            signed_in.add(uid)
+            people.add(("account", uid))
+        visits += 1
+        seconds += active or 0
+        pages += opened or 0
+        local = started.replace(tzinfo=timezone.utc).astimezone(recall.LEARNERS_ZONE)
+        hours[local.hour] += 1
+    busiest = min(hours.items(), key=lambda kv: (-kv[1], kv[0])) if hours else None
+
+    total_people = total_visits = 0
+    for uid, n, browsers in db.get("visit_totals", []):
+        if is_admin(uid):
+            continue
+        total_visits += n
+        total_people += browsers if uid is None else 1
+    return {"people": len(people), "anonymous": len(anonymous),
+            "signed_in": len(signed_in), "visits": visits,
+            "active_minutes": round(seconds / 60), "pages": pages,
+            "busiest": busiest, "yours": yours,
+            "total_people": total_people, "total_visits": total_visits}
 
 
 def has_activity(report):
     """Did anyone other than the admin do anything? Blocks are his own doing."""
-    return bool(report["learners"]) or any(report["anonymous"].values())
+    return (bool(report["learners"]) or any(report["anonymous"].values())
+            or bool(report["visitors"]["people"]))
 
 
 def _counted(counts, keys):
@@ -248,8 +309,11 @@ def render(report, day):
     """(subject, body): plain text, a dozen lines on a normal day."""
     label = f"{day.day} {day.strftime('%b')}"
     n = len(report["learners"])
-    who = f"{n} learner{'' if n == 1 else 's'}" if n else "anonymous visitors only"
-    subject = f"KuantorFlow: activity on {label} ({who})"
+    v = report["visitors"]["people"]
+    who = [f"{n} learner{'' if n == 1 else 's'}"] if n else []
+    who += [f"{v} visitor{'' if v == 1 else 's'}"] if v else []
+    subject = (f"KuantorFlow: activity on {label} "
+               f"({', '.join(who) or 'anonymous visitors only'})")
 
     lines = [f"Activity on KuantorFlow on {day.strftime('%a')} {label} {day.year}, "
              "Kyiv time, 04:00 to 04:00. Your own accounts are left out.", ""]
@@ -265,6 +329,7 @@ def render(report, day):
         lines.append("")
         lines.append("Anonymous visitors: " + _counted(
             report["anonymous"], ("rounds", utils.CHAT, utils.LOOKUP, utils.GENERATE)))
+    lines += _visitor_lines(report["visitors"])
     if report["blocks"] or report["unblocks"]:
         lines.append("")
     for title, entries in (("Blocked", report["blocks"]), ("Unblocked", report["unblocks"])):
@@ -273,6 +338,30 @@ def render(report, day):
     lines += ["", "Mykola messages, lookups, texts, recaps and uploads are counted per "
               "server day (UTC), so they can differ from the Kyiv day by an hour or two."]
     return subject, "\n".join(lines) + "\n"
+
+
+def _visitor_lines(v):
+    """The visitors paragraph (#600), or nothing on a day without visits."""
+    if not v["people"] and not v["yours"]:
+        return []
+    lines = [""]
+    if v["people"]:
+        lines.append(f"Visitors: {v['people']} ({v['anonymous']} anonymous, "
+                     f"{v['signed_in']} signed in), {v['visits']} visit"
+                     f"{'' if v['visits'] == 1 else 's'}, {v['active_minutes']} active "
+                     f"minutes, {v['pages']} page{'' if v['pages'] == 1 else 's'}.")
+        if v["busiest"]:
+            hour, count = v["busiest"]
+            lines.append(f"Busiest hour: {hour:02d}:00 to {(hour + 1) % 24:02d}:00, "
+                         f"{count} visit{'' if count == 1 else 's'}.")
+    if v["yours"]:
+        lines.append(f"Your own: {v['yours']} visit{'' if v['yours'] == 1 else 's'}, "
+                     "left out of the counts.")
+    lines.append(f"Since counting began: {v['total_people']} visitors, "
+                 f"{v['total_visits']} visits.")
+    lines.append("An anonymous visitor is a browser session's random number, so one "
+                 "person on two days counts twice; robots are not counted.")
+    return lines
 
 
 # --- running it -------------------------------------------------------------
