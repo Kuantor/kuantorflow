@@ -739,6 +739,64 @@ def remember_confirmed_word(word, source):
         conn.close()
 
 
+# A visit ends after this long without a check-in (#598): the next one starts
+# a new visit, and #599 closes the old one.
+VISIT_GAP_MINUTES = 30
+# Slack on "no more seconds than the wall time since the last check-in": a
+# check-in reports what the browser counted, and the two clocks drift a little.
+VISIT_SLACK_SECONDS = 5
+
+
+def record_visit(visitor, user_id, active, page):
+    """One check-in from the browser (#598): continue this visitor's visit, or
+    start one. `active` is the seconds the page was visible since the last
+    check-in, already capped by the route; `page` is whether a new page sent it.
+
+    **A visit continues while check-ins keep coming**: the visitor's open
+    visit seen in the last `VISIT_GAP_MINUTES` is continued, and anything older
+    is left for #599 to close, so a learner back after lunch starts a new one.
+
+    **The seconds can never exceed the time that passed**: a continued visit
+    gains at most the wall time since its last check-in, plus a little slack.
+    Two tabs side by side, or a script posting every second, cannot make an
+    hour out of a minute. A new visit takes the seconds it reports, and starts
+    that long ago, since the first check-in comes after the page was read.
+
+    `user_id` is kept from the first signed-in check-in of a visit: signing in
+    part-way attaches the visit to the account, and signing out does not take
+    it away.
+    """
+    pages = 1 if page else 0
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, TIMESTAMPDIFF(SECOND, last_seen_at, UTC_TIMESTAMP()) "
+            "FROM visits WHERE visitor = %s AND closed_at IS NULL "
+            "AND last_seen_at >= UTC_TIMESTAMP() - INTERVAL %s MINUTE "
+            "ORDER BY last_seen_at DESC LIMIT 1",
+            (visitor, VISIT_GAP_MINUTES))
+        row = cursor.fetchone()
+        if row:
+            visit_id, elapsed = row
+            seconds = min(active, max(elapsed or 0, 0) + VISIT_SLACK_SECONDS)
+            cursor.execute(
+                "UPDATE visits SET last_seen_at = UTC_TIMESTAMP(), "
+                "active_seconds = active_seconds + %s, pages = pages + %s, "
+                "user_id = IFNULL(user_id, %s) WHERE id = %s",
+                (seconds, pages, user_id, visit_id))
+        else:
+            cursor.execute(
+                "INSERT INTO visits (visitor, user_id, started_at, last_seen_at, "
+                "active_seconds, pages) VALUES (%s, %s, "
+                "UTC_TIMESTAMP() - INTERVAL %s SECOND, UTC_TIMESTAMP(), %s, %s)",
+                (visitor, user_id, active, active, pages))
+        conn.commit()
+        cursor.close()
+    finally:
+        conn.close()
+
+
 def record_answers(user_id, game, answers):
     """Append one graded round to `recall_answers` (#338). Returns rows written.
 

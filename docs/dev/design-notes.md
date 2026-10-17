@@ -1148,3 +1148,36 @@ move-dialog half, and #178 will keep asking that. `/topics.json` returns
 `base.html` renders the grouped one — that JS and `index.html` build the same
 block, so a change to one is a change to both or a chat save silently
 flattens the page.
+
+## `visits`
+
+**`visits`** (#598) — one row per visit, the record #599's visit email and
+#600's daily visitor count read. Page loads could not answer either question:
+reading a deck for twenty minutes is one request, an anonymous visitor had no
+identity at all, and a robot loads pages like anyone else. So
+**`static/js/visit.js`**, loaded by `base.html` (and through it `deck.html`),
+posts `POST /visit/ping` about once a minute **while the tab is visible**, with
+the seconds it was visible since the last check-in. The first check-in waits
+until the page has been in front for five seconds in all, so a glance -- or a
+script-running robot that leaves -- is never a visit; a hidden tab or a page
+being left sends what it has with `sendBeacon`, once, and stops. Its logic is
+tested in Node with a fake clock (`automation/tests/test_visits.py`).
+**The route is quiet and cheap**: always 204; robots refused by
+`app.ROBOT_AGENTS` (an empty user agent counts as one); seconds cleaned and
+capped at `MAX_PING_SECONDS`; no quota; no `requests.log` line
+(`web._UNLOGGED_ENDPOINTS`), since one a minute per tab would bury the pages
+and the row is the record; a failed write is logged and swallowed. A blocked
+account is still counted -- a visit is the site's figure, not the learner's
+writing. **The visitor** is `secrets.token_hex(8)` in the signed session
+(`app._visitor_token()`), so a script cannot choose its own; an anonymous
+session lasts a browser session, which is what one anonymous visitor means
+here. **`utils.record_visit()`** continues the visitor's open visit seen in
+the last `VISIT_GAP_MINUTES` (30), or inserts one that **starts `active`
+seconds ago**; a continued visit gains at most the wall time since its last
+check-in plus `VISIT_SLACK_SECONDS`, so two tabs or a script posting every
+second cannot make an hour of a minute; and `user_id = IFNULL(user_id, …)`
+attaches a visit to the account signed in part-way and keeps it there after
+signing out. DATETIMEs in UTC (`UTC_TIMESTAMP()`), like `recall_answers`, and
+`ON DELETE CASCADE` from `users`, so deleting an account deletes its visits;
+the guide's privacy section says all of this, including that anonymous
+visitors are now counted under a random number. `closed_at` is #599's.

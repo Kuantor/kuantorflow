@@ -415,6 +415,8 @@ This is the whole picture, in plain words: what KuantorFlow keeps about you, who
 
 **Without signing in**, almost nothing is tied to you. Your games, your chat with Mykola and your settings are not saved on the server under any name. Your conversation with Mykola is kept only in this browser, so it is still there when you come back, and *Reset Auth* clears it.
 
+**Visits are counted, for everybody.** While a page of the site is open in front of you, your browser tells the site about once a minute that you are still there. Each visit is kept as when it began and ended, how long the page was actually on screen and how many pages you opened. If you are not signed in, it is kept under **a random number** in the site's cookie, which lasts until you close the browser and means nothing outside the site; nothing else about you or your device is recorded with it. Robots are left out. A quick look of a few seconds is not counted at all.
+
 **When you sign in with Google**, the site keeps:
 
 - **Your account:** the name, email address and Google account number that Google passes on when you sign in, and the name you asked Mykola to call you, if you did.
@@ -422,6 +424,7 @@ This is the whole picture, in plain words: what KuantorFlow keeps about you, who
 - **The cards you add.** They join the shared deck, so other learners can see them, unless you put them in a private topic.
 - **Your answers in the games**, so the site can bring words back before you forget them. This is described under *What the site remembers about your answers*.
 - **Your conversations with Mykola**, described below.
+- **Your visits:** when each began and ended, how long the page was on screen, and how many pages you opened, as described above, under your account.
 
 **Activity logs, for everybody.** Like most websites, KuantorFlow writes a short line for each thing that happens, so that problems can be found and fixed. For example: a card saved, a word looked up, a file uploaded (its name, not its contents), the idea you typed to build a topic, a round played and its score, a topic's word list printed or downloaded, a setting changed. If you are signed in, **the line includes your email address**. There is also a short line for **each page you open**: which page, how long it took to load, and, if you are signed in, your account number, not your email address. The logs never contain what you say to Mykola. They are started afresh every 30 days, and **each one is deleted automatically after about a year**.
 
@@ -465,7 +468,8 @@ The site itself runs on PythonAnywhere, which stores the database and the files 
 
 - your saved conversations with Mykola;
 - your settings;
-- the record of your answers and the words scheduled for you.
+- the record of your answers and the words scheduled for you;
+- the record of your visits.
 
 It asks first whether your cards should go with you or stay in the shared deck.
 

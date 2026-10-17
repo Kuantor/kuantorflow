@@ -1064,7 +1064,9 @@ def _sse(payload) -> str:
 
 # Flask's static files are not logged: a page brings its stylesheet, scripts
 # and images with it, and a line for each would bury the pages themselves.
-_UNLOGGED_ENDPOINTS = {"static"}
+# Nor is the visit check-in (#598), one a minute per open tab: its record is
+# the `visits` row.
+_UNLOGGED_ENDPOINTS = {"static", "visit_ping"}
 
 
 def _new_request_id():

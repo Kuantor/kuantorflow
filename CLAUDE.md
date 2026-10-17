@@ -82,7 +82,7 @@ topic's word list*, *`schema.sql` + `apply_schema.py`*,
 is gone*, *`robots.txt`*, *Three pools per paid action*, *Per-account
 ceilings*, *`recall_answers`*, *`recall_schedule` + `recall.py`*, *My
 progress*, *The Quiz's two directions*, *`confirmed_words`*, *`topics`*,
-*`topics.is_public` + `topics.namespace`*, *`topic_sections`*.
+*`topics.is_public` + `topics.namespace`*, *`topic_sections`*, *`visits`*.
 
 **The module split** (*The split (#418)*). Six modules in one dependency
 direction: `web.py` ← `icons.py` ← `cards.py` ← `rounds.py` ← `chat.py` ←
@@ -118,6 +118,8 @@ ms. A fifth paid call gets a constant and the line; `scripts/model_usage_report.
 totals it with Mykola's usage lines. **Admin emails go through
 `notify.send_admin_email()`** (*`notify.py`*, #591): off unless `SMTP_*` is
 set, never raises, one `NOTIFY` line in `notify.log`, never the body.
+**Visits** (*`visits`*, #598) are one `visits` row each, from `static/js/visit.js`'s
+check-in; `/visit/ping` claims nothing and writes no request line.
 
 **Paid calls and their ceilings** (*Three pools per paid action*, *Per-account
 ceilings*). Every paid call claims its ceiling **after every free refusal and

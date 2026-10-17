@@ -2251,5 +2251,8 @@
        every dialog that edits a card is one of these two today and the rule is
        about the field, not about the page. #}
     <script src="{{ static_url('js/explanation_credit.js') }}" defer></script>
+    {# #598: the visit check-in, on every page: once a minute while the tab is
+       visible, so the site can count visitors and the time spent. #}
+    <script src="{{ static_url('js/visit.js') }}" data-url="{{ url_for('visit_ping') }}" defer></script>
 </body>
 </html>

@@ -2,6 +2,7 @@ import inspect
 import json
 import os
 import re
+import secrets
 import shutil
 import sys
 import time
@@ -267,6 +268,77 @@ def drop_identity_from_before_the_users_table():
     if user is not None and "id" not in user:
         app.logger.info("Dropping a pre-#148 session identity; it has no user id")
         session.pop("user", None)
+
+
+# --- visits (#598) -----------------------------------------------------------
+
+# The most seconds one check-in may claim: the script sends about once a
+# minute, so anything over this is not the script.
+MAX_PING_SECONDS = 70
+
+# User agents that are not people. Most robots never run the page's script and
+# so never check in at all; these are the ones that do, or that call the route
+# by hand. Google's crawler runs scripts but says what it is. One pattern, so
+# #600's counter and this route cannot disagree about who is a robot.
+ROBOT_AGENTS = re.compile(
+    r"bot|crawl|spider|slurp|headless|python-|curl/|wget|facebookexternalhit"
+    r"|httpclient|okhttp|go-http|java/|libwww|scrapy|lighthouse|phantomjs"
+    r"|yandex|baidu", re.IGNORECASE)
+
+
+def _is_robot(agent):
+    """An empty user agent counts as a robot: every browser sends one."""
+    return not (agent or "").strip() or bool(ROBOT_AGENTS.search(agent))
+
+
+def _visitor_token():
+    """This browser's random visitor number (#598), made on first use.
+
+    Kept in the signed session cookie, so a page script cannot choose its own,
+    and nothing about it means anything outside the site. An anonymous session
+    lasts as long as the browser session, so one browser is one visitor per
+    browser session; Reset Auth clears it with the rest.
+    """
+    token = session.get("visitor")
+    if not (isinstance(token, str) and re.fullmatch(r"[0-9a-f]{16}", token)):
+        token = secrets.token_hex(8)
+        session["visitor"] = token
+    return token
+
+
+def _ping_seconds(raw):
+    """The visible seconds a check-in reports, as a whole number in range."""
+    try:
+        seconds = round(float(raw))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    return max(0, min(seconds, MAX_PING_SECONDS))
+
+
+@app.route("/visit/ping", methods=["POST"])
+def visit_ping():
+    """One check-in from `static/js/visit.js` (#598): this browser is still
+    here, and the page was in front for `active` seconds since the last one.
+
+    **Always 204, and quiet.** A robot is not recorded; a body that is not
+    JSON, or comes as `text/plain` from `sendBeacon`, is read anyway; a write
+    that fails is logged and the page never hears of it, because nothing the
+    learner does depends on this. It claims no quota and writes no
+    `requests.log` line (`web._UNLOGGED_ENDPOINTS`): one a minute per open tab
+    would bury the pages, and the visit row is the record. A blocked account is
+    still counted: a visit is the site's figure, not the learner's writing.
+    """
+    if _is_robot(request.headers.get("User-Agent")):
+        return "", 204
+    body = request.get_json(force=True, silent=True)
+    body = body if isinstance(body, dict) else {}
+    try:
+        utils.record_visit(visitor=_visitor_token(), user_id=web._current_user_id(),
+                           active=_ping_seconds(body.get("active")),
+                           page=bool(body.get("page")))
+    except Exception:
+        app.logger.exception("Could not record a visit")
+    return "", 204
 
 
 @app.route("/robots.txt")
