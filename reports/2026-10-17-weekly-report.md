@@ -15,9 +15,9 @@
 | ai_agent | 1 |
 | **Total** | **31** |
 
-**Sixteen issues were closed, all of them completed**: fifteen in kuantorflow and [ai_agent#90](https://github.com/Kuantor/ai_agent/issues/90). None were declined or closed as duplicates. **Seventeen tickets were filed**, all in kuantorflow, and thirteen of them were also closed within the period.
+**Sixteen issues were closed, all of them completed**: fifteen in kuantorflow and [ai_agent#90](https://github.com/Kuantor/ai_agent/issues/90). None were declined or closed as duplicates. **Eighteen tickets were filed**, all in kuantorflow, and thirteen of them were also closed within the period.
 
-The test suite grew from **2,779 to 3,042** offline tests, and to **{FULL}** with the database and live tiers included. Both tiers pass.
+The test suite grew from **2,779 to 3,042** offline tests, and from 2,967 to **3,245** with the database and live tiers included. Both tiers pass; three tests skip in the full run, as before.
 
 *All 70 commits across the three repositories were authored by Kuantor. The 31 recorded under the full name Anton Kuznietsov are pull requests merged through GitHub's web page, from the same address. The other 39 all carry a `Co-Authored-By: Claude` trailer. No GitHub Copilot commits were found in any repository.*
 
@@ -70,7 +70,7 @@ The page script was tested as real code, run in Node with a fake clock, and chec
 
 The 9 October edition asked for a real week of data, and this is it: eight days on PythonAnywhere, read on 17 October.
 
-- **166 requests since 9 October**: 124 answered 200, 4 answered 304, 4 redirected and 1 was refused. **33 answered 404**, none of them a route of the site, most likely robots probing for paths that do not exist. 105 came from anonymous visitors and 61 from signed-in ones.
+- **166 requests since 9 October**: 124 answered 200, 4 answered 304, 4 redirected and 1 was refused. **33 answered 404**, none of them a route of the site. Most were **scanners looking for secrets**: `/public/.env`, `/server-config.json`, `/runtime-config.json`, `/settings.js` and `/v1/models`, the path of an AI service's API. Only two were `/favicon.ico`. None of them can reach anything: the site serves files only from `static/`, and the real `.env`, `/static/../.env` and its encoded forms all answer 404. 105 came from anonymous visitors and 61 from signed-in ones.
 - **The home page's median rose from 440 ms to 835 ms, and its connections from 2 to 5.** That is the mix, not new code. Measured locally, the anonymous home page opens 2 connections and the signed-in one opens 5: the same 2, one more for the block check, and two for the review badge. Last edition's sample was mostly anonymous; this one has real signed-in use. The two slowest home pages, at 3.1 and 4.7 s, opened 10 and 6 connections. That points [#554](https://github.com/Kuantor/kuantorflow/issues/554) (reusing connections) at the signed-in home page.
 - **The slowest requests were the paid ones**: a word lookup at 5.3 s (two Haiku translations and a dictionary) and a generated text at 4.3 s. Mykola's streamed answer starts after a median of 488 ms. *Flashcards* answered in 355 ms.
 - **The first Haiku calls**: 9 in all. Four word translations used 1,838 input and 177 output tokens, about 460 and 44 per call, as measured on 9 October. Four notes splits used 596 and 140, and one generated text used 354 and 227. So [#563](https://github.com/Kuantor/kuantorflow/issues/563) finally has a small baseline. **Mykola** made 9 calls, with 573 output tokens, 8,021 uncached input tokens, 21,686 written to the cache and 20,796 read from it.
@@ -106,13 +106,17 @@ The 9 October edition asked for a real week of data, and this is it: eight days 
 
 5. **Check a ticket's premise against the code.** #598's ticket asked for a 20-second rate limit. Capping each check-in by the time elapsed did that job better, without dropping a hidden tab's last report.
 
-6. **Escapes typed into a tool call still arrive decoded.** `\n` landed as real line breaks twice this week, in #592 and #590. Building the backslash with `chr(92)` avoids it.
+6. **Read production, not a copy of it.** On the local checkout every 404 was the favicon, which nearly replaced this report's first guess. Production's own paths settled it: most were scanners looking for secret files.
+
+7. **Escapes typed into a tool call still arrive decoded.** `\n` landed as real line breaks twice this week, in #592 and #590. Building the backslash with `chr(92)` avoids it.
 
 ---
 
 ## Plans for Next Week
 
-**First, the last two emails.** [#599](https://github.com/Kuantor/kuantorflow/issues/599) (how long a signed-in learner spent, emailed when the visit ends, from an hourly task) and [#600](https://github.com/Kuantor/kuantorflow/issues/600) (a daily count of visitors) both read #598's visits, which are now being recorded. The daily report's task is to be scheduled on the Tasks tab. The 9 October edition's first items, #554 and #563, now have data. The signed-in home page is #554's target, and the first Haiku calls give #563 a baseline. [#194](https://github.com/Kuantor/kuantorflow/issues/194) (copyright-safe images) has a decision waiting: no hotlinked images, and any future photo downloaded, hosted on the site and credited.
+**This edition's production numbers took five commands, pasted back one by one.** At Anton's suggestion, [#607](https://github.com/Kuantor/kuantorflow/issues/607) turns them into one: `scripts/weekly_numbers.py` writes everything to a single file and adds the paths that answered 404. It is in review as [#608](https://github.com/Kuantor/kuantorflow/pull/608), and the next edition starts from it.
+
+**Then the last two emails.** [#599](https://github.com/Kuantor/kuantorflow/issues/599) (how long a signed-in learner spent, emailed when the visit ends, from an hourly task) and [#600](https://github.com/Kuantor/kuantorflow/issues/600) (a daily count of visitors) both read #598's visits, which are now being recorded. The daily report's task is to be scheduled on the Tasks tab. The 9 October edition's first items, #554 and #563, now have data. The signed-in home page is #554's target, and the first Haiku calls give #563 a baseline. [#194](https://github.com/Kuantor/kuantorflow/issues/194) (copyright-safe images) has a decision waiting: no hotlinked images, and any future photo downloaded, hosted on the site and credited.
 
 ### Highest Prio
 
