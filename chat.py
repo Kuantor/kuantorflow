@@ -710,6 +710,9 @@ def _save_preferred_name_from_chat(name):
 
 # The one declaration lives in `web.py` since #460, because the Help page
 # renders the same file -- see `web.USER_GUIDE` for why that matters.
+# `docs/future-enhancements.md` sits beside the guide and is **not** added
+# (#459): it lists the providers this site cannot use, and Mykola reading it
+# would offer a learner DeepL as if it could be picked.
 MYKOLA_KNOWLEDGE = [web.USER_GUIDE]
 
 

@@ -135,65 +135,61 @@
                            declaration and not one entry plus this markup — the
                            rule `games.ACTIVITIES` follows for the activities.
 
-                           Every provider is listed and the ones this deployment
-                           has no key for are **disabled**, not hidden. #261 made
-                           the same call for an unfinished game: a greyed tile that
-                           says why beats an absent one, because absent reads as
-                           "this app cannot do that" rather than "this copy is not
-                           set up for it". The note names the variable, since the
-                           person who can act on it is the one reading.
+                           **Only the providers this deployment can use are listed**
+                           (#459), which reverses #353's greying. #261's rule -- a
+                           greyed tile that says why beats an absent one -- was about
+                           an unfinished game, which a learner can wait for; a
+                           provider needs a key only whoever runs the site can set,
+                           and they read `.env.example`, not this panel. The others are
+                           still declared in `parsers.TRANSLATORS` (hidden, not
+                           deleted) and written up in `docs/future-enhancements.md`.
+
+                           **The tick follows who answers**, `lookup_providers` (#384):
+                           a stored choice whose key has gone is hidden, and ticking
+                           the stored slug would leave the group with nothing chosen.
+                           The store keeps that choice (#365); the save sends this
+                           group only when the learner picks another (`pickedProvider`).
 
                            The two scraped backends are absent because they are
-                           gone from the declaration — see #348 for why they
+                           gone from the declaration -- see #348 for why they
                            stopped working and #353 for why they are not coming
                            back. #}
-                        {% for option in all_translators %}
-                            {% set usable = option in translators %}
-                            <label class="{% if not usable %}settings-option-off{% endif %}">
+                        {% for option in translators %}
+                            <label>
                                 <input type="radio" name="translator" value="{{ option.slug }}"
-                                       {% if settings.translator == option.slug %}checked{% endif %}
-                                       {% if settings_read_only or not usable %}disabled{% endif %}>
+                                       {% if lookup_providers[0] and lookup_providers[0].slug == option.slug %}checked{% endif %}
+                                       {% if settings_read_only %}disabled{% endif %}>
                                 {{ option.label }}
-                                {% if not usable %}
-                                    <span class="hint settings-inline-hint">needs <code>{{ option.key_env }}</code></span>
-                                {% elif not option.groups_by_pos %}
+                                {% if not option.groups_by_pos %}
                                     <span class="hint settings-inline-hint">one card per word</span>
                                 {% endif %}
                             </label>
                         {% endfor %}
                         {% if not translators %}
-                            <p class="hint">None of these is configured, so a new
-                               card comes with its English explanation and examples
-                               only. Set one of the keys above to turn translations
-                               back on.</p>
+                            <p class="hint">No translator is set up on this site, so a new
+                               card comes with its English explanation and examples only.</p>
                         {% endif %}
                     </fieldset>
 
                     <fieldset class="settings-group">
                         <legend>Explanatory dictionary (ENG &rarr; ENG)</legend>
                         {# #365, and the same block as the translators above it,
-                           for the same reason: rendered from
-                           `parsers.DICTIONARIES` so a third dictionary is one
-                           entry rather than one entry plus this markup, and an
-                           option this deployment cannot use is greyed with the
-                           variable it needs rather than hidden (#261).
+                           for the same reasons: rendered from the declaration
+                           (`parsers.DICTIONARIES`), only what this deployment can
+                           use (#459), ticked by who answers. Oxford needs no key,
+                           so this group is never empty.
 
-                           Merriam-Webster is the one that needed saying. It has
-                           been offered here exactly like Oxford while answering
-                           403 to PythonAnywhere's IPs since #110 measured it in
-                           July -- so choosing it on the deployed site produced
-                           cards with no English explanation, and nothing on this
-                           panel said why. #}
-                        {% for option in all_dictionaries %}
-                            {% set usable = option in dictionaries %}
-                            <label class="{% if not usable %}settings-option-off{% endif %}">
+                           Merriam-Webster is the one that needed saying. Its key
+                           would not help here: the backend scrapes
+                           merriam-webster.com, which answers 403 to
+                           PythonAnywhere (#110). It is still declared, and the
+                           official API is #110's question. #}
+                        {% for option in dictionaries %}
+                            <label>
                                 <input type="radio" name="explanatory_dictionary" value="{{ option.slug }}"
-                                       {% if settings.explanatory_dictionary == option.slug %}checked{% endif %}
-                                       {% if settings_read_only or not usable %}disabled{% endif %}>
+                                       {% if lookup_providers[1] and lookup_providers[1].slug == option.slug %}checked{% endif %}
+                                       {% if settings_read_only %}disabled{% endif %}>
                                 {{ option.label }}
-                                {% if not usable %}
-                                    <span class="hint settings-inline-hint">needs <code>{{ option.key_env }}</code></span>
-                                {% endif %}
                             </label>
                         {% endfor %}
                     </fieldset>
@@ -882,6 +878,18 @@
                 // hides it while this class is set (#121).
                 document.body.classList.add("settings-open");
             }
+            // A provider group's value for the save, or undefined to leave it
+            // out (#459). The panel ticks the provider that answers, which for
+            // an account whose choice is hidden is not the stored one; sending it
+            // on every save would quietly replace that choice. So a group is sent
+            // only when the learner ticked a different radio, and JSON leaves an
+            // undefined field out, so the server keeps what it stores. A group
+            // with no radio at all (no translator configured) is left out too.
+            function pickedProvider(name) {
+                var picked = settingsForm.querySelector('input[name="' + name + '"]:checked');
+                return picked && !picked.defaultChecked ? picked.value : undefined;
+            }
+
             function closeSettings() {
                 settingsOverlay.hidden = true;
                 document.body.classList.remove("settings-open");
@@ -951,8 +959,8 @@
                         cards_automatically: settingsForm.cards_automatically.checked,
                         individual_cards: settingsForm.individual_cards.checked,
                         alphabetical_topics: settingsForm.alphabetical_topics.checked,
-                        translator: settingsForm.translator.value,
-                        explanatory_dictionary: settingsForm.explanatory_dictionary.value,
+                        translator: pickedProvider("translator"),
+                        explanatory_dictionary: pickedProvider("explanatory_dictionary"),
                         show_ukrainian: settingsForm.show_ukrainian.checked,
                         show_russian: settingsForm.show_russian.checked,
                         quiz_lang: settingsForm.quiz_lang.value,
