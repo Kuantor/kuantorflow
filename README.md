@@ -11,6 +11,10 @@ It transforms notes, dictionary lookups, and study materials into interactive ac
 the words the site uses. The rest of this README is for running and building
 it.
 
+🧭 **Running the site?** [Future enhancements](docs/future-enhancements.md)
+([PDF](docs/future-enhancements.pdf)) lists the translators and dictionaries
+the code supports but Settings does not offer here, and what each would take.
+
 ---
 
 ## 🚀 Features

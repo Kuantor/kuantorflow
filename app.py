@@ -566,10 +566,11 @@ def inject_settings():
         # source is how. Empty is a real state — no key, no translator — and
         # the panel says so rather than showing an empty box.
         "translators": parsers.available_translators(),
-        # Every provider, so the panel can show the ones this deployment
-        # cannot use yet rather than hiding them (#353). #261's rule for an
-        # unfinished game tile: greyed and labelled beats absent, because
-        # absent looks like the feature does not exist.
+        # Every provider, declared. The panel no longer renders these: since
+        # #459 it lists only `translators` and `dictionaries`, the ones this
+        # deployment can use, because a key is for whoever runs the site and
+        # a greyed row only told a learner what the site refuses to do. Kept,
+        # not deleted, as the providers themselves are: hidden is not gone.
         "all_translators": parsers.TRANSLATORS,
         # The same pair for the dictionaries (#365). Oxford needs no
         # key, so `dictionaries` is never empty -- which is why the
