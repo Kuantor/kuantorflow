@@ -454,3 +454,34 @@ CREATE TABLE IF NOT EXISTS recall_schedule (
     CONSTRAINT fk_recall_schedule_user FOREIGN KEY (user_id)
         REFERENCES users (id) ON DELETE CASCADE
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- Visits (#598): one row per visit, written by the browser's check-in.
+--
+-- `static/js/visit.js` posts `/visit/ping` about once a minute while the tab
+-- is visible; `utils.record_visit()` continues the visitor's open visit, or
+-- starts one when the last check-in is more than 30 minutes old. `visitor` is
+-- a random token from the browser's session -- not a fingerprint, and the only
+-- thing that tells one anonymous visitor from another. `user_id` is the
+-- account, when signed in; deleting the account deletes its visits (CASCADE),
+-- as with its answers. `active_seconds` is the time the page was actually in
+-- front, never more than the wall time since the last check-in. `closed_at`
+-- is set when the visit is over (#599); #600 counts these rows per day.
+--
+-- DATETIMEs in UTC, written with UTC_TIMESTAMP(), as `recall_answers` is: a
+-- TIMESTAMP would be read back in whatever zone the session is in.
+CREATE TABLE IF NOT EXISTS visits (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    visitor        CHAR(16) NOT NULL,
+    user_id        INT NULL,
+    started_at     DATETIME NOT NULL,
+    last_seen_at   DATETIME NOT NULL,
+    active_seconds INT NOT NULL DEFAULT 0,
+    pages          INT NOT NULL DEFAULT 0,
+    closed_at      DATETIME NULL,
+    -- "this visitor's open visit": every check-in asks it.
+    INDEX idx_visits_visitor (visitor, last_seen_at),
+    -- "the visits that have gone quiet" (#599) and a day's visits (#600).
+    INDEX idx_visits_open (closed_at, last_seen_at),
+    CONSTRAINT fk_visits_user FOREIGN KEY (user_id)
+        REFERENCES users (id) ON DELETE CASCADE
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

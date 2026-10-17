@@ -311,6 +311,16 @@ never do. Each attempt is a `kind=new-account` line in `logs/notify.log`.
 upload), once per limit per day. `NOTIFY_LIMIT_PERCENT` in `.env` changes the
 percent, and 0 turns it off.
 
+**#598 needs `apply_schema.py`, and it is one step**: `visits` is a
+brand-new table, so the `schema.sql` pass creates it on an existing database
+and no migration is needed. The dry run should show `~ visits` and `=`
+against everything else. From the reload on, every page's check-in writes to
+it; nothing reads it until #599 and #600. To see it working:
+
+```bash
+python -c "from utils import get_db_connection; c=get_db_connection(); u=c.cursor(); u.execute('SELECT COUNT(*), SUM(user_id IS NULL), SUM(active_seconds) FROM visits'); print('visits, anonymous, active seconds:', u.fetchone())"
+```
+
 **#593 needs one scheduled task**, and nothing on the deploy itself. The daily
 report runs once a day from the **Tasks** tab (Dashboard → Tasks →
 *Scheduled tasks*), with #591's settings already in `.env`. Check it first by
