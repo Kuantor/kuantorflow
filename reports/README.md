@@ -84,7 +84,25 @@ RUN_DB_ROUNDTRIP=1 venv/Scripts/python -m pytest -q | tail -2   # plus db and li
 Quote the **offline** number as the headline, since that is what the previous
 reports compare against, and mention the opt-in database tests separately.
 
-### 6. Plans for next week
+### 6. Production's numbers
+
+Since 9 October each edition has a section on what production showed. **Ask
+Anton to run one script on PythonAnywhere** (#607), with the window's first
+day:
+
+```bash
+cd ~/kuantorflow && venv/bin/python scripts/weekly_numbers.py --since YYYY-MM-DD
+```
+
+It writes `~/weekly-numbers-<today>.txt` -- AI usage, requests per endpoint
+with the slowest ten and the paths that answered 404, translations dropped,
+admin emails, and visits and accounts -- which he downloads from the Files tab
+and passes on. Read-only, and nothing in it names a person. Diff the figures
+against the previous edition's, and read a change before explaining it: on
+17 October the home page's connections rose because the sample had more
+signed-in use, not because the code changed.
+
+### 7. Plans for next week
 
 From the **KuantorFlow Improvements** project board, read by column. The report
 gives each active column its own table — *Highest Prio*, *In Progress*, *Nice To
@@ -100,7 +118,7 @@ usually the best-specified items available.
 gh project item-list 2 --owner Kuantor --limit 100 --format json
 ```
 
-### 7. Sections, in the established order
+### 8. Sections, in the established order
 
 Title, period and repository links · Executive Summary, with the
 repository/PR table, the issues-closed line and the authorship note in italics ·
@@ -111,7 +129,7 @@ footer naming the merged-PR window, which becomes the **next** report's cutoff.
 Read the most recent edition before writing and match its voice. Prose is written
 as one long line per paragraph, as in the existing reports.
 
-### 8. Render, and read the verification line
+### 9. Render, and read the verification line
 
 ```bash
 venv/Scripts/python reports/scripts/md_to_pdf.py reports/DATE-weekly-report.md
