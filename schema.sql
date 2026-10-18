@@ -485,3 +485,23 @@ CREATE TABLE IF NOT EXISTS visits (
     CONSTRAINT fk_visits_user FOREIGN KEY (user_id)
         REFERENCES users (id) ON DELETE CASCADE
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- Aspect pairs of Ukrainian and Russian verbs (#100): *писати* / *написати*.
+--
+-- The Quiz accepts the other aspect of a stored verb, and a rule cannot find
+-- it (the stem often changes, a prefix can change the meaning), so the pairs
+-- are read in advance from Wiktionary's headword templates by
+-- `aspects.fill()` and only looked up while grading. Stored in both
+-- directions, normalised (lower case, stress marks stripped, ё -> е); a row
+-- whose `partner` is '' means "checked, no partner", so a form is never asked
+-- about twice. Only the fact that two forms pair is kept, not Wiktionary's text.
+--
+-- No foreign key and no user: whether two verbs are a pair is not a fact about
+-- any learner (#258's reason for `confirmed_words`).
+CREATE TABLE IF NOT EXISTS aspect_pairs (
+    lang       CHAR(3) NOT NULL,
+    form       VARCHAR(100) NOT NULL,
+    partner    VARCHAR(100) NOT NULL DEFAULT '',
+    checked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (lang, form, partner)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

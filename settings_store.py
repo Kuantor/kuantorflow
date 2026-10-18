@@ -54,6 +54,10 @@ DEFAULTS = {
     # issue #113 — the language the quiz opens in (the in-page switch still
     # lets the user take it in any visible language).
     "quiz_lang": "ukrainian",
+    # issue #100 -- the Quiz accepts the other aspect of a stored verb
+    # (*написати* for *писати*), from the pairs `aspect_pairs` holds. On by
+    # default; off is the strict form, for a learner who wants the exact word.
+    "accept_verb_aspects": True,
     # issue #235 — how many cards a round of Fill the gap deals. A setting
     # rather than a literal because ten is a guess about attention, not a fact;
     # a selection with fewer playable cards than this deals what it has.

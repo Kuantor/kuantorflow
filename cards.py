@@ -27,6 +27,7 @@ from flask import (
     Response,
     abort,
     flash,
+    g,
     jsonify,
     redirect,
     render_template,
@@ -37,6 +38,7 @@ from flask import (
 )
 
 import applog
+import aspects
 import icons
 import parsers
 import topicgen
@@ -101,7 +103,25 @@ def _save_and_log(entry, source, fills=None, allow_duplicate=False):
         return False
     applog.card_created(entry, source=source, user=web._current_email(),
                         card_id=card_id, alongside=alongside)
+    _fill_aspect_pairs(entry)
     return True
+
+
+def _fill_aspect_pairs(entry):
+    """A new verb card's aspect pairs (#100), after the save and never in its
+    way. **At most one Wiktionary request per page request**: *Add All* saves
+    a topic's cards one by one, and twenty requests in a row would be slow and
+    draw a 429; the cards after the first are left to
+    `scripts/fill_aspect_pairs.py`, which picks up anything missed."""
+    if not aspects.is_verb(entry):
+        return
+    try:
+        if g.get("aspects_filled"):
+            return
+        g.aspects_filled = True
+        aspects.fill_for_card(entry)
+    except Exception:
+        app.logger.exception("Could not fill a verb's aspect pairs")
 
 
 # What a fill actually filled, in the words the popup uses for those fields

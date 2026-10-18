@@ -134,6 +134,10 @@
                     {# #540: right by a synonym from the selection -- say which
                        word this card was, so the learner leaves with both. #}
                     <p class="expected">Also right: {{ r.card_word }}</p>
+                {% elif r.aspect_of %}
+                    {# #100: the other aspect of the stored verb. #}
+                    <p class="expected">{{ r.user_answer }} is the other aspect of
+                       {{ r.aspect_of }}; both are right.</p>
                 {% endif %}
             </div>
         {% endfor %}

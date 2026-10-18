@@ -82,7 +82,7 @@ topic's word list*, *`schema.sql` + `apply_schema.py`*,
 is gone*, *`robots.txt`*, *Three pools per paid action*, *Per-account
 ceilings*, *`recall_answers`*, *`recall_schedule` + `recall.py`*, *My
 progress*, *The Quiz's two directions*, *`confirmed_words`*, *`topics`*,
-*`topics.is_public` + `topics.namespace`*, *`topic_sections`*, *`visits`*.
+*`topics.is_public` + `topics.namespace`*, *`topic_sections`*, *`visits`*, *`aspect_pairs`*.
 
 **The module split** (*The split (#418)*). Six modules in one dependency
 direction: `web.py` ← `icons.py` ← `cards.py` ← `rounds.py` ← `chat.py` ←
@@ -210,7 +210,7 @@ file is the source of truth and its test derives from it.
   `reports/scripts/md_to_pdf.py`). Small PRs are exempt unless asked.
 - **The console one-offs live in `scripts/`** (#442) — `apply_schema.py`,
   `seed_topics.py` + `seed_words.py`, `claim_topics.py`, `claim_flashcards.py`,
-  `retopic.py`, `rebuild_schedule.py` (#479), `find_bad_translations.py` (#544, report-only), `model_usage_report.py` (#562, read-only), `send_test_email.py` (#591), `daily_report.py` (#593, the Tasks tab), `weekly_numbers.py` (#607, read-only, for the weekly report). They are run, never imported by the app, which is why they can
+  `retopic.py`, `rebuild_schedule.py` (#479), `find_bad_translations.py` (#544, report-only), `model_usage_report.py` (#562, read-only), `send_test_email.py` (#591), `daily_report.py` (#593, the Tasks tab), `weekly_numbers.py` (#607, read-only, for the weekly report), `fill_aspect_pairs.py` (#100). They are run, never imported by the app, which is why they can
   sit in a directory of their own while the app's modules stay flat in the root
   (see #442 for why *those* have not moved: seven `Path(__file__)` sites that
   would fail **silently** one level down).

@@ -1440,6 +1440,90 @@ def place_topic(name, section, position, created_by_user_id=None):
     return "moved", topic_id
 
 
+def aspect_forms_checked(lang, forms):
+    """Which of `forms` (normalised) `aspect_pairs` has already checked (#100),
+    paired or not."""
+    forms = sorted(set(forms))
+    if not forms:
+        return set()
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT DISTINCT form FROM aspect_pairs WHERE lang = %s AND form IN ("
+            + ", ".join(["%s"] * len(forms)) + ")", [lang] + forms)
+        found = {row[0] for row in cursor.fetchall()}
+        cursor.close()
+        return found
+    finally:
+        conn.close()
+
+
+def aspect_partners(lang, forms):
+    """{form: {partners}} for the `forms` (normalised) that have one (#100).
+    One query for a whole round; a form with no partner is simply absent."""
+    forms = sorted(set(forms))
+    if not forms:
+        return {}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT form, partner FROM aspect_pairs WHERE lang = %s AND partner <> '' "
+            "AND form IN (" + ", ".join(["%s"] * len(forms)) + ")", [lang] + forms)
+        found = {}
+        for form, partner in cursor.fetchall():
+            found.setdefault(form, set()).add(partner)
+        cursor.close()
+        return found
+    finally:
+        conn.close()
+
+
+def save_aspect_pairs(lang, found):
+    """Store what Wiktionary said (#100): each pair in **both** directions, and
+    `''` for a form checked with no partner. `INSERT IGNORE`, so a re-run and a
+    pair met from either side add nothing twice. Returns the rows written."""
+    rows = set()
+    for form, partners in found.items():
+        if partners:
+            for partner in partners:
+                rows.add((lang, form, partner))
+                rows.add((lang, partner, form))
+        else:
+            rows.add((lang, form, ""))
+    if not rows:
+        return 0
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.executemany(
+            "INSERT IGNORE INTO aspect_pairs (lang, form, partner) VALUES (%s, %s, %s)",
+            sorted(rows))
+        written = cursor.rowcount
+        conn.commit()
+        cursor.close()
+        return written
+    finally:
+        conn.close()
+
+
+def verb_card_translations():
+    """(translation_ukr, translation_rus) of every verb card, for
+    `scripts/fill_aspect_pairs.py` (#100). Adverbs are not verbs."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT translation_ukr, translation_rus FROM flashcards "
+            "WHERE pos LIKE %s AND pos NOT LIKE %s", ("%verb%", "%adverb%"))
+        rows = cursor.fetchall()
+        cursor.close()
+        return rows
+    finally:
+        conn.close()
+
+
 def save_flashcard(entry, added_by_user_id=None, allow_duplicate=False):
     """
     Insert a flashcard entry into the `flashcards` table, unless a card with
