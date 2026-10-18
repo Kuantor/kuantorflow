@@ -40,6 +40,7 @@ from flask import (
 )
 
 import applog
+import aspects
 import games
 import parsers
 import progress
@@ -72,6 +73,22 @@ def _matched_a_variant(card, given, field):
     neither is a fact about an English headword (#267).
     """
     return given.lower().replace("ё", "е") in _answer_variants(card[field])
+
+
+def _aspect_of(card, given, field, partners):
+    """The stored variant `given` is the other aspect of, or None (#100).
+
+    Verb cards only (`aspects.is_verb`), and only the pairs looked up for the
+    quiz's own language -- `partners` -- so a Russian partner never answers a
+    Ukrainian question.
+    """
+    if not partners or not aspects.is_verb(card):
+        return None
+    answer = aspects.normalise(given)
+    for variant in aspects.single_word_variants(card.get(field)):
+        if answer in partners.get(aspects.normalise(variant), ()):
+            return variant
+    return None
 
 
 QUIZ_LANGS = {"rus": "Russian", "ukr": "Ukrainian"}
@@ -2145,12 +2162,18 @@ def _run_quiz(topics, heading, self_url, back, words):
         # through `games.same_answer()` -- the comparison every typed English
         # answer uses -- and accepts a synonym from the selection.
         deck = list(cards)
+        # #100: the other aspect of a stored verb, from `aspect_pairs`, looked
+        # up once for the round's verb cards. Only this direction: the other
+        # one grades English words, which have no aspect.
+        partners = ({} if to_english or not prefs.get("accept_verb_aspects", True)
+                    else aspects.partner_map(lang, cards))
         if to_english:
             def check(card, given):
                 return _english_matches(card, given, field, deck)
         else:
             def check(card, given):
-                return _matched_a_variant(card, given, field)
+                return (_matched_a_variant(card, given, field)
+                        or _aspect_of(card, given, field, partners) is not None)
         graded = _graded_answers(games.ACTIVITIES["quiz"], cards, check)
         # Narrowed to what was actually asked, because the template's
         # empty-state guard reads `cards` and a POST that graded nothing is
@@ -2171,6 +2194,11 @@ def _run_quiz(topics, heading, self_url, back, words):
             if (to_english and correct
                     and not games.same_answer(user_answer, card["word"])):
                 result["card_word"] = card["word"]
+            # Right by the other aspect (#100): name the stored form it pairs
+            # with, so the learner sees both are right.
+            if (not to_english and correct
+                    and not _matched_a_variant(card, user_answer, field)):
+                result["aspect_of"] = _aspect_of(card, user_answer, field, partners)
             results.append(result)
         score = sum(1 for r in results if r["correct"])
         _round_played(games.ACTIVITIES["quiz"], topics, results,

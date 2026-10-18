@@ -1187,3 +1187,25 @@ signing out. DATETIMEs in UTC (`UTC_TIMESTAMP()`), like `recall_answers`, and
 `ON DELETE CASCADE` from `users`, so deleting an account deletes its visits;
 the guide's privacy section says all of this, including that anonymous
 visitors are now counted under a random number. `closed_at` is #599's.
+
+## `aspect_pairs`
+
+**`aspect_pairs`** (#100) — the Quiz accepts the other aspect of a stored
+verb (*написати* for *писати*). A rule cannot find the partner -- the stem
+often changes (*відшкодовувати* / *відшкодувати*) and a prefix can change the
+meaning (*писати* / *описати*) -- so the pairs are **read in advance** from
+Wiktionary's headword templates (`{{uk-verb|…|pf=…}}`, `{{ru-verb|…}}`) by
+`aspects.fill()` and only looked up while grading: no wait, no paid call, no
+failure mid-quiz. Stored both ways and normalised (`aspects.normalise`: lower
+case, stress marks stripped, ё → е); `partner = ''` means "checked, no
+partner", so a form is asked once. **A failed batch is left out, never stored
+as no partner**, and is asked again next run. No foreign key: a pair is not a
+fact about a learner. `scripts/fill_aspect_pairs.py` fills the deck (batches of
+25, a 6-second pause, `Retry-After`); `cards._save_and_log()` fills a new verb
+card after its save, **once per page request** so *Add All* does not fire twenty
+requests, and never in the save's way. The grader (`rounds._aspect_of`) looks up
+the round's verb cards in one query, in the quiz's own language, only in the
+English → Ukrainian/Russian direction, with `accept_verb_aspects` on (the
+default), and the results name the stored form. Wiktionary names a partner for
+about 83% of Russian and 55% of Ukrainian forms (30 Sept); the Claude fallback
+for the rest is #100's later step. #612's AI check runs after this one.

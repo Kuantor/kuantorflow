@@ -726,6 +726,14 @@ def translations_fetched(word, provider, lang, count, elapsed_ms,
            error=error)
 
 
+def aspect_pairs(lang, asked, answered, paired, source, error=None):
+    """Verb aspect pairs looked up on Wiktionary (#100): how many forms were
+    asked, how many answered, how many had a partner, and whether it was the
+    script or a card's save that asked. Lexicon traffic, so `dict.log`."""
+    _write(DICT, "ASPECT-PAIRS", lang=lang, asked=asked, answered=answered,
+           paired=paired, source=source, error=error)
+
+
 def translation_dropped(word, provider, lang, pos, variant, reason):
     """One translation variant refused for its alphabet (#544): the provider,
     the language and the variant itself, so which translator drifts, and how

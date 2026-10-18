@@ -346,6 +346,19 @@ email; a day without is a `kind=daily result=skipped reason=no-activity`
 line in `logs/notify.log`; a failed send exits 1, which the task log shows.
 `--date YYYY-MM-DD` reports another day.
 
+**#100 needs `apply_schema.py`, then one script.** `aspect_pairs` is a
+brand-new table: the dry run should show `~ aspect_pairs` and `=` against
+everything else. Then fill it from Wiktionary, which takes a few minutes for a
+few hundred verb forms and is safe to re-run:
+
+```bash
+venv/bin/python scripts/fill_aspect_pairs.py --dry-run
+venv/bin/python scripts/fill_aspect_pairs.py
+```
+
+Its last lines say how many forms it asked about and how many have a partner;
+a second run says `nothing to do`. New verb cards are filled as they are saved.
+
 **#600 needs nothing**: the daily report gains its visitors paragraph from the
 `visits` table #598 created, on the next run of the same task.
 
