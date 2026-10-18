@@ -293,6 +293,8 @@ This is not *Scrambled* with bigger pieces. That one shuffles the letters inside
 
 Two things are left as they were written. The **full stop is removed**, so the last word does not announce itself. The **capital letter stays**, because lowercasing the first word would mangle every sentence starting with a name or *I* — you can use it to find the beginning, and everything after it is still yours to work out.
 
+Dictionary examples sometimes explain a word in brackets, as in *a verdict (= gave a verdict) of guilty*. **That explanation is left out**, so you rebuild *The jury returned a verdict of guilty*. A sentence that offers choices, like *a film/an art/a music critic*, has no single right order, so it is never used here; the card uses another of its examples, or sits this game out.
+
 If a sentence uses the same word twice, either arrangement of those two words is accepted — they are genuinely interchangeable.
 
 ### Listen and type
