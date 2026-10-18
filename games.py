@@ -1692,6 +1692,16 @@ SENTENCE_MAX = 15
 # token -- half the giveaway, removed for nothing.
 TERMINAL = ".!?…"
 
+# Oxford's examples are not all prose (#614). A **gloss**, "a verdict (= gave
+# a verdict) of guilty", explains a word inside the sentence and comes out
+# (the split absorbs the space it leaves), so the dictionary's own sentence
+# is what remains. An
+# **alternation**, "a film/an art/a music critic", has no one right order,
+# and choosing a side would invent a sentence the dictionary never wrote, so
+# a token still holding one of NOT_PROSE refuses the whole sentence instead.
+GLOSS = re.compile(r"\(=[^)]*\)")
+NOT_PROSE = "/()[]="
+
 
 def sentence_tokens(sentence):
     """The words of `sentence` as chips, or **None** if it will not do.
@@ -1710,10 +1720,16 @@ def sentence_tokens(sentence):
     start has still had to order everything after it, which is the exercise --
     a known hint is better than a clever rule that prints `she` as `She`
     somewhere in the middle of the pool.
+
+    **A gloss comes out, and what is still not prose is refused** (#614):
+    `GLOSS` and `NOT_PROSE` above.
     """
-    text = str(sentence or "").strip().rstrip(TERMINAL).strip()
+    text = GLOSS.sub("", str(sentence or ""))
+    text = text.strip().rstrip(TERMINAL).strip()
     tokens = text.split()
     if not (SENTENCE_MIN <= len(tokens) <= SENTENCE_MAX):
+        return None
+    if any(set(token) & set(NOT_PROSE) for token in tokens):
         return None
     return tokens
 
