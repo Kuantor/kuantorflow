@@ -114,9 +114,19 @@ def _logger(name):
     return logger
 
 
+# Every character `str.splitlines()` ends a line at (#557). Inside a value it
+# would split one event into two lines, the second with no timestamp or
+# action, and every reader that counts one event per line would miscount.
+# Each is written as its escape instead (`\n`, `\r`, `\x85`, `\u2028`), which
+# keeps the line one line and the text greppable.
+LINE_BREAKS = "\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029"
+
+
 def _value(value):
     text = str(value)
     if text == "" or any(ch.isspace() for ch in text):
+        text = "".join(ch.encode("unicode_escape").decode("ascii")
+                       if ch in LINE_BREAKS else ch for ch in text)
         return "'" + text.replace("'", "\\'") + "'"
     return text
 
@@ -137,8 +147,15 @@ def request_id():
     return None
 
 
-def _write(name, action, **fields):
-    """Append one line; never raise — logging is not worth failing a request."""
+def _write(name, action, /, **fields):
+    """Append one line; never raise — logging is not worth failing a request.
+
+    `name` and `action` are **positional-only** (#558), so a field called
+    `action=` or `name=` is an ordinary field. Before, it raised `TypeError`
+    while Python bound the arguments, before the `try` below had started --
+    the one error this function could not swallow, and it shipped for one
+    commit in #448.
+    """
     try:
         parts = [action] + [f"{key}={_value(value)}"
                             for key, value in fields.items()
@@ -430,8 +447,8 @@ def topic_created(name, topic_id=None, created_by=None):
     the user and the source, so the pair reads as one event.
     """
     # The field is `topic=`, matching the card lines, so one grep finds the
-    # topic being created and every card later filed under it. It cannot be
-    # `name=` either way: that is _write()'s own first argument.
+    # topic being created and every card later filed under it. (`name=` would
+    # also work since #558, when _write()'s own `name` became positional-only.)
     _write(CARDS, "TOPIC", topic=name, id=topic_id,
            created_by=(created_by if created_by is not None else "anonymous"))
 
@@ -770,13 +787,12 @@ def anonymous_limit_hit(kind, used, limit, log=DICT, action=None):
     two lines were indistinguishable. The function keeps its name for its
     callers, though half of them are no longer about anonymous visitors.
 
-    **Written as `feature=`, never `action=`.** `_write()`'s own second
-    parameter is called `action` -- it is the LIMIT word itself -- so passing
-    `action=` through it raises `TypeError` *at the call*, before the body
-    whose whole job is to swallow errors has started. That shipped for one
-    commit during #448 and broke every refusal it touched: a log line took
-    down the request, which is the one thing this module promises never to
-    do. `topic_created()` records the same trap for `name=`.
+    **Written as `feature=`**, which says what it is. It once could not be
+    `action=`: `_write()`'s own second parameter has that name, and passing it
+    raised `TypeError` at the call, before the body that swallows errors had
+    started -- shipped for one commit in #448, it broke every refusal it
+    touched. Since #558 the parameter is positional-only and `action=` would
+    simply be a field, but the lines already say `feature=` and stay so.
     """
     _write(log, "LIMIT", feature=action, kind=kind, used=used, limit=limit)
 
