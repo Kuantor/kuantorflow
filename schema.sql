@@ -505,3 +505,23 @@ CREATE TABLE IF NOT EXISTS aspect_pairs (
     checked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (lang, form, partner)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- Verdicts on Quiz answers close in meaning (#612).
+--
+-- An answer that matches none of a card's translations (nor, #100, the other
+-- aspect of a stored verb) is judged by Claude, once per round, as green
+-- (a correct translation the card lacks), yellow (close, not 100%) or red.
+-- Kept by (language, English word, part of speech, normalised answer), so the
+-- same answer to the same word is never paid for twice. `note` is the model's
+-- few words of why, shown on the results page. No user and no foreign key:
+-- a verdict is about the word and the answer, not about who typed it.
+CREATE TABLE IF NOT EXISTS answer_verdicts (
+    lang       CHAR(3) NOT NULL,
+    word       VARCHAR(255) NOT NULL,
+    pos        VARCHAR(20) NOT NULL DEFAULT '',
+    answer     VARCHAR(255) NOT NULL,
+    verdict    VARCHAR(6) NOT NULL,
+    note       VARCHAR(200) NOT NULL DEFAULT '',
+    checked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (lang, word, pos, answer)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

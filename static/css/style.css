@@ -756,6 +756,8 @@ a.button-link { display: inline-block; text-decoration: none;
 .question input[type="text"] { margin-top: 0.5rem; }
 .question.correct { background: var(--ok-bg); border-left: 5px solid var(--ok-border); }
 .question.wrong { background: var(--bad-bg); border-left: 5px solid var(--bad-border); }
+/* #612: close in meaning, not 100% -- between the two. */
+.question.close { background: #fff8e1; border-left: 5px solid #f2b705; }
 .expected { color: var(--muted); }
 .score {
     font-size: 1.5rem;
@@ -3181,10 +3183,11 @@ body:has(#mykola-panel.minimized:not([hidden])) { padding-bottom: 6.5rem; }
     /* Right and wrong: the panels print white (cleaner, and less ink than a
        page of tints), the green or red left border stays where the printer
        has colour, and a check or cross says which in black and white. */
-    .question.correct, .question.wrong {
+    .question.correct, .question.wrong, .question.close {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
     .question.correct > .word:first-child::before { content: "\2713\00a0"; }
     .question.wrong > .word:first-child::before { content: "\2717\00a0"; }
+    .question.close > .word:first-child::before { content: "\2248\00a0"; }
 }

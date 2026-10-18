@@ -39,6 +39,9 @@ from flask import (
     url_for,
 )
 
+import os
+
+import answercheck
 import applog
 import aspects
 import games
@@ -89,6 +92,73 @@ def _aspect_of(card, given, field, partners):
         if answer in partners.get(aspects.normalise(variant), ()):
             return variant
     return None
+
+
+def _close_verdicts(cards, field, lang, partners):
+    """{card id: (verdict, note)} for this round's answers no free check
+    matched, judged by Claude in one call (#612); `answercheck` says why.
+
+    In order, and each step only for what the one before left: the exact
+    match, #100's aspect pairs, the verdicts already stored, and only then a
+    paid call under its own ceiling. A blank answer is never sent. A refused
+    ceiling, a missing key or a failed call returns what was stored, so those
+    answers stay wrong by the exact rule -- never worse than before #612.
+    """
+    by_id = {str(card["id"]): card for card in cards}
+    pending = []
+    for card in games.asked(request.form, by_id):
+        given = (request.form.get(f"answer_{card['id']}") or "").strip()
+        if (given and not _matched_a_variant(card, given, field)
+                and _aspect_of(card, given, field, partners) is None):
+            pending.append((card, given))
+    if not pending:
+        return {}
+    keys = {card["id"]: (card["word"], card.get("pos") or "", aspects.normalise(given))
+            for card, given in pending}
+    try:
+        stored = utils.answer_verdicts(lang, list(keys.values()))
+    except Exception:
+        app.logger.exception("Could not read the stored answer verdicts")
+        stored = {}
+    out = {cid: stored[key] for cid, key in keys.items() if key in stored}
+    ask = [(card, given) for card, given in pending if card["id"] not in out]
+    if not ask or not os.environ.get("ANTHROPIC_API_KEY"):
+        return out
+    try:
+        allowed, scope, used = utils.claim_answer_check(
+            web._current_user_id(), web.CHECK_USER_DAILY, web.CHECK_ANON_DAILY,
+            web.CHECK_ALL_DAILY)
+    except Exception:
+        app.logger.exception("Could not count an answer check")
+        return out
+    if not allowed:
+        limit = {"user": web.CHECK_USER_DAILY, "anonymous": web.CHECK_ANON_DAILY}.get(
+            scope, web.CHECK_ALL_DAILY)
+        applog.anonymous_limit_hit(scope, used, limit, log=applog.GAMES, action="check")
+        return out
+    items = [{"word": card["word"], "pos": card.get("pos"),
+              "explanation": card.get("explanation_en"),
+              "translations": card.get(field) or "", "answer": given}
+             for card, given in ask]
+    try:
+        judged = answercheck.judge(QUIZ_LANGS[lang], items)
+    except Exception as error:
+        applog.answers_checked(lang, asked=len(ask), result="failed", error=error)
+        return out
+    rows = []
+    for n, (card, given) in enumerate(ask):
+        if n in judged:
+            out[card["id"]] = judged[n]
+            rows.append(keys[card["id"]] + judged[n])
+    colours = [verdict for verdict, _note in (judged[n] for n in judged)]
+    applog.answers_checked(lang, asked=len(ask), result="checked",
+                           green=colours.count("green"), yellow=colours.count("yellow"),
+                           red=colours.count("red"))
+    try:
+        utils.save_answer_verdicts(lang, rows)
+    except Exception:
+        app.logger.exception("Could not store the answer verdicts")
+    return out
 
 
 QUIZ_LANGS = {"rus": "Russian", "ukr": "Ukrainian"}
@@ -897,7 +967,8 @@ def _record_recall(activity, graded):
                              activity.slug)
 
 
-def _round_played(activity, topics, results, stage="graded", direction=None):
+def _round_played(activity, topics, results, stage="graded", direction=None,
+                  close=None):
     """Leave one `games.log` line for a finished round (#448).
 
     **Not inside `_graded_answers()`**, though that is the obvious seam, and
@@ -917,7 +988,7 @@ def _round_played(activity, topics, results, stage="graded", direction=None):
                if stage in ("graded", "self-marked") else None)
     applog.round_played(activity.slug, len(topics), len(results),
                         correct=correct, stage=stage, direction=direction,
-                        user=web._current_email())
+                        user=web._current_email(), close=close or None)
 
 
 def _scrambled_round(activity, topics):
@@ -2146,6 +2217,7 @@ def _run_quiz(topics, heading, self_url, back, words):
     cards = [card for card, _ in usable]
 
     results = score = None
+    close = 0
     if request.method == "POST":
         # Grade the questions that were **asked**, not a fresh draw — the rule
         # and the reasoning now live in games.asked() (#267), which scrambled
@@ -2167,13 +2239,17 @@ def _run_quiz(topics, heading, self_url, back, words):
         # one grades English words, which have no aspect.
         partners = ({} if to_english or not prefs.get("accept_verb_aspects", True)
                     else aspects.partner_map(lang, cards))
+        # #612: whatever the free checks left unmatched, judged once for the
+        # round -- before grading, so a green answer is right for recall too.
+        verdicts = {} if to_english else _close_verdicts(cards, field, lang, partners)
         if to_english:
             def check(card, given):
                 return _english_matches(card, given, field, deck)
         else:
             def check(card, given):
                 return (_matched_a_variant(card, given, field)
-                        or _aspect_of(card, given, field, partners) is not None)
+                        or _aspect_of(card, given, field, partners) is not None
+                        or verdicts.get(card["id"], ("",))[0] == "green")
         graded = _graded_answers(games.ACTIVITIES["quiz"], cards, check)
         # Narrowed to what was actually asked, because the template's
         # empty-state guard reads `cards` and a POST that graded nothing is
@@ -2199,9 +2275,15 @@ def _run_quiz(topics, heading, self_url, back, words):
             if (not to_english and correct
                     and not _matched_a_variant(card, user_answer, field)):
                 result["aspect_of"] = _aspect_of(card, user_answer, field, partners)
+            # The model's colour (#612), only for an answer it actually judged.
+            if card["id"] in verdicts and not result.get("aspect_of"):
+                result["verdict"], result["note"] = verdicts[card["id"]]
+            result["state"] = ("correct" if correct else
+                               "close" if result.get("verdict") == "yellow" else "wrong")
             results.append(result)
         score = sum(1 for r in results if r["correct"])
-        _round_played(games.ACTIVITIES["quiz"], topics, results,
+        close = sum(1 for r in results if r["state"] == "close")
+        _round_played(games.ACTIVITIES["quiz"], topics, results, close=close,
                       direction=direction)
     else:
         # A round is `words` questions drawn uniformly from every card in the
@@ -2214,7 +2296,7 @@ def _run_quiz(topics, heading, self_url, back, words):
     return render_template(
         "quiz.html", cards=cards, lang=lang, lang_name=QUIZ_LANGS[lang],
         direction=direction, to_english=to_english,
-        results=results, score=score, dropped=untranslated, **common)
+        results=results, score=score, close=close, dropped=untranslated, **common)
 
 
 @app.route("/quiz/<topic>", methods=["GET", "POST"])
