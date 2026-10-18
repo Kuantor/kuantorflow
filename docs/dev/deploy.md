@@ -346,6 +346,13 @@ email; a day without is a `kind=daily result=skipped reason=no-activity`
 line in `logs/notify.log`; a failed send exits 1, which the task log shows.
 `--date YYYY-MM-DD` reports another day.
 
+**#612 needs `apply_schema.py`, and it is one step**: `answer_verdicts` is a
+brand-new table, so the dry run should show `~ answer_verdicts` and `=` against
+everything else. Its three ceilings default to 30 a day per account, 30 shared by
+everyone signed out and 150 in all (`CHECK_USER_DAILY`, `CHECK_ANON_DAILY`,
+`CHECK_ALL_DAILY` in `.env` change them; 0 turns one off). Each round's check is a
+`CHECK` line in `logs/games.log` and a `feature=check` line in `model_usage.log`.
+
 **#100 needs `apply_schema.py`, then one script.** `aspect_pairs` is a
 brand-new table: the dry run should show `~ aspect_pairs` and `=` against
 everything else. Then fill it from Wiktionary, which takes a few minutes for a

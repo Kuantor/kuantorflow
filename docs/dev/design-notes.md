@@ -1209,3 +1209,26 @@ English → Ukrainian/Russian direction, with `accept_verb_aspects` on (the
 default), and the results name the stored form. Wiktionary names a partner for
 about 83% of Russian and 55% of Ukrainian forms (30 Sept); the Claude fallback
 for the rest is #100's later step. #612's AI check runs after this one.
+
+## `answer_verdicts`
+
+**`answer_verdicts`** (#612) — in the Quiz (English → Ukrainian/Russian), an
+answer that matches no stored translation, nor #100's other aspect, is judged
+by Claude (`answercheck.judge`, Haiku) as **green** (a correct translation the
+card lacks: counts, for recall too), **yellow** (close, not 100%: shown apart,
+wrong for recall) or **red** (wrong, with the model's note). The order is the
+whole design, each step only for what the last left: the exact match, the
+aspect pairs, the stored verdicts, and only then **one call per round** under
+its own three pools (`utils.claim_answer_check`, `web.CHECK_*_DAILY`), claimed
+after every free check (`rounds._close_verdicts`). It runs **before**
+`_graded_answers()`, so a green answer is recorded right. A refused ceiling,
+no key, or a failed call leaves those answers red by the exact rule, with no
+note claiming a model judged them -- never worse than before. Verdicts are
+stored by (language, word, part of speech, normalised answer); a repeat costs
+nothing (measured 475 ms against 2.5-3.4 s for a call). The answers and the
+deck text go in through `promptdata.wrap()` (#602) and the reply must fit a
+JSON schema. **Calibrated on 31 hand-labelled answers** (18 Oct): the final
+prompt agreed with 24 and was never more generous than the label; its
+disagreements are stricter (`спадок` for cultural *heritage* is yellow). It is
+`USAGE_CHECK`, the fifth paid call, with its `MODEL-USAGE` line; each round
+writes a `CHECK` line to `games.log` and its `ROUND` line counts `close=`.

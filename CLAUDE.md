@@ -82,7 +82,7 @@ topic's word list*, *`schema.sql` + `apply_schema.py`*,
 is gone*, *`robots.txt`*, *Three pools per paid action*, *Per-account
 ceilings*, *`recall_answers`*, *`recall_schedule` + `recall.py`*, *My
 progress*, *The Quiz's two directions*, *`confirmed_words`*, *`topics`*,
-*`topics.is_public` + `topics.namespace`*, *`topic_sections`*, *`visits`*, *`aspect_pairs`*.
+*`topics.is_public` + `topics.namespace`*, *`topic_sections`*, *`visits`*, *`aspect_pairs`*, *`answer_verdicts`*.
 
 **The module split** (*The split (#418)*). Six modules in one dependency
 direction: `web.py` ← `icons.py` ← `cards.py` ← `rounds.py` ← `chat.py` ←
@@ -128,7 +128,9 @@ immediately before the call**; claims are all or nothing (`utils.claim_action()`
 below its `*_ALL_DAILY`. Mykola answers on Opus, everything this repo calls on
 Haiku, so the chat ceilings are the tight ones. One chat message is capped at
 `web.MAX_CHAT_MESSAGE_CHARS`, checked before either quota (#564). **Visitor
-text reaches a prompt only through `promptdata.wrap()`** (*`parsers.py`*, #602). **The recap
+text reaches a prompt only through `promptdata.wrap()`** (*`parsers.py`*, #602). The
+Quiz's answers close in meaning are the fifth call (*`answer_verdicts`*, #612): one per
+round, after every free check. **The recap
 happens only when asked** (#495). With no `ANTHROPIC_API_KEY` a paid activity is
 not reachable at all.
 

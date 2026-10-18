@@ -78,14 +78,16 @@ REQUESTS = "requests"
 MODEL_USAGE = "model_usage"
 NOTIFY = "notify"
 
-# The four paid model calls this repo makes itself (#562), written out rather
+# The paid model calls this repo makes itself (#562, #612), written out rather
 # than built from strings: a typo in a feature name would not fail, it would
 # quietly start a fifth row in every usage report.
 USAGE_TRANSLATE = "translate"     # parsers._claude_dictionary
 USAGE_GENERATE = "generate"       # textgen
 USAGE_TOPIC = "topic"             # topicgen, proposing and extending
 USAGE_SPLIT = "split"             # parsers._split_glued_translations
-USAGE_FEATURES = (USAGE_TRANSLATE, USAGE_GENERATE, USAGE_TOPIC, USAGE_SPLIT)
+USAGE_CHECK = "check"             # answercheck.judge, #612
+USAGE_FEATURES = (USAGE_TRANSLATE, USAGE_GENERATE, USAGE_TOPIC, USAGE_SPLIT,
+                  USAGE_CHECK)
 
 _configured = {}  # logger name -> the directory it is currently writing to
 
@@ -863,7 +865,7 @@ def text_generated(model=None, supplied=0, used=0, length=None, elapsed_ms=None,
 
 
 def round_played(game, topics, asked, correct=None, stage="graded",
-                 direction=None, user=None):
+                 direction=None, user=None, close=None):
     """One round of a word game (#448). Nothing wrote one before: `rounds.py`
     held ten activities and a single `applog` call, and that one was about the
     Wiktionary vet rather than the round, so "what do people actually play?"
@@ -891,8 +893,17 @@ def round_played(game, topics, asked, correct=None, stage="graded",
     # way round it was asked is the one thing about a quiz round its score
     # cannot say.
     _write(GAMES, "ROUND", game=game, stage=stage, topics=topics,
-           asked=asked, correct=correct, direction=direction,
+           asked=asked, correct=correct, close=close, direction=direction,
            user=_user(user))
+
+
+def answers_checked(lang, asked, result, green=None, yellow=None, red=None,
+                    error=None):
+    """The Quiz's answers close in meaning, judged by Claude (#612): how many
+    were sent, and how they came back -- or that the call failed, in which
+    case they stayed wrong by the exact rule. Never the answers themselves."""
+    _write(GAMES, "CHECK", lang=lang, asked=asked, result=result, green=green,
+           yellow=yellow, red=red, error=error)
 
 
 class Timer:

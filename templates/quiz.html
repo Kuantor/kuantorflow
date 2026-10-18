@@ -121,14 +121,37 @@
             {% endfor %}
             <button type="submit">Check answers</button>
         </form>
+        {# #612: an answer no translation matches may be judged by Claude,
+           which takes a few seconds -- so the button says what is happening. #}
+        <script>
+            (function () {
+                var form = document.currentScript.previousElementSibling;
+                form.addEventListener("submit", function () {
+                    var button = form.querySelector('button[type="submit"]');
+                    button.disabled = true;
+                    button.textContent = "Checking your answers\u2026";
+                });
+            })();
+        </script>
 
     {% else %}
-        <p class="score">Score: {{ score }} / {{ results|length }}</p>
+        <p class="score">Score: {{ score }} / {{ results|length }}{% if close %}, plus {{ close }} close{% endif %}</p>
         {% for r in results %}
-            <div class="panel question {{ 'correct' if r.correct else 'wrong' }}">
+            <div class="panel question {{ r.state or ('correct' if r.correct else 'wrong') }}">
                 <div class="word">{{ loop.index }}. {{ r.prompt }}{% if r.pos %} ({{ r.pos }}){% endif %}</div>
                 <p>Your answer: {{ r.user_answer or '—' }}</p>
-                {% if not r.correct %}
+                {# #612: the model's colour, each with its word, for the
+                   answers no translation matched. #}
+                {% if r.verdict == 'green' %}
+                    <p class="expected"><strong>Accepted</strong> &mdash; same meaning as
+                       {{ r.expected }}{% if r.note %} ({{ r.note }}){% endif %}</p>
+                {% elif r.verdict == 'yellow' %}
+                    <p class="expected"><strong>Close</strong>{% if r.note %} &mdash; {{ r.note }}{% endif %}.
+                       The card says: {{ r.expected }}</p>
+                {% elif not r.correct %}
+                    {% if r.verdict == 'red' and r.note %}
+                        <p class="expected"><strong>Wrong</strong> &mdash; {{ r.note }}</p>
+                    {% endif %}
                     <p class="expected">Correct answer: {{ r.expected }}</p>
                 {% elif r.card_word %}
                     {# #540: right by a synonym from the selection -- say which

@@ -82,6 +82,10 @@ RECAP = "recap"
 RECAP_ALL = "recap:all"
 UPLOAD = "upload"
 UPLOAD_ALL = "upload:all"
+# #612: checking the Quiz answers no translation matched, one claim per round.
+CHECK = "check"
+CHECK_ANON = "check:anon"
+CHECK_ALL = "check:all"
 
 # Each account ceiling in words, for #594's warning: (the subject's, the
 # body's). Keyed on the names above; a test derives the account ceilings from
@@ -92,6 +96,7 @@ LIMIT_WORDS = {
     GENERATE: ("text", "generated texts and topics"),
     RECAP: ("recap", "recaps"),
     UPLOAD: ("upload", "note uploads"),
+    CHECK: ("answer check", "quiz answer checks"),
 }
 
 
@@ -342,6 +347,54 @@ def claim_text_generation(user_id, user_limit, all_limit, anon_limit=0):
     """
     return claim_pools(_pools(GENERATE, GENERATE_ANON, GENERATE_ALL, user_id,
                               user_limit, anon_limit, all_limit))
+
+
+def claim_answer_check(user_id, user_limit, anon_limit, all_limit):
+    """Count one round's check of Quiz answers close in meaning (#612): one
+    claim per round, however many answers it sends, and only when a call is
+    really needed -- after the exact match, #100's pairs and the stored
+    verdicts have all had their turn."""
+    return claim_pools(_pools(CHECK, CHECK_ANON, CHECK_ALL, user_id,
+                              user_limit, anon_limit, all_limit))
+
+
+def answer_verdicts(lang, keys):
+    """{(word, pos, answer): (verdict, note)} for the `keys` already judged (#612)."""
+    keys = sorted(set(keys))
+    if not keys:
+        return {}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT word, pos, answer, verdict, note FROM answer_verdicts WHERE lang = %s "
+            "AND (word, pos, answer) IN (" + ", ".join(["(%s, %s, %s)"] * len(keys)) + ")",
+            [lang] + [part for key in keys for part in key])
+        found = {(w, p, a): (v, n) for w, p, a, v, n in cursor.fetchall()}
+        cursor.close()
+        return found
+    finally:
+        conn.close()
+
+
+def save_answer_verdicts(lang, rows):
+    """Store (word, pos, answer, verdict, note) rows (#612); a re-judged answer
+    keeps its first verdict (`INSERT IGNORE`)."""
+    rows = [(lang, w, p or "", a, v, (n or "")[:200]) for w, p, a, v, n in rows]
+    if not rows:
+        return 0
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.executemany(
+            "INSERT IGNORE INTO answer_verdicts (lang, word, pos, answer, verdict, note) "
+            "VALUES (%s, %s, %s, %s, %s, %s)", rows)
+        written = cursor.rowcount
+        conn.commit()
+        cursor.close()
+        return written
+    finally:
+        conn.close()
 
 
 def claim_chat_message(user_id, user_limit, anon_limit, all_limit):

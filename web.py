@@ -831,6 +831,11 @@ RECAP_USER_DAILY = _int_env("RECAP_USER_DAILY", 5)
 RECAP_ALL_DAILY = _int_env("RECAP_ALL_DAILY", 10)
 UPLOAD_USER_DAILY = _int_env("UPLOAD_USER_DAILY", 10)
 UPLOAD_ALL_DAILY = _int_env("UPLOAD_ALL_DAILY", 40)
+# #612: checking Quiz answers that no translation matched, counted per round
+# (one Haiku call), so a learner's thirty rounds a day are thirty claims.
+CHECK_USER_DAILY = _int_env("CHECK_USER_DAILY", 30)
+CHECK_ANON_DAILY = _int_env("CHECK_ANON_DAILY", 30)
+CHECK_ALL_DAILY = _int_env("CHECK_ALL_DAILY", 150)
 
 # An account that has spent its own day has nothing to be offered -- signing in
 # is what it already did -- so these say "tomorrow" rather than prompting.

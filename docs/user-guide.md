@@ -210,7 +210,7 @@ It does not include what you did without signing in, or *Odd one out* and *Real 
 
 You type the answer: there is no multiple choice, because producing a word is harder than recognising one, and it holds much better. The quiz works **both ways round**. Choose which under **Which way** when you pick the topics, beside the language, or change it during the quiz with the **⇄** button between the two boxes at the top of the page (the left box is what you see, the right one what you type):
 
-- **English → Ukrainian (or Russian):** you see the English word and type its translation. Any accepted translation counts, case and spacing are ignored, and *ё* and *е* are treated alike. On a verb, **either aspect is right**: *написати* counts for *писати*, and *сложить* for *складывать*, and the results say which form the card stores. The pairs come from Wiktionary, so a verb it doesn't list a partner for still wants the stored form. *Accept either aspect of a verb* in Settings turns this off for the strict form.
+- **English → Ukrainian (or Russian):** you see the English word and type its translation. Any accepted translation counts, case and spacing are ignored, and *ё* and *е* are treated alike. On a verb, **either aspect is right**: *написати* counts for *писати*, and *сложить* for *складывать*, and the results say which form the card stores. The pairs come from Wiktionary, so a verb it doesn't list a partner for still wants the stored form. *Accept either aspect of a verb* in Settings turns this off for the strict form. An answer that is none of these is **checked by Claude, which may find it close in meaning**: a correct synonym the card doesn't list is accepted (green, and it counts), one that is close but not quite is marked *Close* (yellow, shown apart and not counted), and a wrong one stays wrong, each with a few words of why. Checking a round's answers takes a few seconds, and has a daily limit like the other paid features (see *Limits*); if it is unavailable, those answers are simply marked by the exact rule.
 - **Ukrainian (or Russian) → English:** you see the translation and type the English word — the harder direction, and the one that speaking and writing need. Each question gives a hint, such as *noun · starts with "r"*: the part of speech and the English word's first letter. Case, extra spaces and hyphens don't matter (*well being* counts for *well-being*), and because one translation can belong to several English words, **any word in the topics you are playing that shares the translation counts**: answer *dismissal* where the card says *resignation* and it is marked right, with the card's own word shown beside it.
 
 A wrong answer shows you what was expected. The language box opens a menu for your other language. Changing either deals a new set of words — the page asks first only if you have already typed an answer — and the direction you chose is kept while you stay on the site, so the Quiz opens the same way next time.
@@ -381,18 +381,18 @@ Settings belong to your account and follow you between devices. Signed out, you 
 
 ### Why you might be asked to come back tomorrow
 
-Five things on this site cost money every time you use them: looking a word up, generating a text, talking to Mykola, a recap of your past conversations when you ask for one, and importing a file of notes. They call paid language services, and KuantorFlow pays for them.
+Six things on this site cost money every time you use them: looking a word up, generating a text, talking to Mykola, a recap of your past conversations when you ask for one, importing a file of notes, and checking quiz answers that match none of a card's translations (once per round, whatever the number of answers). They call paid language services, and KuantorFlow pays for them.
 
 So each of them has a limit. The limits are there to stop a runaway loop — a script, a stuck button, somebody leaning on *regenerate* — rather than to ration you. A normal study session does not come near them.
 
 There are three of each, and it is worth knowing which one you have met, because they mean different things.
 
-| | Looking a word up | Generating a text | Talking to Mykola | A recap | Importing notes |
-|---|---|---|---|---|---|
-| Signed out, per visit | 3 | 1 | 10 | needs an account | needs an account |
-| Signed out, per day, shared by everyone signed out | 150 | 20 | 15 | — | — |
-| **Your account, per day** | 50 | 10 | 40 | 5 | 10 |
-| Everyone together, per day | 250 | 60 | 40 | 10 | 40 |
+| | Looking a word up | Generating a text | Talking to Mykola | A recap | Importing notes | Checking quiz answers |
+|---|---|---|---|---|---|---|
+| Signed out, per visit | 3 | 1 | 10 | needs an account | needs an account | — |
+| Signed out, per day, shared by everyone signed out | 150 | 20 | 15 | — | — | 30 |
+| **Your account, per day** | 50 | 10 | 40 | 5 | 10 | 30 |
+| Everyone together, per day | 250 | 60 | 40 | 10 | 40 | 150 |
 
 **Building a topic, or adding words to one, uses two of these.** Suggesting the words counts as one generated text, and each word you keep is one lookup. The page shows how many lookups you have left before you approve the list.
 
@@ -455,7 +455,8 @@ To do its work, the site passes some things to a few services:
   - your messages to Mykola, and the first name he calls you by;
   - the words you look up, to translate them;
   - the words and the instruction you give when generating a text or building a topic;
-  - lines from notes you upload that need splitting.
+  - lines from notes you upload that need splitting;
+  - your quiz answers that match none of a card's translations, with the card's English word and meaning, to check whether they are close in meaning.
 
   Anthropic uses them to produce the answer.
 - **Google** handles signing in. It knows you signed in to KuantorFlow; the site receives only your name, email address and account number. Google's Gmail also delivers the site's emails to its owner, described under *Who can read it*.
