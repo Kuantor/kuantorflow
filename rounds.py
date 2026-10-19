@@ -2276,8 +2276,12 @@ def _run_quiz(topics, heading, self_url, back, words):
                     and not _matched_a_variant(card, user_answer, field)):
                 result["aspect_of"] = _aspect_of(card, user_answer, field, partners)
             # The model's colour (#612), only for an answer it actually judged.
+            # The note's own final stop comes off (#634): the template sets
+            # the punctuation around it, and the yellow line adds ". The card
+            # says" -- here rather than in answercheck, so stored notes too.
             if card["id"] in verdicts and not result.get("aspect_of"):
-                result["verdict"], result["note"] = verdicts[card["id"]]
+                verdict, note = verdicts[card["id"]]
+                result["verdict"], result["note"] = verdict, note.rstrip(" .")
             result["state"] = ("correct" if correct else
                                "close" if result.get("verdict") == "yellow" else "wrong")
             results.append(result)
