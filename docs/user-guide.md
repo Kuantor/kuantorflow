@@ -173,9 +173,9 @@ Most of it comes from the games that mark your answer themselves: the **Quiz**, 
 
 The record is about you alone, and other learners cannot see it. You can — on **My progress**, described below. **Deleting your account erases it** along with the account.
 
-### Words that are due come up first
+### Words you know come up less often
 
-From your answers the site works out, for every word you have played, **the day it is next worth asking** — soon for a word you missed, further off each time you get it right. When you are signed in, the games use that: **words due today, and words you have never answered, are dealt first**, and a word you already know for now comes up several times less often. It is never left out altogether, so a topic you know well still plays in full.
+From your answers the site works out, for every word you have played, **the day it is next worth asking** — soon for a word you missed, further off each time you get it right. When you are signed in, the games use that when they pick a round's words: **words due today, and words you have never answered, are the likeliest to be dealt**, and a word you already know for now comes up about five times less often. It is never left out altogether, so a topic you know well still plays in full. The words picked are then shuffled, so a due word is likelier to be in the round, not first in it, and a round that takes every word of its topics plays them all. To play only the words due today, use **Review** (below).
 
 This applies to the Quiz, **Multiple choice**, **Scrambled**, **Fill the gap**, **Spell it**, **Rebuild the sentence** and **Listen and type** — every game whose question is one of your cards. *Odd one out* and *Real or fake* still draw at random. Without signing in, every game draws at random, as it always has.
 
