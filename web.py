@@ -657,6 +657,11 @@ LOOKUP_USER_LIMIT_PROMPT = (
 LOOKUP_BUSY_PROMPT = (
     "KuantorFlow has looked up a lot of words today. Please sign in or try "
     "again tomorrow.")
+# The whole site's pool (#643): an account's lookups claim the same row, so
+# signing in does not get past it -- unlike the anonymous pool above.
+LOOKUP_ALL_BUSY_PROMPT = (
+    "KuantorFlow has looked up a lot of words today. Please try again "
+    "tomorrow.")
 
 
 def _lookup_refusal():
@@ -670,8 +675,8 @@ def _lookup_refusal():
     Returns `{"message": ..., "sign_in": bool}` so the page can offer the
     button that would actually help. Signing in is the way past the anonymous
     nudge and past the anonymous daily ceiling; it is not the way past an
-    account's own ceiling, and saying otherwise would send somebody to a
-    sign-in that changes nothing.
+    account's own ceiling, nor the whole site's (#643), and saying otherwise
+    would send somebody to a sign-in that changes nothing.
 
     **Claiming happens here**, which is why this is not a predicate like
     `can_add_cards()`: asking and taking cannot be two steps, or two workers
@@ -701,17 +706,17 @@ def _lookup_refusal():
         allowed, scope = True, None
 
     if not allowed:
-        applog.anonymous_limit_hit(
-            scope, used,
-            LOOKUP_USER_DAILY if scope == "user" else LOOKUP_ANON_DAILY,
-            action="lookup")
-        return {
-            "message": (LOOKUP_USER_LIMIT_PROMPT if scope == "user"
-                        else LOOKUP_BUSY_PROMPT),
-            # An account's own ceiling is not something signing in fixes; the
-            # anonymous one is, because an account has a ceiling of its own.
-            "sign_in": scope != "user",
+        # All three pools, as `chat_refusal()` maps them (#643). Signing in is
+        # the way past the anonymous pool only, because an account has one of
+        # its own; not past an account's own day, nor past the whole site's.
+        answers = {
+            "user": (LOOKUP_USER_LIMIT_PROMPT, False, LOOKUP_USER_DAILY),
+            "anonymous": (LOOKUP_BUSY_PROMPT, True, LOOKUP_ANON_DAILY),
+            "daily": (LOOKUP_ALL_BUSY_PROMPT, False, LOOKUP_ALL_DAILY),
         }
+        message, sign_in, limit = answers[scope]
+        applog.anonymous_limit_hit(scope, used, limit, action="lookup")
+        return {"message": message, "sign_in": sign_in}
 
     if user_id is None:
         session[LOOKED_UP_COUNT_KEY] = session.get(LOOKED_UP_COUNT_KEY, 0) + 1
@@ -753,6 +758,11 @@ GENERATION_USER_LIMIT_PROMPT = (
     "You've written all your texts for today. Come back tomorrow for more.")
 GENERATION_BUSY_PROMPT = (
     "KuantorFlow has written a lot of texts today. Please try again tomorrow.")
+# The anonymous pool (#643): since #456 an account has a pool of its own, so
+# signing in is the way past this one.
+GENERATION_ANON_BUSY_PROMPT = (
+    "KuantorFlow has written a lot of texts today. Sign in with Google to "
+    "write more, or try again tomorrow.")
 
 
 def _generation_refusal():
@@ -795,16 +805,18 @@ def _generation_refusal():
         allowed, scope = True, None
 
     if not allowed:
-        applog.anonymous_limit_hit(scope, used, GENERATION_USER_DAILY
-                                   if scope == "user" else GENERATION_DAILY_LIMIT,
-                                   log=applog.GEN_TEXTS, action="generate")
-        return {
-            "message": (GENERATION_USER_LIMIT_PROMPT if scope == "user"
-                        else GENERATION_BUSY_PROMPT),
-            # Signing in is the way past the anonymous nudge, not past a
-            # ceiling an account has already reached or the site's own.
-            "sign_in": False,
+        # All three pools, as `chat_refusal()` maps them (#643): signing in is
+        # the way past the anonymous pool, since #456 gave an account one of
+        # its own, and not past an account's own day or the site's.
+        answers = {
+            "user": (GENERATION_USER_LIMIT_PROMPT, False, GENERATION_USER_DAILY),
+            "anonymous": (GENERATION_ANON_BUSY_PROMPT, True, GENERATION_ANON_DAILY),
+            "daily": (GENERATION_BUSY_PROMPT, False, GENERATION_DAILY_LIMIT),
         }
+        message, sign_in, limit = answers[scope]
+        applog.anonymous_limit_hit(scope, used, limit,
+                                   log=applog.GEN_TEXTS, action="generate")
+        return {"message": message, "sign_in": sign_in}
 
     session[GENERATED_COUNT_KEY] = session.get(GENERATED_COUNT_KEY, 0) + 1
     return None
