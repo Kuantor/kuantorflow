@@ -9,7 +9,7 @@
 <p class="crumbs"><a href="{{ url_for('index') }}">&larr; Back</a></p>
 
 {# #524 reaches this page too, adding to a topic that already exists. #}
-<h1>{{ "Adding words to" if plan.extend else "Building" }} &ldquo;{{ plan.title }}&rdquo;</h1>
+<h1 class="page-title">{{ "Adding words to" if plan.extend else "Building" }} &ldquo;{{ plan.title }}&rdquo;</h1>
 
 <div class="panel">
   <p id="fill-status">Looking up {{ plan.words | length }} words. This takes
