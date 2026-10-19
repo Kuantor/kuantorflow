@@ -6,7 +6,7 @@
 {% block content %}
 <p class="crumbs"><a href="{{ url_for('flashcards', topic=topic, t=topic_row.id) }}">&larr; Back to the topic</a></p>
 
-<h1>Add more words to &ldquo;{{ topic }}&rdquo;</h1>
+<h1 class="page-title">Add more words to &ldquo;{{ topic }}&rdquo;</h1>
 
 {% if refusal %}
   <div class="panel notice">{{ refusal }}</div>
