@@ -78,6 +78,15 @@ def _matched_a_variant(card, given, field):
     return given.lower().replace("ё", "е") in _answer_variants(card[field])
 
 
+def _other_variants(card, given, field):
+    """The card's variants other than the one `given` matched, in its order
+    (#636): shown after an exact answer, so the learner leaves with them too.
+    Compared the way `_matched_a_variant` compares."""
+    written = given.strip().lower().replace("ё", "е")
+    return [v.strip() for v in (card.get(field) or "").split(",")
+            if v.strip() and v.strip().lower().replace("ё", "е") != written]
+
+
 def _aspect_of(card, given, field, partners):
     """The stored variant `given` is the other aspect of, or None (#100).
 
@@ -2275,6 +2284,11 @@ def _run_quiz(topics, heading, self_url, back, words):
             if (not to_english and correct
                     and not _matched_a_variant(card, user_answer, field)):
                 result["aspect_of"] = _aspect_of(card, user_answer, field, partners)
+            # Right exactly (#636): the card's other translations, so the
+            # learner leaves with them -- the one right answer that used to
+            # say nothing more.
+            elif not to_english and correct:
+                result["other_variants"] = _other_variants(card, user_answer, field)
             # The model's colour (#612), only for an answer it actually judged.
             # The note's own final stop comes off (#634): the template sets
             # the punctuation around it, and the yellow line adds ". The card
