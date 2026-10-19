@@ -405,7 +405,7 @@ There are three of each, and it is worth knowing which one you have met, because
 When you are turned down, the wording tells you which limit it was:
 
 - *"...Come back tomorrow for more."* — your own day is spent. You have the whole allowance again tomorrow.
-- *"Sign in with Google to keep chatting, or come back tomorrow."* — the shared allowance for signed-out visitors is spent. Signing in gives you your own, so this one has a way forward today.
+- *"...Sign in with Google to keep chatting, or come back tomorrow."* (for a lookup, *"Please sign in or try again tomorrow."*) — the shared allowance for signed-out visitors is spent. Signing in gives you your own, so this one has a way forward today, and it is the only refusal that offers a sign-in button.
 - *"KuantorFlow has ... a lot today. Please try again tomorrow."* — everybody's allowance is spent. **You have done nothing wrong**, and signing in will not help, because an account draws on this pool too. It is the one limit that is genuinely about the site rather than about you.
 
 An administrator can change any of these, and setting one to zero turns it off.
