@@ -36,7 +36,7 @@ One JSON object per line (JSONL), keyed by word and part of speech rather than b
 
 **Otherwise write one** (`wiktionary-adapted` or `ai`):
 
-- one sense, the one the translation points to; **two when both are common** and a learner will meet both (a word whose second sense is everyday in the card's topic), joined with "; ";
+- one sense, the one the translation points to; **two when both are common** and a learner will meet both (a word whose second sense is everyday in the card's topic), joined with "; ". Both are senses of the card's own part of speech: another part of speech is always another card;
 - **7–14 words**, never over 20;
 - short, everyday words; a long word only when there is no plain one;
 - **does not contain the word or any form of it**, which makes a better clue in *Spell it*;
