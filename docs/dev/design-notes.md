@@ -288,11 +288,17 @@ refuses on its own.
 `parsed_files.log`, #30; `games.log` and `gen_texts.log`, #448; `mykola.log`
 for the companion). Card writes go through `cards._save_and_log()`;
 **a new save or delete path must log too**. Helpers never raise, so logging
-can't break a request — **with one hole the `try` cannot close**: `_write()`'s
-own second parameter is named `action`, so passing `action=` (or `name=`)
-as a field raises `TypeError` *at the call*, before the body that swallows
-errors runs. It shipped for one commit in #448 and took down every refusal
-it touched; a field that names a feature is written `feature=`.
+can't break a request. **There was one hole the `try` could not close**:
+`_write()`'s own second parameter is named `action`, so passing `action=` (or
+`name=`) as a field raised `TypeError` *at the call*, before the body that
+swallows errors ran. It shipped for one commit in #448 and took down every
+refusal it touched. Since #558 both parameters are positional-only (`/`), so
+those names are ordinary fields; the lines already written say `feature=`,
+and new ones keep to it. **One event is one line** (#557): `_value()` writes
+every character `str.splitlines()` breaks at as its escape (`\n`, `\u2028`),
+because a line break in a value split one event into two lines, the second
+with no timestamp, and every reader that counts lines miscounted. The two
+lookup routes also squash whitespace inside the word.
 **Each file holds what it is named for** (#448). `dict.log` is dictionary
 and translator traffic and nothing else — it had also collected paid model
 calls and every spending refusal. A `LIMIT` line goes to the log of the thing

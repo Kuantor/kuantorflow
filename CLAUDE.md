@@ -106,8 +106,9 @@ loses the credit, and neither is editable or fillable. The claim scripts take
 (*Who may do what*) is enforced **in the route**; templates only grey or hide.
 
 **Logging** (*`applog.py`*). A new save or delete path **must log**. Helpers
-never raise — except that passing `action=` or `name=` to `_write()` raises
-`TypeError` at the call, so a feature field is written `feature=`. **Each log
+never raise, and **one event is one line** (#557): `_value()` escapes a line
+break. `_write()`'s `name` and `action` are positional-only (#558), so neither
+can raise as a field; a feature field is still written `feature=`. **Each log
 file holds what it is named for** (#448); a `LIMIT` line goes to the log of the
 thing refused; every game round writes one `ROUND` line. **`requests.log`** is
 one line per request from `web`'s hooks (#555): path without the query, `db=`

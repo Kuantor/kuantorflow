@@ -383,7 +383,9 @@ def index():
                  or DEFAULT_TOPIC)
         try:
             if action == "parse_word":
-                word = (request.form.get("word") or "").strip()
+                # Whitespace inside the word squashed to one space (#557): a
+                # word never holds a line break, and one would reach the logs.
+                word = " ".join((request.form.get("word") or "").split())
                 if not word:
                     message = "Please enter a word."
                 elif not request.form.get("force_lookup") and _word_already_saved(word):
@@ -1128,7 +1130,7 @@ def lookup_json():
         return {"ok": False, "error": web.EDIT_SIGN_IN_PROMPT}, 403
 
     payload = request.get_json(silent=True) or {}
-    word = (payload.get("word") or "").strip()
+    word = " ".join((payload.get("word") or "").split())   # #557
     if not word:
         return {"ok": False, "error": "word is required"}, 400
     pos = (payload.get("pos") or "").strip()
