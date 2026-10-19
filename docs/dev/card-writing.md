@@ -32,9 +32,11 @@ One JSON object per line (JSONL), keyed by word and part of speech rather than b
 
 **Prefer Wiktionary verbatim.** If one of its definitions for this part of speech matches the card's sense and suits a B2 learner, copy it exactly: up to three senses joined with "; ", as `lookup_word()` does. Change nothing, not even punctuation; the card credits it (#390).
 
+**Check the sense against the topic first.** The card's translation and its topic say which sense learners need. If Wiktionary does not have that sense, write it yourself (`ai`) instead of taking the sense Wiktionary does have: a Work and careers card for *appraisal* needs the review-of-your-work sense, not only the general "judgement of value".
+
 **Otherwise write one** (`wiktionary-adapted` or `ai`):
 
-- one sense: the one the translation points to; a second only if the translation clearly covers two;
+- one sense, the one the translation points to; **two when both are common** and a learner will meet both (a word whose second sense is everyday in the card's topic), joined with "; ";
 - **7–14 words**, never over 20;
 - short, everyday words; a long word only when there is no plain one;
 - **does not contain the word or any form of it**, which makes a better clue in *Spell it*;
@@ -54,7 +56,8 @@ Each example:
 - contains the word, or an inflected form of it, **exactly once**: *Fill the gap* cuts it out, so it has to be there;
 - is a complete sentence of **6–12 words** (up to 14 when the word needs context), with a capital letter and a full stop: *Rebuild the sentence* needs 5–15 words, and a phrase cannot be rebuilt;
 - is one clause, with no commas by default;
-- uses the card's sense, not another sense of the same word;
+- uses **the same sense as the explanation** above it, not another sense of the same word; check all three against the explanation before moving on;
+- across the three, **one example carries the word's best-known fixed phrase or pattern** when it has one (*on prescription*, *an outbreak of …*, *the dosage of …*), in a sentence of your own;
 - is a plain statement; across a card, mix past and present, and use a question or a negative only now and then (about one card in five);
 - varies its subject across the three: "The …", "He", "She", "We", "They";
 - shows the word with its usual partner words: a noun with its usual preposition (*of, for, to, in, on*), a verb with a direct object or its usual preposition; and does not always put the word last;
