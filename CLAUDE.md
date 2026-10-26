@@ -169,8 +169,8 @@ the code (#90) — change the code, change that section.
 
 **Topics** (*`topics`*, *`topics.is_public` + `topics.namespace`*,
 *`topic_sections`*). A topic name becomes an id only in
-`_get_or_create_topic()`; `flashcards.topic` is still written alongside for
-ai_agent. A private topic lives in its creator's namespace and
+`_get_or_create_topic()`, and a card's topic name lives only in `topics`:
+read it through `topic_id` (#210 dropped the `flashcards.topic` string). A private topic lives in its creator's namespace and
 `set_topic_visibility()` is its only writer. Every topic has a section — **don't
 write a "no section" branch**. `index.html` and the widget's
 `refreshBrowseTopics()` build the same block: change both.

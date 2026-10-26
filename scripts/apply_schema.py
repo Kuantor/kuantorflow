@@ -65,7 +65,24 @@ Constraint = namedtuple("Constraint", "table constraint")
 # The query has to describe the work, not count it — "cards with a topic but no
 # topic_id", never "how many topics exist" — so that a run interrupted halfway
 # is correctly seen as unfinished rather than as done.
-Pending = namedtuple("Pending", "probe")
+#
+# `requires` (#210) names the object the data comes *from*. Once that is gone
+# there is nothing left to move, so the step is done -- and it has to be said
+# here, because the probe itself names that object and a probe that cannot run
+# reads as pending (see Schema.exists). #207's backfill reads the `topic`
+# string, which #210 drops; without this, every run after the drop would try
+# the backfill again and fail on it, and so would a fresh database.
+Pending = namedtuple("Pending", "probe requires", defaults=(None,))
+
+# A step that takes something **away** (#210). The existence check every other
+# step uses is backwards for it -- "the object is there" would mean skip, so
+# the drop would be skipped exactly when there is work to do -- so the question
+# is inverted: already applied means the object is **gone**.
+#
+# `guard` is SQL that returns rows while removing would lose data. A drop is
+# the one step a redeploy of the old code cannot undo, so it refuses rather
+# than runs while the guard finds anything, and a dry run says it would.
+Removed = namedtuple("Removed", "target guard", defaults=(None,))
 
 Step = namedtuple("Step", "name target statements")
 
@@ -131,7 +148,9 @@ MIGRATIONS = (
         Pending(
             "SELECT 1 FROM flashcards "
             "WHERE topic IS NOT NULL AND topic <> '' AND topic_id IS NULL "
-            "LIMIT 1"
+            "LIMIT 1",
+            # Nothing to backfill from once #210 has dropped the string.
+            requires=Column("flashcards", "topic"),
         ),
         (
             # Creator and age come from the *earliest card* in each topic, not
@@ -336,6 +355,24 @@ MIGRATIONS = (
             "(name, namespace)",
         ),
     ),
+    # The topic string goes (#210), last of all: #207 kept it beside topic_id
+    # for the transition, and everything that read it now joins `topics`.
+    # MySQL drops `idx_topic` with it, since that index has no other column.
+    #
+    # The guard is #207's backfill question again -- a card whose string is
+    # its *only* topic. On an old database the backfill above has linked them
+    # all by the time this runs; anywhere else, finding one means dropping the
+    # column would lose that card's topic, and there is no undo but a dump.
+    Step(
+        "flashcards.topic drop",
+        Removed(
+            Column("flashcards", "topic"),
+            guard=("SELECT 1 FROM flashcards "
+                   "WHERE topic IS NOT NULL AND topic <> '' AND topic_id IS NULL "
+                   "LIMIT 1"),
+        ),
+        ("ALTER TABLE flashcards DROP COLUMN topic",),
+    ),
 )
 
 
@@ -428,7 +465,14 @@ class Schema:
                 "AND CONSTRAINT_NAME = %s",
                 (target.table, target.constraint),
             )
+        if isinstance(target, Removed):
+            # Inverted (#210): a removal is "already applied" once the object
+            # is gone.
+            return not self.exists(target.target)
         if isinstance(target, Pending):
+            # The data's source is gone, so nothing is left to move (#210).
+            if target.requires is not None and not self.exists(target.requires):
+                return True
             # A data step is "already applied" when its probe finds nothing
             # left to do.
             #
@@ -444,6 +488,22 @@ class Schema:
             except Exception:  # noqa: BLE001 - reported as pending, see above
                 return False
         raise TypeError(f"unknown step target: {target!r}")
+
+    def blocked(self, target):
+        """Why a removal must not run yet, or None (#210).
+
+        Its guard returns rows while removing would lose data. A guard that
+        cannot run at all is a refusal too, never a pass: a drop has no undo,
+        so "could not check" is not "nothing to lose".
+        """
+        guard = getattr(target, "guard", None)
+        if not guard:
+            return None
+        try:
+            found = self._any(guard, ())
+        except Exception as exc:  # noqa: BLE001 - reported, never waved through
+            return f"its safety check could not run ({exc})"
+        return "rows would lose data" if found else None
 
 
 def run(steps, schema, conn, dry_run=False, out=None):
@@ -461,10 +521,20 @@ def run(steps, schema, conn, dry_run=False, out=None):
             print(f"  = {step.name:<28} already present", file=out, flush=True)
             skipped += 1
             continue
+        blocked = schema.blocked(step.target)
         if dry_run:
-            print(f"  ~ {step.name:<28} would be applied", file=out, flush=True)
+            if blocked:
+                print(f"  ! {step.name:<28} would be refused: {blocked}",
+                      file=out, flush=True)
+            else:
+                print(f"  ~ {step.name:<28} would be applied", file=out, flush=True)
             changed += 1
             continue
+        if blocked:
+            raise StepFailed(
+                step.name, step.target.guard,
+                f"refused: {blocked} -- dropping now would lose them. Run "
+                "scripts/check_topic_column.py to see which, fix them, re-run.")
         cursor = conn.cursor()
         try:
             for statement in step.statements:

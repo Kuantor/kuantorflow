@@ -1087,9 +1087,14 @@ for `concile` on the strength of a Dutch entry.
 ## `topics`
 
 **`topics`** (#207) — topics are a table, and `flashcards.topic_id` points at
-it. `flashcards.topic` is still written alongside, holding the **canonical**
-spelling from the topics row: it is what `ai_agent`'s `cards_db` still reads
-and the rollback if `topic_id` proves wrong, and a later phase drops it. A
+it. The `flashcards.topic` string #207 kept alongside for the transition is
+**gone since #210**: it was what `ai_agent`'s `cards_db` read and the rollback
+if `topic_id` proved wrong, and once ai_agent#67 read topics through the id
+it was only a second copy that could drift. A card's topic name is read
+through `topic_id` everywhere now. `apply_schema.py` dropped it with its first
+removal step (`Removed`, with a guard that refuses while any card's string is
+its only topic); #207's backfill step `requires` the string, so it reads as
+done once the string is gone rather than failing on it. A
 topic name becomes an id in exactly one place — `_get_or_create_topic()`,
 reached from `save_flashcard()` and `move_flashcard()` — so every producer
 upstream (the parsers, the review popup, Mykola's tool schema) keeps speaking

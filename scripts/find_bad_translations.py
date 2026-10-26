@@ -65,8 +65,10 @@ def main(argv=None):
     conn = get_db_connection()
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, word, topic, translation_ukr, "
-                       "translation_rus FROM flashcards ORDER BY id")
+        # The topic's name through topic_id (#210 dropped the string).
+        cursor.execute("SELECT f.id, f.word, t.name AS topic, f.translation_ukr, "
+                       "f.translation_rus FROM flashcards f "
+                       "LEFT JOIN topics t ON t.id = f.topic_id ORDER BY f.id")
         cards = cursor.fetchall()
     finally:
         conn.close()

@@ -27,7 +27,8 @@ name, so dropping the copy loses nothing anybody sees.
 PythonAnywhere at any time. **ASCII output**, like the other console scripts:
 a Windows console is cp1252, so Cyrillic topic names are printed escaped.
 
-Not part of a deploy. Run it before #210, locally and on PythonAnywhere.
+Not part of a deploy. Run it before #210, locally and on PythonAnywhere; once
+#210 has dropped the column it says so and exits 0.
 """
 
 import argparse
@@ -41,6 +42,10 @@ from utils import get_db_connection
 CASES = ("match", "case_or_spacing", "differs", "id_only", "no_topic",
          "unlinked", "missing_topic")
 BLOCKING = ("unlinked", "missing_topic")
+
+COLUMN_QUERY = ("SELECT 1 FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'flashcards' "
+                "AND COLUMN_NAME = 'topic'")
 
 QUERY = ("SELECT f.id, f.word, f.topic, f.topic_id, t.name "
          "FROM flashcards f LEFT JOIN topics t ON t.id = f.topic_id "
@@ -93,11 +98,22 @@ def main(argv=None):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute(QUERY)
-        rows = cursor.fetchall()
+        # After #210 the column is gone, and that is the check's answer: there
+        # is nothing left that could disagree with the topics table.
+        cursor.execute(COLUMN_QUERY)
+        present = bool(cursor.fetchall())
+        rows = []
+        if present:
+            cursor.execute(QUERY)
+            rows = cursor.fetchall()
         cursor.close()
     finally:
         conn.close()
+
+    if not present:
+        print("flashcards.topic is already gone (#210): every card's topic is "
+              "its topic_id, and there is nothing left to compare.")
+        return 0
 
     found = classify(rows)
     print(f"{len(rows)} cards")

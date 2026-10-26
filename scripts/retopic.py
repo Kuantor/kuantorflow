@@ -41,11 +41,9 @@ that shape is what a PythonAnywhere console run needs:
   `set_user_blocked()` and `claim_topics.py` already follow. One line per step,
   not per card, for the reason `CARDS-CLAIMED` settled.
 
-**Two columns move together.** `flashcards.topic_id` points at the row and
-`flashcards.topic` still holds the canonical name beside it (#207). That string
-is what ai_agent's `cards_db` reads today, so updating only the id leaves Mykola
-naming topics that no longer exist, and updating only the string leaves every
-page unchanged. Every write here does both, in one statement.
+**A card's topic is its `topic_id`.** Until #210 the `flashcards.topic`
+string sat beside it and every write here updated both; #210 dropped the
+string, so a rename is one row in `topics` and a merge one UPDATE of the id.
 
 **A merge is not `save_flashcard()`, so #101 is not protecting it.** A bulk
 UPDATE can put the same word and part of speech in a topic twice. Collisions are
@@ -241,10 +239,8 @@ def do_rename(cursor, step, dry_run, out):
     out("%s %-34s -> %-34s (%s cards)" % (
         mark, ascii_safe(step.old), ascii_safe(step.new), source["cards"]))
 
+    # One row: the cards point at it by id, so they follow (#210).
     cursor.execute("UPDATE topics SET name = %s WHERE id = %s",
-                   (step.new, source["id"]))
-    # The string column beside the id (#207) -- the half that is easy to forget.
-    cursor.execute("UPDATE flashcards SET topic = %s WHERE topic_id = %s",
                    (step.new, source["id"]))
     if not dry_run:
         applog.topic_renamed(step.old, step.new, topic_id=source["id"],
@@ -285,8 +281,8 @@ def do_merge(cursor, step, dry_run, allow_duplicates, out):
         mark, ascii_safe(step.source), ascii_safe(step.dest), source["cards"]))
 
     cursor.execute(
-        "UPDATE flashcards SET topic_id = %s, topic = %s WHERE topic_id = %s",
-        (dest["id"], dest["name"], source["id"]))
+        "UPDATE flashcards SET topic_id = %s WHERE topic_id = %s",
+        (dest["id"], source["id"]))
     moved = cursor.rowcount
 
     # Re-ask rather than assume: fk_flashcards_topic is RESTRICT (#165), so a

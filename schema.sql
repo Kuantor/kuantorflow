@@ -329,11 +329,10 @@ CREATE TABLE IF NOT EXISTS flashcards (
     examples_ukr TEXT,
     translation_rus VARCHAR(255),
     examples_rus TEXT,
-    -- The topic name, kept alongside topic_id for the transition (#207). Both
-    -- are written on every save. This column is what ai_agent's cards_db reads
-    -- today, and it is the rollback if topic_id turns out wrong; phase 3 drops
-    -- it once ai_agent joins `topics` instead. Do not read it here.
-    topic VARCHAR(255),
+    -- The card's topic (#207). A card's topic *name* lives in `topics` only:
+    -- the `topic` string #207 kept beside this for the transition was dropped
+    -- in #210, once ai_agent read topics through this id (ai_agent#67). NULL
+    -- is a real state -- a card with no topic -- not a topic named ''.
     topic_id INT NULL,
     -- Who added the card (issue #89). NULL for anonymous visitors and for
     -- every card saved before this column existed — NULL is what SQL already
@@ -343,7 +342,6 @@ CREATE TABLE IF NOT EXISTS flashcards (
     -- cards" (#127) needs IS NOT NULL / <=>, not != .
     added_by_user_id INT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_topic (topic),
     INDEX idx_topic_id (topic_id),
     INDEX idx_word (word),
     INDEX idx_added_by (added_by_user_id),
