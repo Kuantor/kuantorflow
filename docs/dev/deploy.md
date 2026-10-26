@@ -366,6 +366,16 @@ venv/bin/python scripts/fill_aspect_pairs.py
 Its last lines say how many forms it asked about and how many have a partner;
 a second run says `nothing to do`. New verb cards are filled as they are saved.
 
+**Before #210 (dropping `flashcards.topic`), one read-only check**: every
+card's `topic` string against the name its `topic_id` points at. It writes
+nothing, and its last line says whether the column is safe to drop (exit code
+1 if a card would lose its topic). Run it locally and on PythonAnywhere;
+#210 also waits for Kuantor/ai_agent#67 to be **deployed**.
+
+```bash
+venv/bin/python scripts/check_topic_column.py
+```
+
 **#600 needs nothing**: the daily report gains its visitors paragraph from the
 `visits` table #598 created, on the next run of the same task.
 
