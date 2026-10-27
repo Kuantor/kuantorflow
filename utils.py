@@ -624,7 +624,8 @@ FLASHCARD_FIELDS = (
     "examples_ukr",
     "translation_rus",
     "examples_rus",
-    "topic",
+    # Not `topic`: since #210 a card's topic is `topic_id` alone, written by
+    # save_flashcard() from the name in `entry["topic"]`.
 )
 
 
@@ -665,9 +666,8 @@ def _get_or_create_topic(cursor, name, created_by_user_id=None):
     The canonical name is the one **stored on the topics row**, which is not
     always the one passed in: names match case-insensitively, so a card saved
     under 'environment AND climate' belongs to the existing 'Environment and
-    climate'. Callers write that back into `flashcards.topic`, so the string
-    column and the row it points at never disagree about spelling — which
-    matters while ai_agent is still reading the string.
+    climate'. Callers that show the name use this one (the string column that
+    used to copy it was dropped in #210).
 
     This is the only place a topic name becomes an id, and it is deliberately
     reached from inside `save_flashcard()` and `move_flashcard()` rather than
@@ -1605,9 +1605,9 @@ def save_flashcard(entry, added_by_user_id=None, allow_duplicate=False):
     does not exist yet (#207) — one argument serving both, so the card's owner
     and the topic's creator cannot disagree about who was here.
 
-    `topic` and `topic_id` are both written for the duration of the transition:
-    the string is what ai_agent's cards_db still reads and the rollback if the
-    id turns out wrong.
+    Only `topic_id` is written: the `topic` string #207 kept beside it was
+    dropped in #210. `entry["topic"]` stays a *name* -- every producer speaks
+    names, and `_get_or_create_topic()` is where one becomes an id.
     """
     def serialize(value):
         if isinstance(value, (list, dict)):
@@ -1635,12 +1635,7 @@ def save_flashcard(entry, added_by_user_id=None, allow_duplicate=False):
         # to be written must not leave a new topic behind.
         topic_id, topic_name, topic_created = _get_or_create_topic(
             cursor, entry.get("topic"), added_by_user_id)
-        values = tuple(
-            # The topic column takes the canonical spelling, not the submitted
-            # one, so it always matches the row topic_id points at.
-            topic_name if field == "topic" else serialize(entry.get(field))
-            for field in FLASHCARD_FIELDS
-        )
+        values = tuple(serialize(entry.get(field)) for field in FLASHCARD_FIELDS)
         values += (added_by_user_id, topic_id)
         cursor.execute(
             f"INSERT INTO flashcards ({', '.join(columns)}) "
@@ -1687,8 +1682,7 @@ def _is_empty(value):
 # with `explanation_en`, in the one place below that writes both (#390).
 FILLABLE_FIELDS = tuple(
     f for f in FLASHCARD_FIELDS
-    if f not in ("word", "pos", "topic",
-                 "explanation_source", "examples_source"))
+    if f not in ("word", "pos", "explanation_source", "examples_source"))
 
 
 def fill_missing_fields(entry):
@@ -1780,7 +1774,7 @@ def fill_missing_fields(entry):
 # explanation somebody has rewritten is no longer the dictionary's sentence.
 EDITABLE_FIELDS = tuple(
     f for f in FLASHCARD_FIELDS
-    if f not in ("topic", "explanation_source", "examples_source"))
+    if f not in ("explanation_source", "examples_source"))
 
 
 def duplicate_topic(word, pos):
@@ -1807,8 +1801,10 @@ def duplicate_topic(word, pos):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
+        # The name through topic_id (#210); the match itself is unchanged.
         cursor.execute(
-            "SELECT topic FROM flashcards WHERE word = %s AND pos <=> %s LIMIT 1",
+            "SELECT t.name FROM flashcards f LEFT JOIN topics t ON t.id = f.topic_id "
+            "WHERE f.word = %s AND f.pos <=> %s LIMIT 1",
             (word, pos),
         )
         row = cursor.fetchone()
@@ -2049,9 +2045,12 @@ def move_flashcard(card_id, to_topic, owner_id=None, admin=False):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
+        # The topic's name through topic_id (#210), still returned to the
+        # caller for its flash message and its vanished-topic check.
         cursor.execute(
-            "SELECT word, topic, topic_id, added_by_user_id "
-            "FROM flashcards WHERE id = %s",
+            "SELECT f.word, t.name, f.topic_id, f.added_by_user_id "
+            "FROM flashcards f LEFT JOIN topics t ON t.id = f.topic_id "
+            "WHERE f.id = %s",
             (card_id,))
         row = cursor.fetchone()
         if row is None:
@@ -2091,13 +2090,13 @@ def move_flashcard(card_id, to_topic, owner_id=None, admin=False):
 
         if admin:
             cursor.execute(
-                "UPDATE flashcards SET topic = %s, topic_id = %s WHERE id = %s",
-                (topic_name, topic_id, card_id))
+                "UPDATE flashcards SET topic_id = %s WHERE id = %s",
+                (topic_id, card_id))
         else:
             cursor.execute(
-                "UPDATE flashcards SET topic = %s, topic_id = %s "
+                "UPDATE flashcards SET topic_id = %s "
                 "WHERE id = %s AND added_by_user_id = %s",
-                (topic_name, topic_id, card_id, owner_id))
+                (topic_id, card_id, owner_id))
         if cursor.rowcount == 0:
             cursor.close()
             return "denied", None
@@ -2187,8 +2186,8 @@ def resolve_user_cards(user_id, keep_cards=True) -> int:
             if public is None:            # cannot happen; do not lose the row
                 continue
             cursor.execute(
-                "UPDATE flashcards SET topic_id = %s, topic = %s "
-                "WHERE topic_id = %s", (public[0], name, topic_id))
+                "UPDATE flashcards SET topic_id = %s WHERE topic_id = %s",
+                (public[0], topic_id))
             cursor.execute("DELETE FROM topics WHERE id = %s", (topic_id,))
         conn.commit()
         cursor.close()
@@ -2518,12 +2517,8 @@ def get_flashcards_by_topics(topics, owner_id=None, viewer_id=None,
     into an explicit list of names before this is called; see
     `games.resolve_selection()`.
 
-    **`topic` comes from the topics row, not from `flashcards.topic`** (#269).
-    The two hold the same text today -- #207's backfill made the column
-    canonical -- but the column is what #210 exists to drop, and a caller that
-    groups by it would break silently when that lands. Selected after `f.*` so
-    it shadows the column rather than sitting beside it under another name,
-    which keeps every existing caller reading the same key.
+    **`topic` comes from the topics row** (#269), under the key every caller
+    reads; since #210 there is no `flashcards.topic` column for it to shadow.
 
     Ordered by `(topic name, word)` so a result is deterministic and a caller
     that wants to group by topic can. Games shuffle what they get, so the order

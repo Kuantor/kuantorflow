@@ -148,10 +148,9 @@ done, `!` one skipped and why. A merge that would put the same word and part of
 speech in a topic twice is **skipped**, since a bulk UPDATE does not go through
 `save_flashcard()` and so does not get #101 for free.
 
-Two things it does that nothing else here does. It writes **both**
-`flashcards.topic_id` and `flashcards.topic` for every card that moves — the
-string is what ai_agent's `cards_db` reads (#207), so a merge that updated only
-the id would leave Mykola naming topics that no longer exist. And it **deletes
+Two things it does that nothing else here does. It moves cards by
+`flashcards.topic_id` alone; until #210 it also rewrote the `flashcards.topic`
+string beside it, which #210 dropped. And it **deletes
 the emptied source row**, departing from the rule that an empty topic row is
 kept for its name, creator and age: that is right for a topic whose last card
 was deleted and wrong for one being consolidated away, where leaving the name in
@@ -366,15 +365,52 @@ venv/bin/python scripts/fill_aspect_pairs.py
 Its last lines say how many forms it asked about and how many have a partner;
 a second run says `nothing to do`. New verb cards are filled as they are saved.
 
-**Before #210 (dropping `flashcards.topic`), one read-only check**: every
-card's `topic` string against the name its `topic_id` points at. It writes
-nothing, and its last line says whether the column is safe to drop (exit code
-1 if a card would lose its topic). Run it locally and on PythonAnywhere;
-#210 also waits for Kuantor/ai_agent#67 to be **deployed**.
+**#210 drops `flashcards.topic`, and it is the first deploy that cannot be
+undone by putting the old code back**: the column and its strings are gone,
+and only a dump brings them back. Two things differ from every deploy above,
+so follow the order exactly.
 
-```bash
-venv/bin/python scripts/check_topic_column.py
-```
+1. **Take a backup, and check it is readable** (the daily backup script, run
+   by hand now):
+
+   ```bash
+   python3 ~/kuantorflow_automation/backup/backup_db.py
+   ls -t ~/kuantorflow_automation/backup/backups | head -1
+   gunzip -t ~/kuantorflow_automation/backup/backups/<that file> && echo readable
+   ```
+
+2. **Check nothing would be lost.** Its last line must say `safe to drop`:
+
+   ```bash
+   cd ~/kuantorflow && venv/bin/python scripts/check_topic_column.py
+   ```
+
+   Kuantor/ai_agent#67 must be **deployed** too (`cd ~/ai_agent && git log
+   --oneline -1` shows #97 or later): standalone Mykola reads topics through
+   the id since then, and the website's Mykola never read the string.
+
+3. **`git pull`, then reload the web app — before the schema step.** This is
+   the reverse of the usual order, on purpose: the code running until the
+   reload still writes the string, so dropping it first would make every card
+   save fail until the reload. The new code reads and writes only `topic_id`,
+   and runs happily while the column still exists.
+
+4. **Then the schema step.** The dry run should show
+   `~ flashcards.topic drop` and `=` against everything else. If it shows
+   `! flashcards.topic drop would be refused`, a card would lose its topic:
+   stop and run step 2's check, which names it.
+
+   ```bash
+   venv/bin/python scripts/apply_schema.py --dry-run
+   venv/bin/python scripts/apply_schema.py
+   venv/bin/python scripts/apply_schema.py          # again: nothing to do
+   ```
+
+5. **Afterwards** the check says the column is already gone:
+
+   ```bash
+   venv/bin/python scripts/check_topic_column.py
+   ```
 
 **#600 needs nothing**: the daily report gains its visitors paragraph from the
 `visits` table #598 created, on the next run of the same task.
